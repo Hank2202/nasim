@@ -1,0 +1,645 @@
+{
+  "_AI_CONFIGURATION_INSTRUCTIONS": {
+    "purpose": "This is the master, single-source-of-truth configuration file for The Summit of Realms. Facilitators and AI assistants can configure every aspect of the simulation directly here.",
+    "how_to_edit": {
+      "rules": [
+        "1. SIMULATION SETTINGS: 'simulation_settings' controls round timers, economic consumption rates, quiz penalties, and catastrophe roll intervals & probabilities.",
+        "2. REALMS: Define starting nations with unique id, name, pin, theme_color, ethos, backstory, private_agenda, directive goals, starting resources, and geography (world_pos 3D coordinates, terrain, and hazard affinities).",
+        "3. RESOLUTION TYPES: 'resolution_types' defines statutory policy mandates available for sovereign proposals.",
+        "4. LORE ENCYCLOPEDIA & KNOWLEDGE BOUNTIES: 'lore_encyclopedia' contains concise reading dossiers with high-stakes quizzes (+15 resource on success, -5 standing penalty and lockout on failure).",
+        "5. CATASTROPHES CATALOG: 'catastrophes_catalog' defines realistic disasters evaluated every minute. Each disaster has an editable 'base_probability', 'geographic_affinities', 'resource_multipliers', and 'compound_triggers' for realistic multi-disaster cascades."
+      ]
+    }
+  },
+  "simulation_settings": {
+    "max_turns": 3,
+    "working_session_seconds": 300,
+    "debate_session_seconds": 300,
+    "baseline_grain_consumption": 20,
+    "tech_efficiency_threshold": 75,
+    "tech_efficiency_consumption": 15,
+    "starvation_vitality_loss": 25,
+    "starvation_stability_loss": 20,
+    "plutocratic_drift_stability_loss": 5,
+    "quiz_fail_penalty_metric": "diplomatic_standing",
+    "quiz_fail_penalty_amount": 5,
+    "catastrophe_roll_interval_seconds": 60,
+    "compound_disaster_chance": 0.28,
+    "max_simultaneous_catastrophes": 2
+  },
+  "meta_defaults": {
+    "max_turns": 3,
+    "working_session_seconds": 300,
+    "debate_session_seconds": 300,
+    "baseline_grain_consumption": 20,
+    "tech_efficiency_threshold": 75,
+    "tech_efficiency_consumption": 15,
+    "starvation_vitality_loss": 25,
+    "starvation_stability_loss": 20,
+    "plutocratic_drift_stability_loss": 5
+  },
+  "resolution_types": [
+    {
+      "id": "tax",
+      "name": "Emergency Grain Redistribution",
+      "summary": "Mandates wealthy grain silos transfer emergency grain to starving provinces across the continent.",
+      "effect_badge": "HUMANITARIAN GRAIN TRANSFER",
+      "statutory_effect": "Realms with >50 Grain contribute -10 Grain; realms with <25 Grain receive +15 Grain."
+    },
+    {
+      "id": "embargo",
+      "name": "Continental Wealth Surtax & Embargo",
+      "summary": "Imposes commercial trade sanctions on the single wealthiest realm to curb runaway oligarchic dominance.",
+      "effect_badge": "PLUTOCRATIC RESTRAINTS",
+      "statutory_effect": "The wealthiest realm suffers -15 Civil Stability as trade routes are legally choked."
+    },
+    {
+      "id": "aid",
+      "name": "Sovereign Relief Mission",
+      "summary": "The sponsoring realm organizes a multilateral relief fund, providing emergency aid to enhance diplomatic standing.",
+      "effect_badge": "DIPLOMATIC ELEVATION",
+      "statutory_effect": "Sponsoring realm gains +10 Diplomatic Standing for leadership in the Spire."
+    },
+    {
+      "id": "cordon",
+      "name": "Frontier Defense & Quarantine Cordon",
+      "summary": "Militarizes frontier checkpoints along borders to insulate against refugee surges and civil unrest.",
+      "effect_badge": "BORDER QUARANTINE",
+      "statutory_effect": "Targeted realm's borders are quarantined (is_quarantined = true) and gain +10 Stability."
+    },
+    {
+      "id": "custom",
+      "name": "General Sovereign Concordat",
+      "summary": "A mutually drafted statutory pact establishing sovereign cooperation on common issues.",
+      "effect_badge": "MUTUAL ACCORD",
+      "statutory_effect": "Sponsoring realm gains +5 Diplomatic Standing and +5 Civil Stability."
+    }
+  ],
+  "qualitative_thresholds": {
+    "resource_tiers": {
+      "abundant_threshold": 60,
+      "low_threshold": 25,
+      "grain_labels": { "high": "Abundant", "medium": "Sufficient", "low": "Depleted" },
+      "cores_labels": { "high": "Surplus", "medium": "Operational", "low": "Scarce" },
+      "silk_labels":  { "high": "Lavish", "medium": "Modest", "low": "Negligible" },
+      "military_labels": { "high": "Formidable", "medium": "Armed", "low": "Defenseless" }
+    },
+    "metric_tiers": {
+      "flourishing_threshold": 80,
+      "stable_threshold": 50,
+      "strained_threshold": 30,
+      "labels": { "high": "Flourishing", "medium": "Stable", "low": "Strained", "critical": "Critical" }
+    }
+  },
+  "realms": [
+    {
+      "id": "sylvan",
+      "name": "Sylvan Concordat",
+      "pin": "1001",
+      "theme_color": "#10b981",
+      "icon": "leaf",
+      "ethos": "Bio-Harmony, Herbal Mastery, Ancient Pacts",
+      "backstory": "Stewards of the ancient Greatweald. The Concordat commands lush alchemical granaries and herbal reserves. Their elders prioritize biological preservation above all foreign industrial ambitions.",
+      "private_agenda": "SECRET DIRECTIVE: Granary Bastion. Maintain national grain reserves at or above 75 by the conclusion of the Summit, regardless of foreign famine or treaty pressure.",
+      "directive_goal": "grain_reserve_75",
+      "directive_metric": "alchemical_grain",
+      "directive_target_val": 75,
+      "alchemical_grain": 70,
+      "aether_cores": 35,
+      "echo_silk": 40,
+      "military_power": 30,
+      "public_vitality": 80,
+      "diplomatic_standing": 60,
+      "civil_stability": 75,
+      "claimed_lore": [],
+      "failed_lore": [],
+      "geography": {
+        "region_name": "Verdant Lowlands & Greatweald Basin",
+        "terrain": "verdant_lowlands",
+        "world_pos": [-115, 12, 135],
+        "hazard_affinities": ["locust_and_blight", "great_drought_wildfire", "virulent_pestilence", "famine_border_surge"]
+      }
+    },
+    {
+      "id": "val_khor",
+      "name": "Iron Val-Khor",
+      "pin": "1002",
+      "theme_color": "#f59e0b",
+      "icon": "anvil",
+      "ethos": "Heavy Metallurgy, Forge Collectives, Industrial Output",
+      "backstory": "A mountainous civilization of master smiths, engineers, and blast forges. Val-Khor possesses vast geothermal power and aether reserves, but must trade for foreign bread to feed its miners.",
+      "private_agenda": "SECRET DIRECTIVE: Technological Hegemony. Push Aether Cores to 75+ to unlock permanent Technological Efficiency, even if it requires breaking treaty commitments.",
+      "directive_goal": "cores_supremacy_75",
+      "directive_metric": "aether_cores",
+      "directive_target_val": 75,
+      "alchemical_grain": 30,
+      "aether_cores": 60,
+      "echo_silk": 25,
+      "military_power": 65,
+      "public_vitality": 70,
+      "diplomatic_standing": 50,
+      "civil_stability": 65,
+      "claimed_lore": [],
+      "failed_lore": [],
+      "geography": {
+        "region_name": "Mount Khor Volcanic Spine & Mistveil Chasm",
+        "terrain": "volcanic_mountains",
+        "world_pos": [125, 26, 120],
+        "hazard_affinities": ["tectonic_earthquake", "aether_reactor_breach", "plutocratic_labor_revolt"]
+      }
+    },
+    {
+      "id": "solaria",
+      "name": "Solaris Ascendancy",
+      "pin": "1003",
+      "theme_color": "#eab308",
+      "icon": "sun",
+      "ethos": "Divine Mandate, Grand Architecture, Solar Radiance",
+      "backstory": "A grand civilization of shimmering white marble, sun towers, and aristocratic diplomacy. Solaris commands supreme diplomatic prestige and assemblies, relying on high standing to guide the continent.",
+      "private_agenda": "SECRET DIRECTIVE: Diplomatic Supremacy. Conclude the summit with at least 80 Diplomatic Standing. Use silk to bribe swing nations and defeat economic sanction motions.",
+      "directive_goal": "standing_supremacy_80",
+      "directive_metric": "diplomatic_standing",
+      "directive_target_val": 80,
+      "alchemical_grain": 50,
+      "aether_cores": 45,
+      "echo_silk": 65,
+      "military_power": 50,
+      "public_vitality": 85,
+      "diplomatic_standing": 85,
+      "civil_stability": 70,
+      "claimed_lore": [],
+      "failed_lore": [],
+      "geography": {
+        "region_name": "Solar Plateau & Sun Marble Terraces",
+        "terrain": "solar_plateau",
+        "world_pos": [145, 18, -45],
+        "hazard_affinities": ["great_drought_wildfire", "plutocratic_labor_revolt", "locust_and_blight", "famine_border_surge"]
+      }
+    },
+    {
+      "id": "umbra",
+      "name": "Umbral Enclave",
+      "pin": "1004",
+      "theme_color": "#8b5cf6",
+      "icon": "moon",
+      "ethos": "Aetherial Synthesis, Espionage, Arcane Secrecy",
+      "backstory": "A clandestine sanctuary of cloaked scholars, cryptographers, and void researchers. Umbra wields advanced energy research and intelligence networks, seeking to balance continental power.",
+      "private_agenda": "SECRET DIRECTIVE: Continental Balance of Power. Prevent any rival nation from holding 3 or more Assembly Votes. Force flash votes and embargoes to break plutocratic leaders.",
+      "directive_goal": "curb_rival_votes_3",
+      "directive_metric": "rival_max_votes",
+      "directive_target_val": 2,
+      "alchemical_grain": 40,
+      "aether_cores": 70,
+      "echo_silk": 30,
+      "military_power": 45,
+      "public_vitality": 65,
+      "diplomatic_standing": 45,
+      "civil_stability": 80,
+      "claimed_lore": [],
+      "failed_lore": [],
+      "geography": {
+        "region_name": "Abyssal Rift & Subterranean Catacombs",
+        "terrain": "abyssal_chasm",
+        "world_pos": [-95, 14, -135],
+        "hazard_affinities": ["tectonic_earthquake", "aether_reactor_breach", "virulent_pestilence"]
+      }
+    },
+    {
+      "id": "aquila",
+      "name": "Aquila Maritime League",
+      "pin": "1005",
+      "theme_color": "#06b6d4",
+      "icon": "anchor",
+      "ethos": "Free Oceans, Commercial Fleets, Luxury Silk Guilds",
+      "backstory": "An opulent island league of merchant fleets, silk weavers, and commercial banks. Aquila controls luxury trade routes across the continent and leverages superior financial capital.",
+      "private_agenda": "SECRET DIRECTIVE: Plutocratic Monopoly. Finish the summit as the reigning Continental Plutocrat (highest total tangible wealth), holding the extra plutocrat vote.",
+      "directive_goal": "plutocrat_monopoly",
+      "directive_metric": "is_plutocrat",
+      "directive_target_val": true,
+      "alchemical_grain": 45,
+      "aether_cores": 40,
+      "echo_silk": 80,
+      "military_power": 55,
+      "public_vitality": 75,
+      "diplomatic_standing": 65,
+      "civil_stability": 60,
+      "claimed_lore": [],
+      "failed_lore": [],
+      "geography": {
+        "region_name": "Sea of Glass Archipelago & Whispering Straits",
+        "terrain": "coastal_archipelago",
+        "world_pos": [-155, 10, -30],
+        "hazard_affinities": ["coastal_tsunami", "virulent_pestilence", "plutocratic_labor_revolt"]
+      }
+    },
+    {
+      "id": "aethelgard",
+      "name": "Aethelgard Dominion",
+      "pin": "1006",
+      "theme_color": "#ec4899",
+      "icon": "shield",
+      "ethos": "Martial Honor, Feudal Castles, Strategic Strongholds",
+      "backstory": "A disciplined feudal confederation of chivalric knights, border watchtowers, and fortresses. Aethelgard emphasizes civil order, self-sufficiency, and sovereign border integrity.",
+      "private_agenda": "SECRET DIRECTIVE: Sovereign Iron Shield. Command the continent's supreme military host (Military Power at or above 80) and preserve domestic stability (Stability at or above 70).",
+      "directive_goal": "military_power_80",
+      "directive_metric": "military_power",
+      "directive_target_val": 80,
+      "alchemical_grain": 60,
+      "aether_cores": 50,
+      "echo_silk": 35,
+      "military_power": 75,
+      "public_vitality": 80,
+      "diplomatic_standing": 55,
+      "civil_stability": 85,
+      "claimed_lore": [],
+      "failed_lore": [],
+      "geography": {
+        "region_name": "Northern Rocky Steppes & Frontier Citadels",
+        "terrain": "northern_steppes",
+        "world_pos": [85, 20, -145],
+        "hazard_affinities": ["tectonic_earthquake", "great_drought_wildfire", "famine_border_surge"]
+      }
+    }
+  ],
+  "initial_news": [
+    {
+      "type": "system",
+      "headline": "THE SUMMIT OF REALMS CONVENES",
+      "detail": "Plenary delegates have assembled at the Neutral Spire. Turn 1 Working Session (5 Minutes) is officially underway."
+    },
+    {
+      "type": "crisis",
+      "headline": "HARVEST DEFICIT BULLETIN",
+      "detail": "Continental grain supplies are strained across multiple provinces. Nations failing to feed populations risk sudden civil famine."
+    }
+  ],
+  "lore_encyclopedia": [
+    {
+      "id": "geo_convergence",
+      "category": "geography",
+      "category_label": "Geography & Frontiers",
+      "title": "The Great Convergence & The Spire Plateaus",
+      "snippet": "Three centuries ago, tectonic upheaval forced the continental plates inward, lifting the obsidian plateaus of the Neutral Spire above sea level. Surrounding the Spire are the Verdant Lowlands, where natural silt deposits allow Alchemical Grain to germinate twice as fast as elsewhere on the continent.",
+      "quiz": {
+        "question": "What geologic zone surrounding the Spire enables accelerated germination of Alchemical Grain?",
+        "options": ["The Verdant Lowlands", "The Obsidian Fault", "The Sunken Basin", "The Mistveil Marsh"],
+        "correct_index": 0,
+        "reward_resource": "grain",
+        "reward_amount": 15,
+        "reward_label": "+15 Alchemical Grain",
+        "explanation": "The Verdant Lowlands contain dense silt deposits from the Convergence that double crop germination speed."
+      }
+    },
+    {
+      "id": "geo_mistveil",
+      "category": "geography",
+      "category_label": "Geography & Frontiers",
+      "title": "The Mistveil Geothermal Chasm",
+      "snippet": "Splitting the northern mountain spine, the Mistveil Chasm vents superheated sulfur gas and pure raw aether steam. Only the pressurized geothermal turbines of the Iron Val-Khor can harvest these high-density thermal vents without catastrophic pipe collapses.",
+      "quiz": {
+        "question": "Which sovereign nation possesses the pressurized turbines required to tap the Mistveil Chasm?",
+        "options": ["Sylvan Concordat", "Iron Val-Khor", "Umbral Enclave", "Solaris Ascendancy"],
+        "correct_index": 1,
+        "reward_resource": "cores",
+        "reward_amount": 15,
+        "reward_label": "+15 Aether Cores",
+        "explanation": "Val-Khor master smiths engineered heavy reinforced turbines designed to withstand the Mistveil's volcanic pressure."
+      }
+    },
+    {
+      "id": "geo_archipelago",
+      "category": "geography",
+      "category_label": "Geography & Frontiers",
+      "title": "The Whispering Straits & Sea of Glass",
+      "snippet": "The southern ocean is known as the Sea of Glass due to its mirror-calm surface. Navigating these waters requires specialized shallow-draft galleys. The Whispering Straits harbor rare luminescent silk moths, whose cocoons provide the base fiber for Echo Silk.",
+      "quiz": {
+        "question": "What rare creature found in the Whispering Straits produces the base material for Echo Silk?",
+        "options": ["Glass River Crabs", "Luminescent Silk Moths", "Aether Corals", "Void Beetles"],
+        "correct_index": 1,
+        "reward_resource": "silk",
+        "reward_amount": 15,
+        "reward_label": "+15 Echo Silk",
+        "explanation": "Luminescent silk moths thrive exclusively along the warm micro-currents of the Whispering Straits."
+      }
+    },
+    {
+      "id": "faction_sylvan",
+      "category": "factions",
+      "category_label": "Sovereign Factions",
+      "title": "Sylvan Bio-Harmony & Ancient Silo Pacts",
+      "snippet": "The Sylvan Concordat operates sacred underground root-vaults beneath the Greatweald. By binding alchemical grain with mycorrhizal fungal threads, Sylvan grain reserves resist rot for decades, creating the continent's most resilient emergency food stockpiles.",
+      "quiz": {
+        "question": "How do Sylvan herbalists preserve their alchemical grain reserves against biological rot?",
+        "options": ["Cryogenic Aether Freezing", "Mycorrhizal Fungal Thread Binding", "Solar Drying Mirrors", "Obsidian Salt Brines"],
+        "correct_index": 1,
+        "reward_resource": "grain",
+        "reward_amount": 15,
+        "reward_label": "+15 Alchemical Grain",
+        "explanation": "Symbiotic mycorrhizal threads inoculate grain against mold and moisture degradation."
+      }
+    },
+    {
+      "id": "faction_valkhor",
+      "category": "factions",
+      "category_label": "Sovereign Factions",
+      "title": "Val-Khor Arcane Foundries & Core Synthesis",
+      "snippet": "Inside the blast furnace caverns of Mount Khor, smiths stabilize volatile liquid aether into solid crystalline cores using volcanic basalt crucibles. If a nation maintains 75 or more active Aether Cores, their industrial grid unlocks Technological Efficiency, reducing grain consumption by 25%.",
+      "quiz": {
+        "question": "What threshold of Aether Cores is required to unlock Technological Efficiency?",
+        "options": ["50 Cores", "60 Cores", "75 Cores", "90 Cores"],
+        "correct_index": 2,
+        "reward_resource": "cores",
+        "reward_amount": 15,
+        "reward_label": "+15 Aether Cores",
+        "explanation": "Reaching 75 Aether Cores powers full automation, reducing domestic grain burn from 20 to 15."
+      }
+    },
+    {
+      "id": "faction_aquila",
+      "category": "factions",
+      "category_label": "Sovereign Factions",
+      "title": "Aquila Maritime Fleets & The Silk Banking Guilds",
+      "snippet": "The merchant oligarchy of Aquila commands both the commercial shipping lanes and the continental credit ledgers. Because raw wealth dictates influence, the single realm possessing the highest combined tangible assets holds the coveted Plutocrat status and an extra Assembly Vote.",
+      "quiz": {
+        "question": "What parliamentary privilege is awarded to the single realm holding the highest total wealth?",
+        "options": ["Veto Power on Taxes", "One Extra Assembly Vote", "Immunity to Embargoes", "Free Grain Rations"],
+        "correct_index": 1,
+        "reward_resource": "silk",
+        "reward_amount": 15,
+        "reward_label": "+15 Echo Silk",
+        "explanation": "The continental plutocrat earns 1 additional assembly vote (+1 PLUTOCRAT) in all plenary roll-calls."
+      }
+    },
+    {
+      "id": "faction_umbra",
+      "category": "factions",
+      "category_label": "Sovereign Factions",
+      "title": "Umbral Cryptography & Continental Power Balancing",
+      "snippet": "The Umbral Enclave believes peace can only endure if no single empire consolidates supreme hegemony. Operating from cloistered catacombs, Umbral cryptographers monitor international votes, seeking to prevent rival hegemons from holding three or more Assembly votes.",
+      "quiz": {
+        "question": "What dangerous threshold of rival Assembly votes does Umbral foreign policy seek to prevent?",
+        "options": ["2 Votes", "3 or more Votes", "5 Votes", "Unanimous Consensus"],
+        "correct_index": 1,
+        "reward_resource": "stability",
+        "reward_amount": 10,
+        "reward_label": "+10 Civil Stability",
+        "explanation": "Umbral doctrine dictates that any rival faction reaching 3+ votes poses an existential threat to continental equilibrium."
+      }
+    },
+    {
+      "id": "charters_spire",
+      "category": "charters",
+      "category_label": "Spire Accords & Law",
+      "title": "The Founders' Charter & The Two-Sponsor Rule",
+      "snippet": "According to the Founding Charter of the Neutral Spire, no sovereign declaration or statute may be presented for formal voting unless it receives co-sponsorship from at least two sovereign nations during the working session. Unseconded motions die on the floor.",
+      "quiz": {
+        "question": "How many sovereign nations must endorse a declaration before it qualifies for the Plenary Ballot?",
+        "options": ["Only the author", "At least two nations", "At least four nations", "Unanimous agreement"],
+        "correct_index": 1,
+        "reward_resource": "standing",
+        "reward_amount": 10,
+        "reward_label": "+10 Diplomatic Standing",
+        "explanation": "Statute Article IV requires endorsement from at least 2 distinct sovereign realms for ballot qualification."
+      }
+    }
+  ],
+  "world_lore": {
+    "title": "The Neutral Spire & The Great Convergence",
+    "backstory": "Following the Great Convergence, the continent faces severe resource strain. The six sovereign powers have convened at the Spire of Accords for a decisive three-round summit. Famine looms unless agricultural reserves are shared, but national agendas, industrial supremacy, and geopolitical rivalries threaten the peace. Each nation must balance survival, diplomacy, and their classified domestic directives.",
+    "resources": {
+      "alchemical_grain": "Food & Lifeblood. Every turn, populations consume 20 grain (15 if Technological Efficiency is unlocked). Silos running empty triggers Famine Emergencies (-25 Vitality, -20 Stability).",
+      "aether_cores": "Power & Technology. High-density energy matrices that power cities. Reaching 75+ Cores unlocks Technological Efficiency, cutting grain consumption by 25%.",
+      "echo_silk": "Luxury & Diplomacy. Precious gossamer thread prized by international courts. Used to fund Grand Galas, prevent Complacency Slumps, and sway swing votes."
+    }
+  },
+  "catastrophes_catalog": [
+    {
+      "id": "tectonic_earthquake",
+      "name": "Subduction Fault Earthquake & Mine Collapse",
+      "category": "Geophysical",
+      "base_probability": 0.22,
+      "geographic_affinities": ["volcanic_mountains", "abyssal_chasm", "northern_steppes"],
+      "resource_multipliers": {
+        "cores_high_risk": { "threshold": 60, "prob_boost": 0.10, "extra_damage": { "cores": -10 } },
+        "stability_low_risk": { "threshold": 40, "prob_boost": 0.05, "extra_damage": { "vitality": -5 } }
+      },
+      "compound_triggers": ["coastal_tsunami", "aether_reactor_breach"],
+      "headline": "TECTONIC SUBDUCTION FAULT RUPTURE",
+      "narrative": "A violent magnitude-8 tremor tore through the continental bedrock! Subterranean shafts collapsed and industrial refineries suffered catastrophic structural fractures.",
+      "effects": { "cores": -15, "vitality": -10, "stability": -10 }
+    },
+    {
+      "id": "coastal_tsunami",
+      "name": "Oceanic Tsunami & Storm Surge",
+      "category": "Meteorological",
+      "base_probability": 0.20,
+      "geographic_affinities": ["coastal_archipelago", "verdant_lowlands"],
+      "resource_multipliers": {
+        "silk_high_risk": { "threshold": 50, "prob_boost": 0.08, "extra_damage": { "silk": -15 } },
+        "quarantined_mitigation": { "prob_boost": -0.05, "damage_reduction": 0.5 }
+      },
+      "compound_triggers": ["virulent_pestilence", "locust_and_blight"],
+      "headline": "OCEANIC MEGATSUNAMI & TIDAL SURGE",
+      "narrative": "A monstrous wall of displaced ocean water slammed into coastal harbors, capsizing maritime merchant galleys and inundating low-lying granaries with saltwater.",
+      "effects": { "silk": -20, "grain": -10, "stability": -10 }
+    },
+    {
+      "id": "great_drought_wildfire",
+      "name": "Prolonged Drought & Wildfire Conflagration",
+      "category": "Climatic",
+      "base_probability": 0.25,
+      "geographic_affinities": ["verdant_lowlands", "solar_plateau", "northern_steppes"],
+      "resource_multipliers": {
+        "grain_low_risk": { "threshold": 35, "prob_boost": 0.12, "extra_damage": { "vitality": -15 } },
+        "cores_efficiency_mitigation": { "damage_reduction": 0.3 }
+      },
+      "compound_triggers": ["famine_border_surge", "locust_and_blight"],
+      "headline": "CONTINENTAL DROUGHT & WILDFIRE STORM",
+      "narrative": "Scorching atmospheric heatwaves have parched agricultural riverbeds, igniting uncontained wildfires that reduce prime alchemical fields to ash.",
+      "effects": { "grain": -25, "vitality": -10 }
+    },
+    {
+      "id": "locust_and_blight",
+      "name": "Alchemical Rust Spore & Swarm Incursion",
+      "category": "Biological",
+      "base_probability": 0.24,
+      "geographic_affinities": ["verdant_lowlands", "solar_plateau"],
+      "resource_multipliers": {
+        "grain_high_risk": { "threshold": 60, "prob_boost": 0.15, "extra_damage": { "grain": -15 } }
+      },
+      "compound_triggers": ["famine_border_surge"],
+      "headline": "ALCHEMICAL RUST SPORE & LOCUST PLAGUE",
+      "narrative": "A virulent fungal blight combined with migratory locust swarms has blanketed food-producing provinces, devastating silo stockpiles within hours.",
+      "effects": { "grain": -25, "vitality": -10, "stability": -5 }
+    },
+    {
+      "id": "aether_reactor_breach",
+      "name": "Arcane Grid Overload & Radiation Breach",
+      "category": "Industrial",
+      "base_probability": 0.18,
+      "geographic_affinities": ["volcanic_mountains", "abyssal_chasm"],
+      "resource_multipliers": {
+        "cores_high_risk": { "threshold": 65, "prob_boost": 0.20, "extra_damage": { "cores": -15, "vitality": -10 } }
+      },
+      "compound_triggers": ["plutocratic_labor_revolt"],
+      "headline": "ARCANE CORE PRESSURE OVERLOAD",
+      "narrative": "Geothermal containment conduits ruptured under runaway harmonic pressure, venting radioactive aether plasma into surrounding industrial districts.",
+      "effects": { "cores": -25, "stability": -15, "vitality": -10 }
+    },
+    {
+      "id": "virulent_pestilence",
+      "name": "Waterborne Epidemic & Border Pestilence",
+      "category": "Biological",
+      "base_probability": 0.20,
+      "geographic_affinities": ["coastal_archipelago", "verdant_lowlands", "abyssal_chasm"],
+      "resource_multipliers": {
+        "vitality_low_risk": { "threshold": 40, "prob_boost": 0.15, "extra_damage": { "vitality": -15 } },
+        "quarantined_mitigation": { "prob_boost": -0.15, "damage_reduction": 0.7 }
+      },
+      "compound_triggers": ["famine_border_surge", "plutocratic_labor_revolt"],
+      "headline": "PALE FEVER EPIDEMIC OUTBREAK",
+      "narrative": "A deadly microbial contagion has emerged from unsanitary refugee camps and contaminated transit canals, causing widespread mortality across unquarantined zones.",
+      "effects": { "vitality": -20, "stability": -15 }
+    },
+    {
+      "id": "plutocratic_labor_revolt",
+      "name": "General Artisan Strike & Trade Blockade",
+      "category": "Socioeconomic",
+      "base_probability": 0.20,
+      "geographic_affinities": ["coastal_archipelago", "solar_plateau", "volcanic_mountains"],
+      "resource_multipliers": {
+        "silk_high_risk": { "threshold": 65, "prob_boost": 0.15, "extra_damage": { "silk": -20 } },
+        "stability_low_risk": { "threshold": 45, "prob_boost": 0.10, "extra_damage": { "stability": -10 } }
+      },
+      "compound_triggers": ["famine_border_surge"],
+      "headline": "CONTINENTAL GUILD STRIKE & HARBOR BLOCKADE",
+      "narrative": "Infuriated by luxury hoarders and wartime inflation, labor guilds and harbor pilots have closed the shipping channels, sabotaging merchant warehouses.",
+      "effects": { "silk": -20, "stability": -15 }
+    },
+    {
+      "id": "famine_border_surge",
+      "name": "Displaced Refugee Inundation",
+      "category": "Demographics",
+      "base_probability": 0.22,
+      "geographic_affinities": ["northern_steppes", "verdant_lowlands", "solar_plateau"],
+      "resource_multipliers": {
+        "vitality_low_risk": { "threshold": 50, "prob_boost": 0.10, "extra_damage": { "grain": -15 } },
+        "quarantined_mitigation": { "prob_boost": -0.10, "damage_reduction": 0.6 }
+      },
+      "compound_triggers": ["virulent_pestilence"],
+      "headline": "MASS BORDER REFUGEE CONVERGENCE",
+      "narrative": "Desperate populations displaced by peripheral famines are swarming sovereign frontier checkpoints, overwhelming local garrisons and demanding emergency food aid.",
+      "effects": { "grain": -15, "stability": -15 }
+    }
+  ],
+  "events_catalog": [
+    {
+      "id": "blight_outbreak",
+      "turn_recommended": 1,
+      "trigger_on": "turn_mid",
+      "trigger_at_seconds_remaining": 180,
+      "category": "Agriculture",
+      "headline": "ALCHEMICAL RUST BLIGHT OUTBREAK",
+      "narrative": "A virulent fungal rust has breached primary granaries in the top grain-producing realm! Stockpiles spoil rapidly as farmers demand emergency intervention.",
+      "target": "highest 1 by alchemical_grain",
+      "effects": { "grain": -25, "vitality": -10 }
+    },
+    {
+      "id": "famine_refugee_wave",
+      "turn_recommended": 1,
+      "trigger_on": "turn_mid",
+      "trigger_at_seconds_remaining": 90,
+      "category": "Demographics",
+      "headline": "BORDER REFUGEE SURGE",
+      "narrative": "Starving border populations in the 3 nations with the lowest vitality are fleeing across frontiers seeking emergency rations.",
+      "target": "lowest 3 by public_vitality",
+      "effects": { "grain": -15, "stability": -10 }
+    },
+    {
+      "id": "geothermal_vent_discovery",
+      "turn_recommended": 1,
+      "trigger_on": "turn_mid",
+      "trigger_at_seconds_remaining": 40,
+      "category": "Technology",
+      "headline": "GEOTHERMAL FISSURE STRUCK",
+      "narrative": "Mining engineers in the most technologically advanced realm struck a rich thermal vein, generating a surge of pristine aether crystals!",
+      "target": "highest 1 by aether_cores",
+      "effects": { "cores": 15 }
+    },
+    {
+      "id": "bounty_soil_surge",
+      "turn_recommended": 2,
+      "trigger_on": "turn_start",
+      "category": "Bounty",
+      "headline": "MIRACULOUS SOIL RECOVERY",
+      "narrative": "Unprecedented mineral springs enriched agricultural soil in the 2 nations with the least food, yielding an unexpected emergency harvest.",
+      "target": "lowest 2 by alchemical_grain",
+      "effects": { "grain": 30, "vitality": 15 }
+    },
+    {
+      "id": "resonance_cascade",
+      "turn_recommended": 2,
+      "trigger_on": "turn_mid",
+      "trigger_at_seconds_remaining": 200,
+      "category": "Aether Dynamics",
+      "headline": "AETHER RESONANCE CASCADE",
+      "narrative": "A geomagnetic power surge destabilized reactor grids in the 2 nations with the highest core reserves!",
+      "target": "highest 2 by aether_cores",
+      "effects": { "cores": -20, "stability": -15 }
+    },
+    {
+      "id": "artisan_revolt",
+      "turn_recommended": 2,
+      "trigger_on": "turn_mid",
+      "trigger_at_seconds_remaining": 110,
+      "category": "Civil Unrest",
+      "headline": "GENERAL ARTISAN STRIKE",
+      "narrative": "Frustrated by runaway wealth inequality and luxury consumption, labor guilds across the single wealthiest nation have walked out on strike.",
+      "target": "highest 1 by total_wealth",
+      "effects": { "stability": -20, "grain": -10 }
+    },
+    {
+      "id": "counterfeit_silk_scandal",
+      "turn_recommended": 2,
+      "trigger_on": "turn_mid",
+      "trigger_at_seconds_remaining": 45,
+      "category": "Commerce",
+      "headline": "LUXURY SILK EMBARGO SCANDAL",
+      "narrative": "Counterfeit dye and defective weaves were uncovered in the premier silk merchant realm, damaging merchant credibility and market confidence.",
+      "target": "highest 1 by echo_silk",
+      "effects": { "silk": -20, "standing": -10 }
+    },
+    {
+      "id": "continental_frost",
+      "turn_recommended": 3,
+      "trigger_on": "turn_start",
+      "category": "Climate",
+      "headline": "THE GLACIAL CONVERGENCE",
+      "narrative": "An unnatural arctic blizzard sweeps across all sovereign borders, freezing supply transit waterways and straining national granaries.",
+      "target": "all",
+      "effects": { "grain": -15, "vitality": -10 }
+    },
+    {
+      "id": "aether_reactor_meltdown",
+      "turn_recommended": 3,
+      "trigger_on": "turn_mid",
+      "trigger_at_seconds_remaining": 180,
+      "category": "Industrial Crisis",
+      "headline": "ARCANE CORE REACTOR EXPLOSION",
+      "narrative": "Catastrophic containment breach at the primary energy facility of the leading technocracy! Arcane radiation forces immediate civil evacuations.",
+      "target": "highest 1 by aether_cores",
+      "effects": { "cores": -25, "stability": -15 }
+    },
+    {
+      "id": "spire_accord_ultimatum",
+      "turn_recommended": 3,
+      "trigger_on": "turn_mid",
+      "trigger_at_seconds_remaining": 90,
+      "category": "Civil Crisis",
+      "headline": "POPULAR INSURRECTION WARNING",
+      "narrative": "Rioters in the two most unstable nations demand sovereign leaders ratify binding humanitarian treaties before the Spire dissolves.",
+      "target": "lowest 2 by civil_stability",
+      "effects": { "stability": -15 }
+    }
+  ]
+}

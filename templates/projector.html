@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Summit of Realms - Continental Wire & Plenary</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    html, body {
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      background: #0b0f19;
+      color: #f1f5f9;
+    }
+    .projector-main-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 16px;
+      min-height: 0;
+      height: calc(100vh - 60px);
+    }
+    .projector-col {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+      height: 100%;
+    }
+    .card-fill {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+  </style>
+</head>
+<body class="theme-dark" style="background: #0b0f19; color: #f8fafc;">
+
+  <!-- Auditorium Master Topbar -->
+  <div class="auditorium-topbar">
+    <div class="auditorium-brand">
+      <span style="color: #38bdf8; font-size: 1.15rem;">⬢</span>
+      <div>
+        <span style="font-weight: 900; letter-spacing: 0.12em; color: #f8fafc;">THE SUMMIT OF REALMS</span>
+        <span style="font-size: 0.72rem; color: #64748b; font-family: var(--font-mono); margin-left: 8px;">CONTINENTAL PLENARY</span>
+      </div>
+    </div>
+
+    <!-- Cycling Realm Spotlight Indicators -->
+    <div class="auditorium-realms-strip">
+      <div id="pill-sylvan" class="realm-indicator-pill">
+        <span class="realm-indicator-dot" style="background: #10b981;"></span>
+        <span>SYLVAN</span>
+      </div>
+      <div id="pill-val_khor" class="realm-indicator-pill">
+        <span class="realm-indicator-dot" style="background: #f59e0b;"></span>
+        <span>VAL-KHOR</span>
+      </div>
+      <div id="pill-solaria" class="realm-indicator-pill">
+        <span class="realm-indicator-dot" style="background: #eab308;"></span>
+        <span>SOLARIS</span>
+      </div>
+      <div id="pill-umbra" class="realm-indicator-pill">
+        <span class="realm-indicator-dot" style="background: #8b5cf6;"></span>
+        <span>UMBRA</span>
+      </div>
+      <div id="pill-aquila" class="realm-indicator-pill">
+        <span class="realm-indicator-dot" style="background: #06b6d4;"></span>
+        <span>AQUILA</span>
+      </div>
+      <div id="pill-aethelgard" class="realm-indicator-pill active">
+        <span class="realm-indicator-dot" style="background: #ec4899;"></span>
+        <span>AETHELGARD</span>
+      </div>
+    </div>
+
+    <!-- Session Status, Clock & Single Settings Gear -->
+    <div class="auditorium-top-metrics">
+      <div class="projector-turn" id="proj-turn" style="font-size: 0.85rem; padding: 4px 10px; background: rgba(19, 27, 46, 0.8); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 4px; color: #38bdf8; font-weight: 700; font-family: var(--font-mono);">
+        TURN {{ state.meta.current_turn }} • WORKING SESSION
+      </div>
+      <div class="projector-timer" id="proj-timer" style="font-size: 1.45rem; font-weight: 900; color: #f8fafc; font-family: var(--font-mono); line-height: 1;">05:00</div>
+      <button id="btn-open-settings" class="btn btn-secondary btn-sm" onclick="toggleSettingsModal()" title="Auditorium Settings" style="font-size: 1.15rem; padding: 4px 10px; line-height: 1;">
+        ⚙️
+      </button>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- GRAND PLENARY STAGE (ROUND 3: 5-MINUTE DEBATE & SEQUENTIAL VOTING) -->
+  <!-- ========================================================================= -->
+  <div id="proj-grand-plenary-stage" style="display: none; flex: 1; min-height: 0;">
+    <div class="debate-stage" style="height: 100%; box-sizing: border-box; display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-subtle); padding-bottom: 10px; margin-bottom: 12px; flex-shrink: 0;">
+        <div>
+          <span id="proj-grand-badge" class="badge" style="font-size: 0.82rem; padding: 4px 10px;">
+            GRAND PLENARY RESOLUTION
+          </span>
+          <span id="proj-grand-phase-label" class="badge" style="background:#000; color:#fff; font-size:0.82rem; margin-left:6px;">
+            5-MINUTE FLOOR DEBATE
+          </span>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">DEBATE CLOCK</div>
+          <div id="proj-debate-clock" class="debate-clock-large" style="font-size: 2.8rem;">05:00</div>
+        </div>
+      </div>
+
+      <h2 id="proj-grand-title" style="font-size: 1.6rem; font-weight: 900; margin-bottom: 6px; flex-shrink: 0;">-</h2>
+      <div id="proj-grand-sponsors" style="font-size: 0.82rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 10px; flex-shrink: 0;"></div>
+      <div id="proj-grand-desc" style="font-size: 1rem; line-height: 1.4; background: var(--bg-surface-sunken); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-bottom: 12px; flex-shrink: 0;"></div>
+
+      <div id="proj-grand-voting-floor" style="display: none; border-top: 2px solid var(--border-subtle); padding-top: 12px; flex: 1; min-height: 0;">
+        <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 1rem; font-family: var(--font-mono); margin-bottom: 4px;">
+          <span style="color: var(--text-primary);">SUPPORT: <span id="proj-grand-support-tally">0</span></span>
+          <span style="color: var(--text-muted);">OPPOSE: <span id="proj-grand-oppose-tally">0</span></span>
+        </div>
+        <div style="width: 100%; height: 12px; background: var(--bg-surface-sunken); border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; margin-bottom: 12px;">
+          <div id="proj-grand-tally-bar" style="height: 100%; background: var(--border-white); width: 50%; transition: width 0.3s ease;"></div>
+        </div>
+
+        <div class="card-title" style="font-size: 0.8rem; margin-bottom: 8px;">Floor Roll-Call Ballots</div>
+        <div id="proj-grand-rollcall-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- QUICK PLENARY VOTING SCREEN (ROUNDS 1 & 2: RAPID BETWEEN-ROUND VOTES) -->
+  <!-- ========================================================================= -->
+  <div id="proj-quick-plenary-stage" style="display: none; flex: 1; min-height: 0; overflow-y: auto;">
+    <div class="card" style="border: 2px solid var(--border-white); padding: 18px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span class="badge" style="background:var(--border-white); color:var(--bg-base); font-size: 0.82rem; padding: 4px 12px;">
+          BETWEEN-ROUNDS PLENARY: SOVEREIGN VOTING SESSION
+        </span>
+        <span style="font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-muted);">
+          ALL MOTIONS WITH ≥2 SOVEREIGN ENDORSEMENTS
+        </span>
+      </div>
+
+      <div id="proj-quick-plenary-docket-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SUMMIT CONCLUDED: CONTINENTAL DEBRIEF & SOVEREIGN VERDICT STAGE -->
+  <!-- ========================================================================= -->
+  <div id="proj-concluded-stage" style="display: none; flex: 1; min-height: 0; overflow-y: auto;">
+    <div style="display: flex; flex-direction: column; gap: 14px; height: 100%;">
+      <!-- Grand Verdict Hero Banner -->
+      <div class="card" style="border: 2px solid var(--border-white); padding: 18px 22px; text-align: center;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span class="badge" style="background:var(--border-white); color:var(--bg-base); font-size:0.75rem; letter-spacing:0.1em;">
+            FINAL CONTINENTAL DEBRIEF • SUMMIT CONCLUDED
+          </span>
+          <span id="proj-concluded-timestamp" style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">-</span>
+        </div>
+        <h1 id="proj-verdict-title" style="font-size: 2.1rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; margin: 4px 0;">
+          GOLDEN AGE OF ACCORDS
+        </h1>
+        <p id="proj-verdict-desc" style="font-size: 1.05rem; color: var(--text-secondary); max-width: 850px; margin: 6px auto 0 auto; line-height: 1.45;">
+          The Neutral Spire succeeded beyond all expectations. Sovereign powers shared reserves and ratified an enduring multilateral charter.
+        </p>
+
+        <!-- Continental Metrics Summary Badges -->
+        <div id="proj-verdict-badges" style="display: flex; justify-content: center; gap: 14px; margin-top: 14px; font-family: var(--font-mono); font-size: 0.85rem;">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <!-- Two-Column Debrief Grid: Realm Report Cards & Continental Distinctions -->
+      <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; flex: 1; min-height: 0;">
+        <!-- Left: Sovereign Realm Report Cards -->
+        <div class="card" style="padding: 14px 18px; display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div class="card-title" style="font-size: 0.95rem;">Sovereign Leaderboard & Directive Outcomes</div>
+            <span style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">CLASSIFIED AGENDAS REVEALED</span>
+          </div>
+          <div id="proj-debrief-realms-list" style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1;">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+
+        <!-- Right: Continental Honours & Treaty Accords -->
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <!-- Honours Card -->
+          <div class="card" style="padding: 14px 18px;">
+            <div class="card-title" style="font-size: 0.9rem; margin-bottom: 10px;">Continental Laurels & Distinctions</div>
+            <div id="proj-debrief-honors" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Injected via JS -->
+            </div>
+          </div>
+
+          <!-- Historic Accords Ratified -->
+          <div class="card" style="padding: 14px 18px; flex: 1;">
+            <div class="card-title" style="font-size: 0.9rem; margin-bottom: 10px;">Legislative Legacy: Accords Ratified</div>
+            <div id="proj-debrief-accords" style="display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 200px;">
+              <!-- Injected via JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MAIN PROJECTOR LAYOUT: ORGANIC WORLD MAP & 3-BAR GRAPHICAL SPOTLIGHT -->
+  <!-- ========================================================================= -->
+  <div id="proj-main-layout" class="auditorium-viewport">
+    <!-- Hardware-Accelerated Cartographic World Canvas -->
+    <canvas id="world-3d-canvas" class="auditorium-canvas"></canvas>
+
+    <!-- Floating Spotlight Card: Kept hidden so 3D in-canvas floating cards take full stage -->
+    <div id="proj-spotlight-card" class="auditorium-spotlight-card" style="display: none;">
+      <div id="spotlight-bar" class="spotlight-crest-bar" style="background: #ec4899;"></div>
+      <div class="spotlight-title-row">
+        <span id="spotlight-name" class="spotlight-realm-name">AETHELGARD DOMINION</span>
+        <span id="spotlight-votes" class="badge" style="font-size: 0.65rem; padding: 2px 6px; border-color: rgba(255,255,255,0.2);">1 VOTE</span>
+      </div>
+      <div id="spotlight-capital" class="spotlight-capital">Valenhold Citadel • Northern Rocky Steppes</div>
+
+      <!-- 4 Core Resources with 3-Bar Graphical Gauges (Low / Med / High) -->
+      <div class="spotlight-resource-grid">
+        <div class="resource-bar-row">
+          <div class="resource-label-group"><span>🌾</span><span>GRAIN</span></div>
+          <div id="meter-grain"></div>
+        </div>
+        <div class="resource-bar-row">
+          <div class="resource-label-group"><span>⚡</span><span>CORES</span></div>
+          <div id="meter-cores"></div>
+        </div>
+        <div class="resource-bar-row">
+          <div class="resource-label-group"><span>🧣</span><span>SILK</span></div>
+          <div id="meter-silk"></div>
+        </div>
+        <div class="resource-bar-row">
+          <div class="resource-label-group"><span>⚔️</span><span>MILITARY</span></div>
+          <div id="meter-military"></div>
+        </div>
+      </div>
+
+      <!-- Vitality, Stability & Quarantine Status -->
+      <div class="spotlight-footer">
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span style="color: #64748b;">CIVIL STATE:</span>
+          <span id="spotlight-stability" class="badge" style="font-size: 0.65rem; padding: 2px 6px;">STABLE</span>
+        </div>
+        <span id="spotlight-hazard" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: #10b981; font-size: 0.65rem; padding: 2px 6px;">ALL CLEAR</span>
+      </div>
+    </div>
+
+    <!-- Master Bottom Timeline & Motions Ticker -->
+    <div class="auditorium-bottombar" style="position: absolute; bottom: 0; left: 0; right: 0;">
+      <div class="timeline-milestones">
+        <span class="milestone-item current">● Turn 1 [Session]</span>
+        <span class="milestone-item">○ Turn 2 [Trade]</span>
+        <span class="milestone-item">○ Plenary [Debate]</span>
+        <span class="milestone-item">○ Turn 3 [Assembly]</span>
+        <span class="milestone-item">○ Debrief</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="color: #64748b; font-size: 0.68rem;">QUALIFIED MOTIONS:</span>
+        <div id="projector-qualified-motions-list" style="display: flex; gap: 6px;"></div>
+      </div>
+    </div>
+
+    <!-- Hidden compatibility elements -->
+    <div id="projector-news-list" style="display: none;"></div>
+    <div id="projector-realms-list" style="display: none;"></div>
+    <div id="proj-hero-headline" style="display: none;"></div>
+    <div id="proj-hero-detail" style="display: none;"></div>
+    <div id="proj-hero-time" style="display: none;"></div>
+  </div>
+
+  <!-- Auditorium Controls & Settings Modal Overlay -->
+  <div id="proj-settings-modal" class="modal-overlay" style="display: none;" onclick="if(event.target===this) toggleSettingsModal()">
+    <div class="modal-card" style="max-width: 440px; padding: 22px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px;">
+        <h3 style="font-size: 1.15rem; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; margin: 0;">
+          ⚙️ Auditorium Settings
+        </h3>
+        <button class="btn btn-secondary btn-sm" onclick="toggleSettingsModal()" style="padding: 2px 8px;">✕</button>
+      </div>
+
+      <!-- 3D Camera Controls -->
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+          3D World Camera
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button id="btn-camera-drift" class="btn btn-secondary btn-sm" onclick="toggleWorldDrift()">
+            🎥 CAM: DRIFT
+          </button>
+          <button id="btn-camera-speed" class="btn btn-secondary btn-sm" onclick="toggleWorldSpeed()">
+            SPEED: SERENE
+          </button>
+        </div>
+        <button class="btn btn-secondary btn-sm btn-block" onclick="resetWorldCamera()" style="margin-top: 8px;">
+          ↺ Reset Birds-Eye View
+        </button>
+      </div>
+
+      <!-- Display & Projection Controls -->
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+          Display & Projection
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button id="btn-theme-toggle" class="btn btn-secondary btn-sm" onclick="toggleProjectorTheme()">
+            🌓 Theme Toggle
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleFullscreen()">
+            ⛶ Fullscreen
+          </button>
+        </div>
+      </div>
+
+      <!-- Delegate Gateway Access -->
+      <div style="margin-bottom: 16px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+        <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+          Delegate Mobile Gateway
+        </div>
+        <button class="btn btn-primary btn-sm btn-block" onclick="toggleQrModal(); toggleSettingsModal();">
+          📱 GATEWAY QR CODE
+        </button>
+        <div style="margin-top: 8px; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); word-break: break-all; text-align: center;">
+          {{ server_url }}
+        </div>
+      </div>
+
+      <button class="btn btn-secondary btn-block" onclick="toggleSettingsModal()">Close</button>
+    </div>
+  </div>
+
+  <!-- On-Demand QR Gateway Modal Overlay -->
+  <div id="proj-qr-modal" class="modal-overlay" style="display: none;" onclick="if(event.target===this) toggleQrModal()">
+    <div class="modal-card" style="max-width: 380px; text-align: center; padding: 24px;">
+      <h3 style="font-size: 1.2rem; font-weight: 900; margin-bottom: 4px; text-transform: uppercase;">
+        Delegate Terminal Access
+      </h3>
+      <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 14px;">
+        Scan with smartphone & enter your sovereign PIN:
+      </p>
+
+      <div class="qr-box" style="margin: 0 auto 14px auto; max-width: 220px; background:#fff; padding:8px; border-radius:4px;">
+        {{ qr_svg | safe }}
+      </div>
+
+      <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 8px; border-radius: var(--radius-xs); font-family: var(--font-mono); font-size: 0.9rem; font-weight: 700; margin-bottom: 14px;">
+        {{ server_url }}
+      </div>
+
+      <button class="btn btn-secondary btn-block" onclick="toggleQrModal()">Close Gateway</button>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='world3d.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script>
+    function toggleSettingsModal() {
+      const modal = document.getElementById('proj-settings-modal');
+      modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
+    }
+
+    function resetWorldCamera() {
+      if (window.projApp && window.projApp.world3d) {
+        window.projApp.world3d.resetCamera();
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        document.exitFullscreen().catch(err => console.log(err));
+      }
+    }
+
+    function toggleProjectorTheme() {
+      const isLight = document.body.classList.toggle('theme-light');
+      localStorage.setItem('projector_theme', isLight ? 'light' : 'dark');
+    }
+
+    function toggleQrModal() {
+      const modal = document.getElementById('proj-qr-modal');
+      modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
+    }
+
+    function toggleWorldDrift() {
+      if (window.projApp && window.projApp.world3d) {
+        const isDrifting = window.projApp.world3d.toggleDrift();
+        const btn = document.getElementById('btn-camera-drift');
+        if (btn) btn.innerText = isDrifting ? '🎥 CAM: DRIFT' : '⏸️ CAM: PAUSED';
+      }
+    }
+
+    function toggleWorldSpeed() {
+      if (window.projApp && window.projApp.world3d) {
+        const mode = window.projApp.world3d.toggleSpeed();
+        const btn = document.getElementById('btn-camera-speed');
+        if (btn) btn.innerText = `SPEED: ${mode}`;
+      }
+    }
+
+    const savedTheme = localStorage.getItem('projector_theme');
+    if (savedTheme === 'light') {
+      document.body.classList.add('theme-light');
+    } else {
+      document.body.classList.remove('theme-light');
+    }
+
+    const projApp = new ProjectorApp();
+    window.projApp = projApp;
+    projApp.start();
+  </script>
+</body>
+</html>

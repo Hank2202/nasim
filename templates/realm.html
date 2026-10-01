@@ -1,0 +1,510 @@
+{% extends "base.html" %}
+
+{% block title %}{{ realm.name }} - Sovereign Console{% endblock %}
+
+{% block header_extra %}
+  <a href="/" class="btn btn-secondary btn-sm">Exit</a>
+{% endblock %}
+
+{% block content %}
+<div class="mobile-container">
+
+  <!-- ========================================================================= -->
+  <!-- BETWEEN-ROUNDS PLENARY VOTING OVERLAY / ACTIVE FLOOR CALLOUT -->
+  <!-- ========================================================================= -->
+  <div id="plenary-session-callout" style="display: none; margin-bottom: 14px;">
+    <div class="card" style="border: 2px solid var(--border-white); padding: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <span class="badge" style="background:var(--border-white); color:var(--bg-base);">PLENARY FLOOR ACTIVE</span>
+        <span id="plenary-timer-display" style="font-family:var(--font-mono); font-size:0.85rem; font-weight:800;">-</span>
+      </div>
+      <h3 id="plenary-callout-title" style="font-size: 1.1rem; color: #fff; font-weight: 800;">Between-Rounds Voting Session</h3>
+      <p id="plenary-callout-desc" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">
+        Resolutions endorsed by at least two sovereign nations are on the floor. Cast your sovereign ballot.
+      </p>
+
+      <div id="plenary-voting-actions-container" style="margin-top: 12px;">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- VIEW 1: MY REALM (DEFAULT) -->
+  <!-- ========================================================================= -->
+  <div id="view-overview" class="mobile-view active">
+    <!-- Summit Concluded Personal Debrief Callout -->
+    <div id="mobile-concluded-callout" style="display: none; margin-bottom: 14px;"></div>
+
+    <!-- Sovereign Realm Header Banner -->
+    <div class="realm-banner">
+      <div class="realm-banner-header">
+        <div class="realm-icon-circle">
+          <svg><use href="#icon-overview"></use></svg>
+        </div>
+        <div class="realm-info" style="flex: 1;">
+          <h2>{{ realm.name }}</h2>
+          <div class="realm-values">{{ realm.ethos }}</div>
+          <div>
+            <span id="votes-badge" class="votes-badge">
+              {{ realm.assembly_votes }} ASSEMBLY VOTE{{ 'S' if realm.assembly_votes > 1 else '' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Classified Domestic Directive Compartment -->
+      <div class="agenda-card">
+        <button type="button" id="toggle-agenda-btn" class="agenda-toggle-btn">
+          <span style="display: flex; align-items: center; gap: 6px;">
+            <svg style="width: 14px; height: 14px; stroke: currentColor;"><use href="#icon-lock"></use></svg>
+            CLASSIFIED DOMESTIC DIRECTIVE
+          </span>
+          <span class="toggle-indicator">▼</span>
+        </button>
+        <div id="agenda-content" class="agenda-content">
+          <div style="color: var(--text-muted); font-weight: 700; margin-bottom: 6px; font-size: 0.7rem; font-family: var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;">
+            EYES ONLY • SOVEREIGN CHANCELLOR DIRECTIVE
+          </div>
+          <p>{{ realm.private_agenda }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mini Breaking News Wire -->
+    <div class="news-banner">
+      <div class="news-icon">
+        <svg width="18" height="18"><use href="#icon-bell"></use></svg>
+      </div>
+      <div class="news-content">
+        <div id="news-headline" class="news-headline">PLANETARY WIRE</div>
+        <div id="news-body" class="news-body">Summit proceedings active. Standby for continental roll-calls.</div>
+      </div>
+    </div>
+
+    <!-- Status Tags Container -->
+    <div id="status-tags-container" class="status-tags" style="margin-bottom: 14px;"></div>
+
+    <!-- Tactile Inset Counters (Grain, Cores, Silk) -->
+    <div class="telemetry-grid">
+      <div class="resource-card">
+        <div class="resource-label">GRAIN</div>
+        <div id="grain-val" class="resource-value">{{ realm.alchemical_grain }}</div>
+        <div class="resource-subtext">-20/turn base</div>
+      </div>
+      <div class="resource-card">
+        <div class="resource-label">CORES</div>
+        <div id="cores-val" class="resource-value">{{ realm.aether_cores }}</div>
+        <div class="resource-subtext">thresh 75</div>
+      </div>
+      <div class="resource-card">
+        <div class="resource-label">SILK</div>
+        <div id="silk-val" class="resource-value">{{ realm.echo_silk }}</div>
+        <div class="resource-subtext">luxury</div>
+      </div>
+      <div class="resource-card">
+        <div class="resource-label">MILITARY</div>
+        <div id="military-val" class="resource-value">{{ realm.military_power or 50 }}</div>
+        <div class="resource-subtext">regiments</div>
+      </div>
+    </div>
+
+    <!-- State Metrics (0-100) with Tactile Monochromatic Tracks -->
+    <div class="card">
+      <div class="card-title">State Metrics & Vital Signs</div>
+      
+      <div class="metric-row" style="margin-top: 12px;">
+        <div class="metric-header">
+          <span>PUBLIC VITALITY</span>
+          <strong id="vitality-val">{{ realm.public_vitality }}/100</strong>
+        </div>
+        <div class="metric-progress-bg">
+          <div id="vitality-bar" class="metric-progress-fill" style="width: {{ realm.public_vitality }}%;"></div>
+        </div>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric-header">
+          <span>DIPLOMATIC STANDING</span>
+          <strong id="standing-val">{{ realm.diplomatic_standing }}/100</strong>
+        </div>
+        <div class="metric-progress-bg">
+          <div id="standing-bar" class="metric-progress-fill" style="width: {{ realm.diplomatic_standing }}%;"></div>
+        </div>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric-header">
+          <span>CIVIL STABILITY</span>
+          <strong id="stability-val">{{ realm.civil_stability }}/100</strong>
+        </div>
+        <div class="metric-progress-bg">
+          <div id="stability-bar" class="metric-progress-fill" style="width: {{ realm.civil_stability }}%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Domestic Policies & Executive Actions Card -->
+    <div class="card">
+      <div class="card-title">Executive Governance & Domestic Levers</div>
+      <p style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;">
+        ENACT EXECUTIVE DIRECTIVES TO ALLOCATE NATIONAL RESOURCES
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+        <!-- Action 1: Relief -->
+        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 10px; border-radius: var(--radius-xs); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div>
+            <strong style="font-size: 0.85rem;">Emergency Grain Rationing</strong>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">
+              Cost: <span class="badge" style="padding: 2px 6px;">15 GRAIN</span> → Gain: <strong style="color:#fff;">+15 VITALITY</strong>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="realmApp.executeDomesticAction('relief')">Enact</button>
+        </div>
+
+        <!-- Action 2: Forge -->
+        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 10px; border-radius: var(--radius-xs); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div>
+            <strong style="font-size: 0.85rem;">Stoke Industrial Forges</strong>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">
+              Cost: <span class="badge" style="padding: 2px 6px;">10 GRAIN + 10 SILK</span> → Gain: <strong style="color:#fff;">+15 CORES</strong>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="realmApp.executeDomesticAction('forge')">Enact</button>
+        </div>
+
+        <!-- Action 3: Gala -->
+        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 10px; border-radius: var(--radius-xs); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div>
+            <strong style="font-size: 0.85rem;">Host Grand Cultural Gala</strong>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">
+              Cost: <span class="badge" style="padding: 2px 6px;">15 SILK</span> → Gain: <strong style="color:#fff;">+10 STANDING, +10 STABILITY</strong>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="realmApp.executeDomesticAction('gala')">Enact</button>
+        </div>
+
+        <!-- Action 4: Security -->
+        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 10px; border-radius: var(--radius-xs); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div>
+            <strong style="font-size: 0.85rem;">Mobilize Civil Guard</strong>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">
+              Cost: <span class="badge" style="padding: 2px 6px;">10 CORES</span> → Gain: <strong style="color:#fff;">+15 STABILITY</strong>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="realmApp.executeDomesticAction('security')">Enact</button>
+        </div>
+
+        <!-- Action 5: Muster Regiments -->
+        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 10px; border-radius: var(--radius-xs); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div>
+            <strong style="font-size: 0.85rem;">Muster Sovereign Regiments</strong>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">
+              Cost: <span class="badge" style="padding: 2px 6px;">10 GRAIN + 10 CORES</span> → Gain: <strong style="color:#fff;">+15 MILITARY</strong>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="realmApp.executeDomesticAction('muster')">Enact</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- VIEW 2: WORLD NEWS & CHRONICLE -->
+  <!-- ========================================================================= -->
+  <div id="view-news" class="mobile-view">
+    <div class="card">
+      <div class="card-title">Continental World News & Chronicles</div>
+      <p style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:2px;">
+        OFFICIAL DISPATCH STREAM • IN-GAME CHRONOLOGY
+      </p>
+
+      <!-- Category Filter Chips -->
+      <div style="display: flex; gap: 6px; margin-top: 10px; margin-bottom: 8px; overflow-x: auto;">
+        <button type="button" class="btn btn-secondary btn-sm active news-filter-btn" style="font-size:0.7rem; padding: 4px 10px;" onclick="realmApp.filterNews('all', this)">All</button>
+        <button type="button" class="btn btn-secondary btn-sm news-filter-btn" style="font-size:0.7rem; padding: 4px 10px;" onclick="realmApp.filterNews('crisis', this)">Crises</button>
+        <button type="button" class="btn btn-secondary btn-sm news-filter-btn" style="font-size:0.7rem; padding: 4px 10px;" onclick="realmApp.filterNews('trade', this)">Treaties</button>
+        <button type="button" class="btn btn-secondary btn-sm news-filter-btn" style="font-size:0.7rem; padding: 4px 10px;" onclick="realmApp.filterNews('assembly', this)">Assembly</button>
+      </div>
+
+      <div id="mobile-news-feed" style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- VIEW 3: PEER-TO-PEER TRADING HUB -->
+  <!-- ========================================================================= -->
+  <div id="view-trades" class="mobile-view">
+    <!-- Propose Trade Card -->
+    <div class="card">
+      <div class="card-title">Draft Bilateral Treaty</div>
+      <p style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:2px;">
+        PROPOSE ATOMIC RESOURCE EXCHANGES WITH COUNTERPARTY REALMS
+      </p>
+      <form id="trade-form" style="margin-top: 10px;">
+        <div class="form-group">
+          <label class="form-label" for="trade-receiver">Counterparty Sovereign Nation</label>
+          <select id="trade-receiver" class="form-select" required>
+            <option value="" disabled selected>Select counterparty...</option>
+            {% for other in other_realms %}
+            <option value="{{ other.id }}">{{ other.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="flex: 1.2;">
+            <label class="form-label" for="trade-offer-res">Offered Asset</label>
+            <select id="trade-offer-res" class="form-select" onchange="realmApp.updateTradePreview()">
+              <option value="grain">🌾 Grain</option>
+              <option value="cores">⚙️ Cores</option>
+              <option value="silk">🪡 Silk</option>
+              <option value="military">⚔️ Military</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 1.8;">
+            <label class="form-label" for="trade-offer-amt">Quantity Offered</label>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-weight:800;" onclick="realmApp.adjustTradeInput('trade-offer-amt', -5)">-5</button>
+              <input type="number" id="trade-offer-amt" class="form-input" min="1" max="100" value="10" required style="text-align:center; font-weight:700;" oninput="realmApp.updateTradePreview()">
+              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-weight:800;" onclick="realmApp.adjustTradeInput('trade-offer-amt', 5)">+5</button>
+              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-weight:800;" onclick="realmApp.adjustTradeInput('trade-offer-amt', 10)">+10</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="flex: 1.2;">
+            <label class="form-label" for="trade-req-res">Demanded Asset</label>
+            <select id="trade-req-res" class="form-select" onchange="realmApp.updateTradePreview()">
+              <option value="cores">⚙️ Cores</option>
+              <option value="grain">🌾 Grain</option>
+              <option value="silk">🪡 Silk</option>
+              <option value="military">⚔️ Military</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 1.8;">
+            <label class="form-label" for="trade-req-amt">Quantity Demanded</label>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-weight:800;" onclick="realmApp.adjustTradeInput('trade-req-amt', -5)">-5</button>
+              <input type="number" id="trade-req-amt" class="form-input" min="1" max="100" value="10" required style="text-align:center; font-weight:700;" oninput="realmApp.updateTradePreview()">
+              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-weight:800;" onclick="realmApp.adjustTradeInput('trade-req-amt', 5)">+5</button>
+              <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px; font-weight:800;" onclick="realmApp.adjustTradeInput('trade-req-amt', 10)">+10</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Treaty Terms Preview Box -->
+        <div id="trade-preview-box" style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); border-radius:var(--radius-xs); padding:8px 12px; margin-bottom:12px; font-size:0.78rem; font-family:var(--font-mono); display:flex; justify-content:space-between; align-items:center;">
+          <span style="color:var(--text-muted);">PROPOSED TERMS:</span>
+          <span id="trade-preview-text" style="color:var(--text-primary); font-weight:800;">10 GRAIN ⇄ 10 CORES</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="trade-note">Diplomatic Dispatch / Treaty Note (Optional)</label>
+          <input type="text" id="trade-note" class="form-input" placeholder="e.g. Urgent grain needed; will back your floor motion!" maxlength="140">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Transmit Treaty Proposal</button>
+      </form>
+    </div>
+
+    <!-- Incoming Trades List -->
+    <div class="card">
+      <div class="card-title">Pending Incoming Proposals</div>
+      <div id="incoming-trades-list" style="margin-top: 10px;">
+        <p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono);">No pending incoming proposals.</p>
+      </div>
+    </div>
+
+    <!-- Outgoing Trades List -->
+    <div class="card">
+      <div class="card-title">Active Outgoing Offers</div>
+      <div id="outgoing-trades-list" style="margin-top: 10px;">
+        <p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono);">No active outgoing proposals.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- VIEW 4: DECLARATIONS & RESOLUTIONS -->
+  <!-- ========================================================================= -->
+  <div id="view-declarations" class="mobile-view">
+    <!-- Draft Declaration Card -->
+    <div class="card">
+      <div class="card-title">Draft Sovereign Declaration</div>
+      <p style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-top: 2px;">
+        Requires support from at least two sovereign countries to enter the Plenary Ballot.
+      </p>
+      <form id="proposal-form" style="margin-top: 10px;" onsubmit="realmApp.handleDraftProposal(event)">
+        <div class="form-group">
+          <label class="form-label" for="proposal-title">Declaration Title</label>
+          <input type="text" id="proposal-title" class="form-input" placeholder="e.g. Continental Granary Accord" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="proposal-type">Statutory Policy Mandate / Treaty Type</label>
+          <select id="proposal-type" class="form-select">
+            <option value="tax">🌾 Emergency Grain Redistribution (Surplus grain reallocated to famine zones)</option>
+            <option value="embargo">⚖️ Wealth Surtax & Embargo (Commercial sanctions on richest nation)</option>
+            <option value="aid">🕊️ Sovereign Relief Mission (Sponsor donates relief for +10 Standing)</option>
+            <option value="cordon">🛡️ Frontier Defense & Quarantine Cordon (Seals borders against civil unrest)</option>
+            <option value="custom">📜 General Sovereign Concordat (Custom mutual statutory accord)</option>
+          </select>
+        </div>
+
+        <!-- Co-Sponsorship Targeting Selection -->
+        <div class="form-group">
+          <label class="form-label" for="proposal-target-mode">Endorsement Mode</label>
+          <select id="proposal-target-mode" class="form-select" onchange="realmApp.handleEndorsementModeChange(this.value)">
+            <option value="open">Open Call (Any sovereign nation may co-sponsor)</option>
+            <option value="targeted">Direct Envoy (Specifically request support from a chosen country)</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="proposal-target-realm-group" style="display: none;">
+          <label class="form-label" for="proposal-target-realm">Targeted Sovereign Partner</label>
+          <select id="proposal-target-realm" class="form-select">
+            {% for other in other_realms %}
+            <option value="{{ other.id }}">{{ other.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="proposal-desc">Terms & Sovereign Justification</label>
+          <textarea id="proposal-desc" class="form-textarea" rows="2" placeholder="Detail statutory obligations and mutual terms..." required></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Proclaim Declaration on Floor</button>
+      </form>
+    </div>
+
+    <!-- Floor Declarations Docket & Endorsement Tracker -->
+    <div class="card">
+      <div class="card-title">Floor Declarations & Co-Sponsorships</div>
+      <p style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:2px;">
+        STATUS: AWAITING SUPPORT VS QUALIFIED FOR PLENARY BALLOT
+      </p>
+      <div id="pending-motions-list" style="margin-top: 10px;">
+        <p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono);">No active declarations on the floor.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- VIEW 5: WORLD LORE & CONTINENTAL INTEL ARCHIVE -->
+  <!-- ========================================================================= -->
+  <div id="view-lore" class="mobile-view">
+    <!-- Header & Topic Filter Chips -->
+    <div class="card" style="padding: 14px 16px;">
+      <div class="card-title">Imperial Intelligence & Lore Archive</div>
+      <p style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:2px;">
+        GEOGRAPHY, FACTION DOSSIERS & KNOWLEDGE INQUIRIES
+      </p>
+      <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:8px 10px; border-radius:var(--radius-xs); margin-top:8px; font-size:0.75rem; line-height:1.4;">
+        <span style="color:#10b981; font-weight:800;">HIGH-STAKES INTEL:</span> Read the concise dossiers below and verify intelligence inquiries. Correct deductions award national resources. Flawed deductions assess a <strong>-5 Diplomatic Standing penalty</strong> and permanently lock access to that dossier!
+      </div>
+
+      <!-- Filter Chips -->
+      <div style="display: flex; gap: 6px; margin-top: 10px; overflow-x: auto;">
+        <button type="button" class="btn btn-secondary btn-sm active lore-filter-btn" style="font-size:0.7rem; padding: 4px 10px;" onclick="realmApp.filterLore('all', this)">All</button>
+        <button type="button" class="btn btn-secondary btn-sm lore-filter-btn" style="font-size:0.7rem; padding: 4px 10px;" onclick="realmApp.filterLore('geography', this)">Geography</button>
+        <button type="button" class="btn btn-secondary btn-sm lore-filter-btn" style="font-size:0.7rem; padding: 4px 10px;" onclick="realmApp.filterLore('factions', this)">Factions</button>
+        <button type="button" class="btn btn-secondary btn-sm lore-filter-btn" style="font-size:0.7rem; padding: 4px 10px;" onclick="realmApp.filterLore('charters', this)">Charters</button>
+      </div>
+    </div>
+
+    <!-- Dynamic Lore Encyclopedia Stream -->
+    <div id="lore-encyclopedia-container" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+      <!-- Injected via JS -->
+    </div>
+
+    <!-- Sovereign Nations Dossiers -->
+    <div class="card" style="margin-top: 14px;">
+      <div class="card-title">Continental Diplomatic Dossiers</div>
+      <p style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:2px;">
+        CULTURAL HERITAGE & QUALITATIVE INTELLIGENCE ESTIMATES
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+        {% for other in realms %}
+        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-sunken); border-radius: var(--radius-sm); padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: var(--text-primary); font-size: 0.95rem;">{{ other.name }}</strong>
+            <span class="badge">{{ other.assembly_votes }} VOTES</span>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-family:var(--font-mono); margin-top: 2px;">{{ other.ethos }}</div>
+          {% if other.backstory %}
+          <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.35;">{{ other.backstory }}</p>
+          {% endif %}
+          
+          {% if other.id == realm.id %}
+          <div style="display: flex; gap: 12px; font-size: 0.72rem; font-family: var(--font-mono); margin-top: 8px; color: var(--text-muted);">
+            <span>GRAIN: <strong style="color:var(--text-primary);">{{ other.alchemical_grain }}</strong></span>
+            <span>CORES: <strong style="color:var(--text-primary);">{{ other.aether_cores }}</strong></span>
+            <span>SILK: <strong style="color:var(--text-primary);">{{ other.echo_silk }}</strong></span>
+          </div>
+          <div style="display: flex; gap: 12px; font-size: 0.72rem; font-family: var(--font-mono); margin-top: 4px; color: var(--text-muted);">
+            <span>STANDING: <strong style="color:var(--text-primary);">{{ other.diplomatic_standing }}/100</strong></span>
+            <span>VITALITY: <strong style="color:var(--text-primary);">{{ other.public_vitality }}/100</strong></span>
+            <span>STABILITY: <strong style="color:var(--text-primary);">{{ other.civil_stability }}/100</strong></span>
+          </div>
+          {% else %}
+          <div style="display: flex; gap: 10px; font-size: 0.72rem; font-family: var(--font-mono); margin-top: 8px; color: var(--text-muted);">
+            <span>GRAIN: <strong style="color:var(--text-primary);">{{ other.grain_tier }}</strong></span>
+            <span>CORES: <strong style="color:var(--text-primary);">{{ other.cores_tier }}</strong></span>
+            <span>SILK: <strong style="color:var(--text-primary);">{{ other.silk_tier }}</strong></span>
+          </div>
+          <div style="display: flex; gap: 10px; font-size: 0.72rem; font-family: var(--font-mono); margin-top: 4px; color: var(--text-muted);">
+            <span>STANDING: <strong style="color:var(--text-primary);">{{ other.standing_tier }}</strong></span>
+            <span>VITALITY: <strong style="color:var(--text-primary);">{{ other.vitality_tier }}</strong></span>
+            <span>STABILITY: <strong style="color:var(--text-primary);">{{ other.stability_tier }}</strong></span>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ========================================================================= -->
+<!-- TACTILE PERSISTENT BOTTOM NAVIGATION BAR (DIRECT SWITCHING) -->
+<!-- ========================================================================= -->
+<nav class="bottom-nav">
+  <button class="bottom-nav-item active" data-view="view-overview" onclick="realmApp.switchView('view-overview')">
+    <span class="bottom-nav-icon"><svg><use href="#icon-overview"></use></svg></span>
+    <span>Realm</span>
+  </button>
+  <button class="bottom-nav-item" data-view="view-news" onclick="realmApp.switchView('view-news')">
+    <span class="bottom-nav-icon"><svg><use href="#icon-news"></use></svg></span>
+    <span>World News</span>
+  </button>
+  <button class="bottom-nav-item" data-view="view-trades" onclick="realmApp.switchView('view-trades')">
+    <span class="bottom-nav-icon"><svg><use href="#icon-trade"></use></svg></span>
+    <span>Trade</span>
+    <span id="nav-trade-badge" class="bottom-nav-badge" style="display: none;">0</span>
+  </button>
+  <button class="bottom-nav-item" data-view="view-declarations" onclick="realmApp.switchView('view-declarations')">
+    <span class="bottom-nav-icon"><svg><use href="#icon-motions"></use></svg></span>
+    <span>Declarations</span>
+    <span id="nav-motions-badge" class="bottom-nav-badge" style="display: none;">0</span>
+  </button>
+  <button class="bottom-nav-item" data-view="view-lore" onclick="realmApp.switchView('view-lore')">
+    <span class="bottom-nav-icon"><svg><use href="#icon-continent"></use></svg></span>
+    <span>Lore & Intel</span>
+  </button>
+</nav>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const realmApp = new RealmApp("{{ realm.id }}");
+  window.realmApp = realmApp;
+  realmApp.start();
+</script>
+{% endblock %}

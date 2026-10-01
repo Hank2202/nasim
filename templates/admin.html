@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+
+{% block title %}Facilitator Command Deck - The Summit of Realms{% endblock %}
+
+{% block header_extra %}
+  <a href="/projector" target="_blank" class="btn btn-secondary btn-sm">
+    Projector View ↗
+  </a>
+  <button id="btn-sound-chime" class="btn btn-secondary btn-sm" title="Sound chime across all devices">
+    Chime 🔔
+  </button>
+  <button id="btn-end-turn-header" class="btn btn-primary btn-sm" onclick="adminApp.advanceTurn()">
+    Advance Turn ⏩
+  </button>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1280px;">
+
+  <!-- Master Facilitator Header Bar -->
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+    <div>
+      <h1 style="font-size: 1.4rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #fff;">
+        Facilitator Command Deck
+      </h1>
+      <p style="color: var(--text-muted); font-size: 0.8rem; font-family: var(--font-mono); margin-top: 2px;">
+        MASTER WORKSPACE • SESSION CONTROLS & TELEMETRY
+      </p>
+    </div>
+    <div style="display:flex; gap: 8px; align-items:center;">
+      <span id="admin-turn-display" class="turn-pill" style="font-size: 0.85rem; padding: 6px 12px;">TURN {{ state.meta.current_turn }}</span>
+      <span id="admin-timer-display" class="timer-pill" style="font-size: 0.85rem; padding: 6px 12px;">05:00</span>
+      <button onclick="adminApp.openResetModal()" class="btn btn-danger btn-sm">Reset Sim</button>
+    </div>
+  </div>
+
+  <!-- Functional Workspace Tabs -->
+  <div class="admin-tab-nav" style="display: flex; gap: 6px; border-bottom: 2px solid var(--border-subtle); margin-bottom: 18px; overflow-x: auto;">
+    <button class="admin-tab-btn active" data-tab="tab-pacing">⏱️ Pacing & Timers</button>
+    <button class="admin-tab-btn" data-tab="tab-events">📰 Events & Crises</button>
+    <button class="admin-tab-btn" data-tab="tab-resources">🌾 Resource Overrides</button>
+    <button class="admin-tab-btn" data-tab="tab-resolutions">📜 Resolutions & Docket</button>
+    <button class="admin-tab-btn" data-tab="tab-access">🔐 Delegations & Passcodes</button>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 1: PACING & TIME CONTROLS -->
+  <!-- ========================================================================= -->
+  <div id="tab-pacing" class="admin-tab-content active">
+    <!-- Simulation Phase Banner -->
+    <div class="card" style="border: 2px solid var(--border-white); margin-bottom: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase;">Current Simulation Phase</div>
+          <div id="admin-phase-display" style="font-size: 1.25rem; font-weight: 900; font-family: var(--font-mono); color: #fff; margin-top: 2px;">
+            WORKING SESSION (5 MINUTES)
+          </div>
+        </div>
+        <div id="admin-plenary-controls" style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <!-- Precise Time Editing Card -->
+      <div class="card">
+        <div class="card-title">Precise Timer Controls</div>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+          Set exact custom remaining time or adjust ongoing clocks on the fly:
+        </p>
+
+        <!-- Direct Time Input Form -->
+        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 14px; border-radius: var(--radius-sm); margin-top: 12px;">
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 6px;">EDIT TIMER DIRECTLY:</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="number" id="input-custom-mins" class="form-input" min="0" max="120" value="5" style="width: 75px; text-align: center; font-family: var(--font-mono); font-weight: 700;">
+            <span style="font-family: var(--font-mono); font-size: 0.85rem;">min</span>
+            <input type="number" id="input-custom-secs" class="form-input" min="0" max="59" value="0" style="width: 75px; text-align: center; font-family: var(--font-mono); font-weight: 700;">
+            <span style="font-family: var(--font-mono); font-size: 0.85rem;">sec</span>
+            <button class="btn btn-primary btn-sm" onclick="adminApp.setCustomTimer()">Apply Time</button>
+          </div>
+        </div>
+
+        <!-- Quick Adjustment Buttons -->
+        <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(60)">+1 Min</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(120)">+2 Min</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(-60)">-1 Min</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.controlTimer('reset', 300)">↺ 5m</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.controlTimer('reset', 600)">↺ 10m</button>
+        </div>
+
+        <!-- Timer Run/Pause -->
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button id="timer-start-btn" class="btn btn-primary btn-block" onclick="adminApp.controlTimer('start')">▶ Resume Timer</button>
+          <button id="timer-pause-btn" class="btn btn-secondary btn-block" onclick="adminApp.controlTimer('pause')">⏸ Pause Timer</button>
+        </div>
+
+        <!-- Room Sound Alerts -->
+        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-subtle);">
+          <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 6px;">FACILITATOR ROOM SOUNDS:</div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('chime', 'Attention Sovereign Delegates')">🔔 Chime</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('gong', 'Plenary Assembly Called')">⚡ Plenary Gong</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('alert', 'Crisis Warning Alert')">🚨 Crisis Siren</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Turn Advance & Settlement Card -->
+      <div class="card">
+        <div class="card-title">Turn Advancement & Cycles</div>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+          Settle background socioeconomic cycles and advance to the next turn:
+        </p>
+
+        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 12px; border-radius: var(--radius-sm); margin: 12px 0; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
+          <strong>End-of-Turn Routine Executes:</strong>
+          <ul style="padding-left: 18px; margin-top: 6px;">
+            <li>Deducts baseline grain (-20 Grain default, -15 with Efficiency).</li>
+            <li>Enforces Starvation penalties if grain $\le 0$ (-25 Vitality, -20 Stability).</li>
+            <li>Enforces Complacency penalties if stability & vitality $\ge 85$ without 10 Silk.</li>
+            <li>Calculates Plutocratic Drift (+1 bonus vote, -5 Stability).</li>
+            <li>Resets working session timer to 5:00.</li>
+          </ul>
+        </div>
+
+        <button class="btn btn-primary btn-block" onclick="adminApp.advanceTurn()" style="padding: 12px; font-weight: 800;">
+          Execute End of Turn Calculations ⏩
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 2: EVENTS & CRISES -->
+  <!-- ========================================================================= -->
+  <div id="tab-events" class="admin-tab-content">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div>
+        <!-- Automated Event Deck -->
+        <div class="card">
+          <div class="card-title">Automated Event Deck</div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+            Dilemmas configured from <code>scenario_config.json</code>:
+          </p>
+
+          <div style="margin-top: 10px;">
+            <button class="btn btn-primary btn-block" onclick="adminApp.triggerAutoNextEvent()" style="padding: 10px;">
+              ⚡ Trigger Next Recommended Crisis
+            </button>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <label class="form-label" for="catalog-event-select">Select Catalog Dilemma</label>
+            <select id="catalog-event-select" class="form-select" style="font-family: var(--font-mono); font-size: 0.82rem;">
+              <option value="">Loading events...</option>
+            </select>
+            <button class="btn btn-secondary btn-block btn-sm" style="margin-top: 8px;" onclick="adminApp.triggerSelectedCatalogEvent()">
+              Inject Selected Crisis
+            </button>
+          </div>
+
+          <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-subtle);">
+            <label style="font-size: 0.78rem; font-family: var(--font-mono); display: flex; align-items: center; gap: 8px; color: var(--text-secondary); cursor: pointer;">
+              <input type="checkbox" id="check-auto-inject-turn" onchange="adminApp.toggleAutoCrisisOnTurn(this.checked)">
+              <span>AUTO-INJECT CRISIS ON TURN ADVANCE</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Custom Wire Broadcast -->
+        <div class="card">
+          <div class="card-title">Custom Wire Broadcast</div>
+          <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
+            Broadcast an emergency breaking news bulletin to all smartphones and projector:
+          </p>
+          <form id="admin-news-form" style="margin-top: 8px;" onsubmit="adminApp.handleBroadcastNews(event)">
+            <div class="form-group">
+              <input type="text" id="admin-news-headline" class="form-input" placeholder="Headline (e.g. EMBARGO DECLARED)" required>
+            </div>
+            <div class="form-group">
+              <textarea id="admin-news-detail" class="form-textarea" rows="2" placeholder="Full dispatch narrative..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-secondary btn-block btn-sm">Broadcast Emergency Dispatch</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Live Dispatch Audit Log -->
+      <div class="card">
+        <div class="card-title">Dispatch Wire Audit Log</div>
+        <p style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;">
+          CHRONOLOGICAL DISPATCH STREAM
+        </p>
+        <div id="admin-news-feed" style="max-height: 480px; overflow-y: auto; margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 3: RESOURCE OVERRIDES & TELEMETRY -->
+  <!-- ========================================================================= -->
+  <div id="tab-resources" class="admin-tab-content">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+        <div>
+          <div class="card-title">Continental Telemetry & Direct Overrides</div>
+          <p style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:2px;">
+            CLICK +/- TO ADJUST RESERVES BY 5 • CLICK 'EDIT' FOR STATUS PROTOCOLS
+          </p>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table-deck">
+          <thead>
+            <tr>
+              <th>Delegation</th>
+              <th>Grain</th>
+              <th>Cores</th>
+              <th>Silk</th>
+              <th>Military</th>
+              <th>Vitality</th>
+              <th>Standing</th>
+              <th>Stability</th>
+              <th>Votes</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="admin-realms-tbody">
+            <!-- Injected via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 4: RESOLUTIONS & PLENARY DOCKET -->
+  <!-- ========================================================================= -->
+  <div id="tab-resolutions" class="admin-tab-content">
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div class="card-title">Floor Resolutions & Plenary Docket</div>
+        <span style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">
+          MOTIONS WITH ≥ 2 CO-SPONSORS QUALIFY FOR PLENARY
+        </span>
+      </div>
+
+      <div id="admin-resolutions-list" style="display: flex; flex-direction: column; gap: 10px;">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 5: DELEGATIONS & PASSCODES -->
+  <!-- ========================================================================= -->
+  <div id="tab-access" class="admin-tab-content">
+    <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px;">
+      <!-- Active Delegation PINs -->
+      <div class="card">
+        <div class="card-title">Delegation Access & Security Passcodes</div>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+          Participants must enter their delegation's 4-digit PIN to access their phone terminal:
+        </p>
+
+        <div class="table-responsive" style="margin-top: 12px;">
+          <table class="table-deck">
+            <thead>
+              <tr>
+                <th>Delegation</th>
+                <th>Ethos</th>
+                <th>Active PIN</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-pins-tbody">
+              <!-- Injected via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Gateway & Add Realm -->
+      <div>
+        <div class="card">
+          <div class="card-title">Network Gateway</div>
+          <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 8px 10px; border-radius: var(--radius-xs); margin: 8px 0; font-family: var(--font-mono); font-size: 0.82rem; color: #fff; display:flex; justify-content:space-between; align-items:center;">
+            <span id="server-url-display">{{ server_url }}</span>
+            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('{{ server_url }}'); showToast('URL copied to clipboard', 'info');">Copy</button>
+          </div>
+          <div class="qr-box" style="max-width: 180px; margin: 10px auto;">
+            {{ qr_svg | safe }}
+          </div>
+        </div>
+
+        <!-- Add Delegation -->
+        <div class="card">
+          <div class="card-title">Add Sovereign Delegation</div>
+          <form id="add-realm-form" style="margin-top: 8px;" onsubmit="adminApp.handleAddRealm(event)">
+            <div class="form-group" style="margin-bottom: 6px;">
+              <input type="text" id="new-realm-name" class="form-input" placeholder="Realm Name (e.g. Cloud Collective)" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 6px;">
+              <input type="text" id="new-realm-id" class="form-input" placeholder="Unique ID (e.g. cloud_collective)" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 6px;">
+              <input type="text" id="new-realm-pin" class="form-input" placeholder="4-Digit PIN (e.g. 1007)" value="1007" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 6px;">
+              <input type="text" id="new-realm-values" class="form-input" placeholder="Ethos / Cultural Values" value="Autonomy, Trade, Innovation">
+            </div>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <textarea id="new-realm-agenda" class="form-textarea" rows="2" placeholder="Secret Domestic Directive"></textarea>
+            </div>
+            <button type="submit" class="btn btn-secondary btn-sm btn-block">+ Register Delegation</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal for editing a realm stats & flags -->
+<div id="edit-realm-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="max-width: 480px;">
+    <h3 id="edit-modal-title" style="color: #fff; margin-bottom: 12px; font-size: 1.1rem; text-transform: uppercase;">Edit Delegation</h3>
+    <form id="edit-realm-form" onsubmit="adminApp.handleSaveRealmEdit(event)">
+      <input type="hidden" id="edit-realm-id">
+      
+      <div class="form-group">
+        <label class="form-label">Ethos & Cultural Values</label>
+        <input type="text" id="edit-realm-ethos" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Secret Domestic Directive</label>
+        <textarea id="edit-realm-agenda" class="form-textarea" rows="3"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Status Penalties & Protocols</label>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: var(--font-mono); font-size: 0.75rem;">
+          <label style="display:flex; align-items:center; gap:6px; color:#d4d4d8;">
+            <input type="checkbox" id="edit-flag-quarantine"> QUARANTINED
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; color:#d4d4d8;">
+            <input type="checkbox" id="edit-flag-strike"> GENERAL STRIKE
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; color:#d4d4d8;">
+            <input type="checkbox" id="edit-flag-starving"> STARVING
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; color:#d4d4d8;">
+            <input type="checkbox" id="edit-flag-efficiency"> TECH EFFICIENCY
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; margin-top: 18px;">
+        <button type="button" class="btn btn-danger btn-sm" onclick="adminApp.deleteCurrentEditingRealm()">Delete Delegation</button>
+        <div style="display:flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('edit-realm-modal').style.display='none'">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Reset Confirmation Modal -->
+<div id="modal-confirm-reset" class="modal-overlay" style="display: none;" onclick="if(event.target===this) adminApp.closeResetModal()">
+  <div class="modal-card" style="max-width: 420px; text-align: center;">
+    <div style="font-size: 2rem; margin-bottom: 8px;">⚠️</div>
+    <h3 style="font-size: 1.2rem; font-weight: 900; color: #fff; text-transform: uppercase;">Confirm Simulation Reset</h3>
+    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.45;">
+      Are you sure you want to reset the simulation back to Turn 1? All ongoing treaties, passed resolutions, and event dispatches will be cleared.
+    </p>
+    <div style="display: flex; gap: 10px; margin-top: 18px;">
+      <button class="btn btn-secondary btn-block" onclick="adminApp.closeResetModal()">Cancel</button>
+      <button class="btn btn-danger btn-block" onclick="adminApp.resetSimulation()">Yes, Reset Sim</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const adminApp = new AdminApp();
+  window.adminApp = adminApp;
+  adminApp.start();
+
+  // Tab switching logic
+  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      const tabId = btn.dataset.tab;
+      const target = document.getElementById(tabId);
+      if (target) target.classList.add('active');
+    });
+  });
+
+  adminApp.editRealmModal = async function(realmId) {
+    const resp = await fetch('/api/state');
+    const state = await resp.json();
+    const realm = state.realms.find(r => r.id === realmId);
+    if (!realm) return;
+
+    document.getElementById('edit-realm-id').value = realm.id;
+    document.getElementById('edit-modal-title').innerText = `Edit: ${realm.name}`;
+    document.getElementById('edit-realm-ethos').value = realm.ethos || realm.values || '';
+    document.getElementById('edit-realm-agenda').value = realm.private_agenda || '';
+    document.getElementById('edit-flag-quarantine').checked = Boolean(realm.is_quarantined);
+    document.getElementById('edit-flag-strike').checked = Boolean(realm.is_striking);
+    document.getElementById('edit-flag-starving').checked = Boolean(realm.is_starving);
+    document.getElementById('edit-flag-efficiency').checked = Boolean(realm.tech_efficiency_unlocked);
+    document.getElementById('edit-realm-modal').style.display = 'flex';
+  };
+
+  adminApp.handleSaveRealmEdit = async function(e) {
+    e.preventDefault();
+    const rid = document.getElementById('edit-realm-id').value;
+    const updates = {
+      ethos: document.getElementById('edit-realm-ethos').value,
+      private_agenda: document.getElementById('edit-realm-agenda').value,
+      is_quarantined: document.getElementById('edit-flag-quarantine').checked,
+      is_striking: document.getElementById('edit-flag-strike').checked,
+      is_starving: document.getElementById('edit-flag-starving').checked,
+      tech_efficiency_unlocked: document.getElementById('edit-flag-efficiency').checked,
+    };
+
+    try {
+      await fetch('/api/admin/realm/override', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: rid, updates })
+      });
+      document.getElementById('edit-realm-modal').style.display = 'none';
+      showToast('Delegation configuration saved', 'info');
+      this.pollState();
+    } catch(err) {
+      showToast('Failed to save edit', 'danger');
+    }
+  };
+
+  adminApp.deleteCurrentEditingRealm = async function() {
+    const rid = document.getElementById('edit-realm-id').value;
+    if (!confirm(`Permanently remove this delegation from the summit?`)) return;
+    try {
+      const resp = await fetch('/api/admin/realm/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: rid })
+      });
+      const res = await resp.json();
+      if (res.success) {
+        document.getElementById('edit-realm-modal').style.display = 'none';
+        showToast('Delegation removed', 'warning');
+        this.pollState();
+      } else {
+        showToast(res.message, 'danger');
+      }
+    } catch(err) {
+      showToast('Failed to delete delegation', 'danger');
+    }
+  };
+
+  adminApp.handleAddRealm = async function(e) {
+    e.preventDefault();
+    const data = {
+      id: document.getElementById('new-realm-id').value,
+      name: document.getElementById('new-realm-name').value,
+      pin: document.getElementById('new-realm-pin').value,
+      values: document.getElementById('new-realm-values').value,
+      private_agenda: document.getElementById('new-realm-agenda').value,
+    };
+
+    try {
+      const resp = await fetch('/api/admin/realm/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const res = await resp.json();
+      if (res.success) {
+        showToast('New delegation registered', 'info');
+        document.getElementById('add-realm-form').reset();
+        this.pollState();
+      } else {
+        showToast(res.message, 'danger');
+      }
+    } catch(err) {
+      showToast('Failed to add delegation', 'danger');
+    }
+  };
+</script>
+{% endblock %}

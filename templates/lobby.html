@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}The Summit of Realms - Sovereign Login{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 900px; text-align: center;">
+
+  <div style="margin-bottom: 24px;">
+    <h1 style="font-size: 1.8rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;">
+      The Summit of Realms
+    </h1>
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+      Live Educational Geopolitical Simulation Platform • Host Terminal
+    </p>
+    <div style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 4px 12px; border-radius: var(--radius-pill); margin-top: 10px;">
+      <span>SESSION GATEWAY: {{ server_url }}</span>
+    </div>
+  </div>
+
+  <div class="card" style="text-align: left; margin-bottom: 20px;">
+    <div class="card-title">Select Sovereign Delegation</div>
+    <p style="color: var(--text-secondary); font-size: 0.82rem; margin-top: 4px;">
+      Each delegation commands unique resource endowments, cultural ethos, and a classified domestic directive. Tap your nation and enter your delegation passcode to access your sovereign terminal.
+    </p>
+  </div>
+
+  <div class="lobby-grid" style="text-align: left;">
+    {% for r in realms %}
+    <div class="lobby-realm-card" onclick="openLoginModal('{{ r.id }}', '{{ r.name }}')" style="cursor: pointer;">
+      <div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <h3 style="font-size: 1.1rem; color: #fff; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em;">{{ r.name }}</h3>
+          <span class="badge">
+            {{ r.assembly_votes }} VOTE{{ 'S' if r.assembly_votes > 1 else '' }}
+          </span>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 14px;">
+          {{ r.ethos }}
+        </p>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 12px;">
+        <div style="display: flex; gap: 10px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">
+          <span>GRAIN: <strong>{{ r.grain_tier }}</strong></span>
+          <span>CORES: <strong>{{ r.cores_tier }}</strong></span>
+          <span>SILK: <strong>{{ r.silk_tier }}</strong></span>
+        </div>
+        <span class="btn btn-primary btn-sm">
+          Login 🔒
+        </span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="margin-top: 24px; font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">
+    <span>Facilitators: <a href="/admin" style="color: var(--text-primary); text-decoration: underline;">Open Command Deck</a> • <a href="/projector" style="color: var(--text-primary); text-decoration: underline;">Open Projector</a></span>
+  </div>
+
+</div>
+
+<!-- Authentication PIN Modal -->
+<div id="login-pin-modal" class="modal-overlay" style="display: none;" onclick="if(event.target===this) closeLoginModal()">
+  <div class="modal-card" style="max-width: 400px; text-align: center;">
+    <div style="font-size: 1.8rem; margin-bottom: 6px;">🔒</div>
+    <h3 id="modal-realm-name" style="font-size: 1.2rem; font-weight: 900; color: #fff; text-transform: uppercase;">
+      Delegation Access
+    </h3>
+    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; margin-bottom: 16px;">
+      Enter the 4-digit sovereign passcode provided by your facilitator:
+    </p>
+
+    <form id="pin-login-form" onsubmit="submitPinLogin(event)">
+      <input type="hidden" id="login-realm-id">
+      
+      <div class="form-group">
+        <input type="password" id="login-realm-pin" class="form-input" placeholder="Passcode (e.g. 1001)" inputmode="numeric" maxlength="10" required style="text-align: center; font-size: 1.3rem; letter-spacing: 0.2em; font-family: var(--font-mono);" autofocus>
+      </div>
+
+      <div id="login-error-msg" style="display: none; color: #ef4444; font-size: 0.8rem; font-family: var(--font-mono); margin-bottom: 12px;">
+        Incorrect passcode. Please try again.
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button type="button" class="btn btn-secondary btn-block" onclick="closeLoginModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-block">Authenticate</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openLoginModal(realmId, realmName) {
+    document.getElementById('login-realm-id').value = realmId;
+    document.getElementById('modal-realm-name').innerText = realmName;
+    document.getElementById('login-realm-pin').value = '';
+    document.getElementById('login-error-msg').style.display = 'none';
+    document.getElementById('login-pin-modal').style.display = 'flex';
+    setTimeout(() => {
+      document.getElementById('login-realm-pin').focus();
+    }, 100);
+  }
+
+  function closeLoginModal() {
+    document.getElementById('login-pin-modal').style.display = 'none';
+  }
+
+  async function submitPinLogin(e) {
+    e.preventDefault();
+    const realmId = document.getElementById('login-realm-id').value;
+    const pin = document.getElementById('login-realm-pin').value;
+    const errorEl = document.getElementById('login-error-msg');
+
+    try {
+      const resp = await fetch('/api/auth/realm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: realmId, pin: pin })
+      });
+      const res = await resp.json();
+      if (res.success) {
+        window.location.href = `/realm/${realmId}`;
+      } else {
+        errorEl.innerText = res.message || 'Invalid passcode.';
+        errorEl.style.display = 'block';
+        synth.playAlert();
+      }
+    } catch (err) {
+      errorEl.innerText = 'Network error contacting host.';
+      errorEl.style.display = 'block';
+    }
+  }
+
+  // Auto-open if query param ?login=<id> is present
+  const urlParams = new URLSearchParams(window.location.search);
+  const autoTarget = urlParams.get('login');
+  if (autoTarget) {
+    const realms = {{ realms | tojson }};
+    const target = realms.find(r => r.id === autoTarget);
+    if (target) {
+      openLoginModal(target.id, target.name);
+    }
+  }
+</script>
+{% endblock %}
