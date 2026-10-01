@@ -2,955 +2,669 @@
 
 {% block title %}Game Overview & Simulation Guide - The Summit of Realms{% endblock %}
 
-{% block header_extra %}
-  <a href="/" class="btn btn-primary btn-sm">Sovereign Lobby 🏛️</a>
+{% block nav_items %}
+  <a href="/" class="btn btn-primary btn-sm">Sovereign Lobby</a>
+  <a href="/projector" target="_blank" class="btn btn-secondary btn-sm">Projector</a>
+  <a href="/admin" class="btn btn-secondary btn-sm">Command Deck</a>
 {% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 1100px; padding-bottom: 60px;">
+<div class="container" style="max-width: 1160px; padding-bottom: 60px;">
 
   <!-- Hero Header -->
-  <div class="card" style="margin-bottom: 24px; border: 1px solid var(--border-strong); background: var(--bg-surface-raised); padding: 28px 24px;">
+  <div class="card" style="margin-bottom: 20px; border: 1px solid var(--border-strong); background: var(--bg-surface-raised); padding: 24px;">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
-      <div style="max-width: 760px;">
-        <div style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 3px 10px; border-radius: var(--radius-pill); margin-bottom: 12px;">
-          <span>SIMULATION ARCHITECTURE • OFFLINE-FIRST EDUCATIONAL PLATFORM</span>
+      <div style="max-width: 780px;">
+        <div style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 4px 10px; border-radius: var(--radius-xs); margin-bottom: 12px; text-transform: uppercase;">
+          Simulation Guide & Sovereign Reference
         </div>
-        <h1 style="font-size: 2rem; font-weight: 900; letter-spacing: -0.02em; color: #fff; line-height: 1.2;">
+        <h1 style="font-size: 1.85rem; font-weight: 900; letter-spacing: -0.02em; color: var(--text-primary); line-height: 1.2;">
           The Summit of Realms
         </h1>
-        <p style="font-size: 1.05rem; color: var(--text-secondary); margin-top: 8px; line-height: 1.5;">
-          A real-time, offline-first geopolitical strategy simulation. Six sovereign nations convene at the Neutral Spire to avert continental collapse, navigate cutthroat diplomacy, trade vital lifeblood, and achieve classified domestic directives across three high-stakes turns.
+        <p style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 8px; line-height: 1.55;">
+          A real-time, offline-first geopolitical strategy simulation. Six sovereign nations convene at the Neutral Spire to navigate resource scarcity, conduct bilateral trade, author statutory motions, and fulfill classified domestic directives over three operational turns.
         </p>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 8px; min-width: 180px;">
-        <a href="/" class="btn btn-primary btn-block" style="text-align: center;">Enter Lobby 🔑</a>
-        <a href="/projector" target="_blank" class="btn btn-secondary btn-block" style="text-align: center;">Projector View ↗</a>
-        <a href="/admin" class="btn btn-secondary btn-block" style="text-align: center;">Facilitator Deck ⚙️</a>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <a href="/" class="btn btn-primary btn-sm">Enter Lobby</a>
+        <a href="/admin" class="btn btn-secondary btn-sm">Command Deck</a>
       </div>
     </div>
 
-    <!-- Quick Stats Pill Ribbon -->
-    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-subtle);">
+    <!-- Quick Telemetry Badges -->
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
       <div class="overview-stat-pill">
-        <span class="pill-label">SOVEREIGN NATIONS</span>
-        <span class="pill-val">6 Powers</span>
+        <span class="pill-label">Delegations</span>
+        <span class="pill-val">6 Sovereign Powers</span>
       </div>
       <div class="overview-stat-pill">
-        <span class="pill-label">SIMULATION DURATION</span>
+        <span class="pill-label">Duration</span>
         <span class="pill-val">3 Turns (~30–45 Mins)</span>
       </div>
       <div class="overview-stat-pill">
-        <span class="pill-label">PRIMARY RESOURCES</span>
+        <span class="pill-label">Primary Tangibles</span>
         <span class="pill-val">Grain • Cores • Silk • Military</span>
       </div>
       <div class="overview-stat-pill">
-        <span class="pill-label">STATE METRICS</span>
+        <span class="pill-label">National Metrics</span>
         <span class="pill-val">Vitality • Standing • Stability</span>
       </div>
       <div class="overview-stat-pill">
-        <span class="pill-label">NETWORK REQUIREMENT</span>
-        <span class="pill-val">0% External Internet (Local Wi-Fi Only)</span>
+        <span class="pill-label">Architecture</span>
+        <span class="pill-val">100% Offline Local LAN</span>
       </div>
     </div>
   </div>
 
-  <!-- Jump Navigation Sub-Bar -->
-  <div class="overview-nav-bar" style="position: sticky; top: 58px; z-index: 100; margin-bottom: 24px; background: rgba(12, 12, 14, 0.95); backdrop-filter: blur(8px); padding: 8px 0; border-bottom: 1px solid var(--border-subtle);">
-    <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px;">
-      <a href="#premise" class="overview-jump-link active">📜 Lore & Premise</a>
-      <a href="#turn-cycle" class="overview-jump-link">⏱️ Turn Structure</a>
-      <a href="#realms" class="overview-jump-link">👑 The 6 Nations</a>
-      <a href="#resources" class="overview-jump-link">🌾 Economy & Laws</a>
-      <a href="#levers" class="overview-jump-link">⚖️ Domestic Levers</a>
-      <a href="#plenary" class="overview-jump-link">🏛️ Plenary & Voting</a>
-      <a href="#quizzes-catastrophes" class="overview-jump-link">⚡ Lore & Hazards</a>
-      <a href="#architecture" class="overview-jump-link">📱 Participant & Room Guide</a>
-    </div>
+  <!-- Workspace Section Tabs -->
+  <div class="overview-tab-nav" role="tablist">
+    <button class="overview-tab-btn active" data-tab="tab-overview" onclick="switchOverviewTab('tab-overview')">
+      Overview & Lore
+    </button>
+    <button class="overview-tab-btn" data-tab="tab-pacing" onclick="switchOverviewTab('tab-pacing')">
+      Turn Structure
+    </button>
+    <button class="overview-tab-btn" data-tab="tab-realms" onclick="switchOverviewTab('tab-realms')">
+      The 6 Nations
+    </button>
+    <button class="overview-tab-btn" data-tab="tab-economy" onclick="switchOverviewTab('tab-economy')">
+      Economy & Formulas
+    </button>
+    <button class="overview-tab-btn" data-tab="tab-levers" onclick="switchOverviewTab('tab-levers')">
+      Domestic Decrees
+    </button>
+    <button class="overview-tab-btn" data-tab="tab-assembly" onclick="switchOverviewTab('tab-assembly')">
+      Plenary Assembly
+    </button>
+    <button class="overview-tab-btn" data-tab="tab-roles" onclick="switchOverviewTab('tab-roles')">
+      Hardware & Roles
+    </button>
   </div>
 
-  <!-- ========================================================================= -->
-  <!-- SECTION 1: PREMISE & WORLD LORE -->
-  <!-- ========================================================================= -->
-  <section id="premise" style="margin-bottom: 36px; scroll-margin-top: 110px;">
+  <!-- ======================================================================= -->
+  <!-- TAB 1: OVERVIEW & LORE -->
+  <!-- ======================================================================= -->
+  <div id="tab-overview" class="overview-tab-content active">
     <div class="card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-        <h2 style="font-size: 1.25rem; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">
-          1. The Neutral Spire & The Great Convergence
-        </h2>
-        <span class="badge">HISTORICAL SETTING</span>
-      </div>
-
-      <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 14px;">
-        Three centuries after the cataclysmic tectonic upheaval known as the <strong>Great Convergence</strong>, the continental plates fused inward, creating the obsidian plateaus of the Neutral Spire. Around this central sanctum lie six disparate sovereign nations, each forged by contrasting environments—from volcanic smelters and misty sea straits to fungal lowlands and sun-baked marble plateaus.
+      <div class="card-title" style="margin-bottom: 10px;">The Neutral Spire & The Great Convergence</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 14px;">
+        Three centuries after the cataclysmic tectonic upheaval known as the Great Convergence, continental plates fused inward, elevating the obsidian cliffs of the Neutral Spire. Around this central sanctum lie six distinct sovereign nations with fundamentally asymmetrical endowments—ranging from fertile agrarian lowlands and volcanic smelters to maritime trade straits and abyssal mining chasms.
       </p>
-
-      <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 18px;">
-        Now, a continental harvest deficit and escalating technological disparity threaten total destabilization. The six delegations have convened at the Spire of Accords for a mandatory <strong>Three-Turn Summit</strong>. Every sovereign delegation faces a demanding <strong>Triple Mandate</strong>:
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 20px;">
+        With harvest shortfalls looming, the six sovereign delegations have convened at the Spire of Accords for a decisive three-turn diplomatic summit. Every nation must navigate a demanding <strong>Triple Mandate</strong>:
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
-        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px;">
-          <div style="font-weight: 800; font-size: 0.85rem; color: #fff; margin-bottom: 6px;">
-            🌾 I. Preserve Domestic Survival
-          </div>
-          <p style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.45;">
-            Prevent catastrophic famine. Populations steadily consume <strong>20 Alchemical Grain</strong> every turn. Allowing food silos to drop to zero unleashes severe humanitarian collapse (-25 Vitality, -20 Stability).
+        <div class="overview-rule-box">
+          <div class="rule-title">I. Domestic Survival</div>
+          <p class="rule-desc">
+            Prevent famine at all costs. Populations consume <strong>20 Alchemical Grain</strong> every turn (15 if Technological Efficiency is unlocked). Silos reaching 0 trigger severe civil starvation riots (-25 Vitality, -20 Stability).
           </p>
         </div>
 
-        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px;">
-          <div style="font-weight: 800; font-size: 0.85rem; color: #fff; margin-bottom: 6px;">
-            🏛️ II. Shape Continental Statutes
-          </div>
-          <p style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.45;">
-            Leverage Diplomatic Standing to author and vote on statutory resolutions—such as emergency grain aid, plutocratic wealth sanctions, or border cordons—that redistribute wealth and impose international order.
+        <div class="overview-rule-box">
+          <div class="rule-title">II. Continental Governance</div>
+          <p class="rule-desc">
+            Leverage Diplomatic Standing to author and pass statutory resolutions—including humanitarian grain transfers, wealth surtaxes, and border quarantines—to shape continental order.
           </p>
         </div>
 
-        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px;">
-          <div style="font-weight: 800; font-size: 0.85rem; color: #fff; margin-bottom: 6px;">
-            🔒 III. Fulfill Classified Directives
-          </div>
-          <p style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.45;">
-            Each realm harbors a secret, high-priority national objective known only to their delegation. Fulfilling your classified directive by the conclusion of Turn 3 secures historical triumph for your people.
+        <div class="overview-rule-box">
+          <div class="rule-title">III. Classified Directives</div>
+          <p class="rule-desc">
+            Each sovereign nation harbors a secret strategic objective accessible only to their delegation terminal. Achieving this classified mandate before Turn 3 concludes secures sovereign victory.
           </p>
         </div>
       </div>
     </div>
-  </section>
+  </div>
 
-  <!-- ========================================================================= -->
-  <!-- SECTION 2: TURN STRUCTURE & TIMELINE -->
-  <!-- ========================================================================= -->
-  <section id="turn-cycle" style="margin-bottom: 36px; scroll-margin-top: 110px;">
+  <!-- ======================================================================= -->
+  <!-- TAB 2: TURN STRUCTURE & TIMELINE -->
+  <!-- ======================================================================= -->
+  <div id="tab-pacing" class="overview-tab-content">
     <div class="card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-        <h2 style="font-size: 1.25rem; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">
-          2. Simulation Flow & Turn Structure
-        </h2>
-        <span class="badge">CHRONOLOGY</span>
-      </div>
-
-      <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 16px;">
-        The simulation operates across <strong>3 consecutive Turns</strong>. Each Turn follows a structured cadence combining high-energy physical negotiation and formal parliamentary plenary debate:
+      <div class="card-title" style="margin-bottom: 10px;">Simulation Chronology (3 Turns)</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
+        The simulation runs through 3 operational turns. Each turn combines freeform bilateral negotiations and formal parliamentary plenary sessions:
       </p>
 
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <!-- Phase 1 -->
-        <div style="display: flex; gap: 16px; background: var(--bg-surface-sunken); border-left: 4px solid #38bdf8; border-radius: var(--radius-sm); padding: 14px;">
-          <div style="font-family: var(--font-mono); font-size: 1.1rem; font-weight: 900; color: #38bdf8; min-width: 85px;">
-            PHASE 1
+        <div style="background: var(--bg-surface-sunken); border-left: 3px solid #38bdf8; border-radius: var(--radius-xs); padding: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
+            <strong style="color: var(--text-primary); font-size: 0.92rem; font-family: var(--font-mono);">
+              Phase 1: Working & Bilateral Trade Session (5 Minutes)
+            </strong>
+            <span class="badge">ACTIVE ROOM FLOOR</span>
           </div>
-          <div style="flex: 1;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
-              <strong style="color: #fff; font-size: 0.95rem;">Working & Bilateral Trading Session (5:00 Minutes)</strong>
-              <span class="badge" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; border-color: #38bdf8;">ACTIVE FLOOR</span>
-            </div>
-            <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-              Participants freely roam the room conducting face-to-face bilateral diplomacy. Using their mobile consoles, delegates initiate atomic P2P trades, trigger internal domestic policies (relief, forges, galas), read historical dossiers for quiz rewards, and draft statutory motions for the Plenary docket.
-            </p>
-          </div>
+          <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
+            Delegates move freely through the room conducting face-to-face negotiations. Via smartphone terminals, delegations execute atomic P2P trades, trigger internal domestic policies (relief, forges, galas), read historical dossiers for quiz rewards, and author statutory motions for the Plenary docket.
+          </p>
         </div>
 
         <!-- Phase 2 -->
-        <div style="display: flex; gap: 16px; background: var(--bg-surface-sunken); border-left: 4px solid #eab308; border-radius: var(--radius-sm); padding: 14px;">
-          <div style="font-family: var(--font-mono); font-size: 1.1rem; font-weight: 900; color: #eab308; min-width: 85px;">
-            PHASE 2
+        <div style="background: var(--bg-surface-sunken); border-left: 3px solid #eab308; border-radius: var(--radius-xs); padding: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
+            <strong style="color: var(--text-primary); font-size: 0.92rem; font-family: var(--font-mono);">
+              Phase 2: Plenary Floor & Flash Assembly (3–5 Minutes)
+            </strong>
+            <span class="badge">PARLIAMENTARY ROLL-CALL</span>
           </div>
-          <div style="flex: 1;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
-              <strong style="color: #fff; font-size: 0.95rem;">Plenary Floor Debate & Flash Assembly (3:00–5:00 Minutes)</strong>
-              <span class="badge" style="background: rgba(234, 179, 8, 0.1); color: #eab308; border-color: #eab308;">PARLIAMENTARY</span>
-            </div>
-            <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-              All nations return to their delegation seats. Resolutions that secured the mandatory <strong>Second Sovereign Endorsement</strong> are called to the floor. Delegates cast weighted votes (1, 2, or 3 votes) in real-time. If <em>YES > NO</em>, the resolution immediately takes statutory effect.
-            </p>
-          </div>
+          <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
+            Delegations return to their seats. Statutory motions that secured a Second Endorsement are called to the floor. Nations cast weighted votes (1, 2, or 3 votes). If affirmative votes exceed negative votes, the statute is enacted immediately across all nations.
+          </p>
         </div>
 
         <!-- Phase 3 -->
-        <div style="display: flex; gap: 16px; background: var(--bg-surface-sunken); border-left: 4px solid #10b981; border-radius: var(--radius-sm); padding: 14px;">
-          <div style="font-family: var(--font-mono); font-size: 1.1rem; font-weight: 900; color: #10b981; min-width: 85px;">
-            PHASE 3
+        <div style="background: var(--bg-surface-sunken); border-left: 3px solid #10b981; border-radius: var(--radius-xs); padding: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
+            <strong style="color: var(--text-primary); font-size: 0.92rem; font-family: var(--font-mono);">
+              Phase 3: Turn Processing & Socioeconomic Settlement
+            </strong>
+            <span class="badge">ENGINE EXECUTION</span>
           </div>
-          <div style="flex: 1;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
-              <strong style="color: #fff; font-size: 0.95rem;">Turn Resolution & Socioeconomic Processing</strong>
-              <span class="badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: #10b981;">AUTOMATED</span>
-            </div>
-            <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-              The engine automatically deducts grain consumption (-20 or -15), triggers famine penalties if silos are empty, evaluates the Complacency Paradox, awards the Plutocratic bonus vote, calculates dynamic voting weights, and broadcasts news alerts across all screens.
-            </p>
-          </div>
+          <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
+            The engine deducts grain consumption (-20 or -15), executes starvation penalties if silos empty, evaluates the Complacency Paradox, awards the Plutocratic bonus vote, recalculates voting weights, and publishes continental news dispatches.
+          </p>
         </div>
 
         <!-- Phase 4 -->
-        <div style="display: flex; gap: 16px; background: var(--bg-surface-sunken); border-left: 4px solid #ec4899; border-radius: var(--radius-sm); padding: 14px;">
-          <div style="font-family: var(--font-mono); font-size: 1.1rem; font-weight: 900; color: #ec4899; min-width: 85px;">
-            TURN 3
+        <div style="background: var(--bg-surface-sunken); border-left: 3px solid #ec4899; border-radius: var(--radius-xs); padding: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
+            <strong style="color: var(--text-primary); font-size: 0.92rem; font-family: var(--font-mono);">
+              Turn 3 Finale: Summit Concluded & Debriefing
+            </strong>
+            <span class="badge">STRATEGIC REVELATION</span>
           </div>
-          <div style="flex: 1;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
-              <strong style="color: #fff; font-size: 0.95rem;">Summit Concluded: Revelation & Debrief</strong>
-              <span class="badge" style="background: rgba(236, 72, 153, 0.1); color: #ec4899; border-color: #ec4899;">FINALE</span>
-            </div>
-            <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-              At the close of Turn 3, the facilitator concludes the simulation. Secret agendas are publicly unveiled, final continental rankings are displayed on the auditorium projector, and successful nations celebrate their strategic triumphs.
-            </p>
-          </div>
+          <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
+            At the conclusion of Turn 3, the facilitator triggers simulation conclusion. Secret directives are unveiled, continental awards (Hegemon, Plutocrat, Shield) are tallied, and final rankings are broadcasted on the auditorium projector.
+          </p>
         </div>
       </div>
     </div>
-  </section>
+  </div>
 
-  <!-- ========================================================================= -->
-  <!-- SECTION 3: THE 6 SOVEREIGN NATIONS -->
-  <!-- ========================================================================= -->
-  <section id="realms" style="margin-bottom: 36px; scroll-margin-top: 110px;">
+  <!-- ======================================================================= -->
+  <!-- TAB 3: THE 6 NATIONS -->
+  <!-- ======================================================================= -->
+  <div id="tab-realms" class="overview-tab-content">
     <div class="card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-        <h2 style="font-size: 1.25rem; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">
-          3. The Six Sovereign Nations
-        </h2>
-        <span class="badge">FACTION ROSTER</span>
-      </div>
-
-      <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 18px;">
-        Every delegation controls asymmetrical starting endowments, geographic vulnerabilities, and distinct strategic roles in the continental ecosystem:
-      </p>
-
-      <!-- Nation Grid -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
-
-        <!-- 1. Sylvan Concordat -->
-        <div class="overview-realm-card" style="border-top: 4px solid #10b981;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div>
-              <h3 style="font-size: 1.15rem; font-weight: 900; color: #fff;">Sylvan Concordat</h3>
-              <div style="font-size: 0.75rem; color: #10b981; font-family: var(--font-mono); font-weight: 700;">
-                Verdant Lowlands & Greatweald Basin
-              </div>
-            </div>
-            <span class="badge">2 VOTES</span>
-          </div>
-          <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
-            Stewards of the ancient Greatweald. Master bio-herbalists commanding lush alchemical granaries. They hold the continent's largest food reserves, but possess weak defenses.
-          </p>
-          <div class="overview-stats-grid">
-            <div>🌾 Grain: <strong>70 (High)</strong></div>
-            <div>⚡ Cores: <strong>35</strong></div>
-            <div>🧵 Silk: <strong>40</strong></div>
-            <div>🛡️ Military: <strong>30 (Low)</strong></div>
-            <div>❤️ Vitality: <strong>80</strong></div>
-            <div>🏛️ Standing: <strong>60</strong></div>
-          </div>
-          <div class="overview-directive-box">
-            <strong>🔒 Strategic Role & Agenda:</strong> Agricultural granary. Must safeguard food reserves (Grain &ge; 75) despite foreign famine and treaty pressure.
-          </div>
-        </div>
-
-        <!-- 2. Iron Val-Khor -->
-        <div class="overview-realm-card" style="border-top: 4px solid #f59e0b;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div>
-              <h3 style="font-size: 1.15rem; font-weight: 900; color: #fff;">Iron Val-Khor</h3>
-              <div style="font-size: 0.75rem; color: #f59e0b; font-family: var(--font-mono); font-weight: 700;">
-                Mount Khor Volcanic Spine & Mistveil Chasm
-              </div>
-            </div>
-            <span class="badge">2 VOTES</span>
-          </div>
-          <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
-            A mountainous civilization of master smiths, geothermal turbines, and blast forges. Rich in heavy metallurgy and aether energy, but chronically deficient in agricultural grain.
-          </p>
-          <div class="overview-stats-grid">
-            <div>🌾 Grain: <strong>30 (Critical!)</strong></div>
-            <div>⚡ Cores: <strong>60 (High)</strong></div>
-            <div>🧵 Silk: <strong>25</strong></div>
-            <div>🛡️ Military: <strong>65</strong></div>
-            <div>❤️ Vitality: <strong>70</strong></div>
-            <div>🏛️ Standing: <strong>50</strong></div>
-          </div>
-          <div class="overview-directive-box">
-            <strong>🔒 Strategic Role & Agenda:</strong> Industrial titan. Must urgently trade for food while rushing Aether Cores to 75+ to unlock Technological Efficiency.
-          </div>
-        </div>
-
-        <!-- 3. Solaris Ascendancy -->
-        <div class="overview-realm-card" style="border-top: 4px solid #eab308;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div>
-              <h3 style="font-size: 1.15rem; font-weight: 900; color: #fff;">Solaris Ascendancy</h3>
-              <div style="font-size: 0.75rem; color: #eab308; font-family: var(--font-mono); font-weight: 700;">
-                Solar Plateau & Sun Marble Terraces
-              </div>
-            </div>
-            <span class="badge" style="background:#eab308; color:#0c0c0e;">3 VOTES (SUPERPOWER)</span>
-          </div>
-          <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
-            Shimmering marble sun towers and aristocratic courts. Solaris commands supreme diplomatic prestige, cultural silk reserves, and the largest starting voting bloc in the Spire.
-          </p>
-          <div class="overview-stats-grid">
-            <div>🌾 Grain: <strong>50</strong></div>
-            <div>⚡ Cores: <strong>45</strong></div>
-            <div>🧵 Silk: <strong>65 (High)</strong></div>
-            <div>🛡️ Military: <strong>50</strong></div>
-            <div>❤️ Vitality: <strong>85</strong></div>
-            <div>🏛️ Standing: <strong>85 (Supreme)</strong></div>
-          </div>
-          <div class="overview-directive-box">
-            <strong>🔒 Strategic Role & Agenda:</strong> Diplomatic hegemon. Must protect its moral authority, bribe swing voters with silk, and keep Standing &ge; 80.
-          </div>
-        </div>
-
-        <!-- 4. Umbral Enclave -->
-        <div class="overview-realm-card" style="border-top: 4px solid #8b5cf6;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div>
-              <h3 style="font-size: 1.15rem; font-weight: 900; color: #fff;">Umbral Enclave</h3>
-              <div style="font-size: 0.75rem; color: #8b5cf6; font-family: var(--font-mono); font-weight: 700;">
-                Abyssal Rift & Subterranean Catacombs
-              </div>
-            </div>
-            <span class="badge">2 VOTES</span>
-          </div>
-          <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
-            Clandestine sanctuary of cryptographers, void researchers, and energy synthesizers. Boasts unmatched core synthesis and espionage, secretly monitoring continental power.
-          </p>
-          <div class="overview-stats-grid">
-            <div>🌾 Grain: <strong>40</strong></div>
-            <div>⚡ Cores: <strong>70 (Supreme)</strong></div>
-            <div>🧵 Silk: <strong>30</strong></div>
-            <div>🛡️ Military: <strong>45</strong></div>
-            <div>❤️ Vitality: <strong>65</strong></div>
-            <div>🏛️ Standing: <strong>45</strong></div>
-          </div>
-          <div class="overview-directive-box">
-            <strong>🔒 Strategic Role & Agenda:</strong> Arcane disruptor. Balance of power keeper; task is to ensure no rival nation ever controls 3 or more Assembly votes.
-          </div>
-        </div>
-
-        <!-- 5. Aquila Maritime League -->
-        <div class="overview-realm-card" style="border-top: 4px solid #06b6d4;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div>
-              <h3 style="font-size: 1.15rem; font-weight: 900; color: #fff;">Aquila Maritime League</h3>
-              <div style="font-size: 0.75rem; color: #06b6d4; font-family: var(--font-mono); font-weight: 700;">
-                Sea of Glass Archipelago & Whispering Straits
-              </div>
-            </div>
-            <span class="badge">2 VOTES</span>
-          </div>
-          <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
-            Opulent island league of commercial merchant fleets, silk guilds, and financiers. Controls luxury gossamer silk routes and dominates liquid commercial banking.
-          </p>
-          <div class="overview-stats-grid">
-            <div>🌾 Grain: <strong>45</strong></div>
-            <div>⚡ Cores: <strong>40</strong></div>
-            <div>🧵 Silk: <strong>80 (Monopoly)</strong></div>
-            <div>🛡️ Military: <strong>55</strong></div>
-            <div>❤️ Vitality: <strong>75</strong></div>
-            <div>🏛️ Standing: <strong>65</strong></div>
-          </div>
-          <div class="overview-directive-box">
-            <strong>🔒 Strategic Role & Agenda:</strong> Financial oligarch. Strives to maintain the highest total tangible wealth to retain the Plutocratic Drift bonus vote.
-          </div>
-        </div>
-
-        <!-- 6. Aethelgard Dominion -->
-        <div class="overview-realm-card" style="border-top: 4px solid #ec4899;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div>
-              <h3 style="font-size: 1.15rem; font-weight: 900; color: #fff;">Aethelgard Dominion</h3>
-              <div style="font-size: 0.75rem; color: #ec4899; font-family: var(--font-mono); font-weight: 700;">
-                Northern Rocky Steppes & Frontier Citadels
-              </div>
-            </div>
-            <span class="badge">2 VOTES</span>
-          </div>
-          <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
-            Chivalric feudal knights, border watchtowers, and impenetrable stone fortresses. Possesses supreme military might and iron domestic stability, acting as the continental shield.
-          </p>
-          <div class="overview-stats-grid">
-            <div>🌾 Grain: <strong>60</strong></div>
-            <div>⚡ Cores: <strong>50</strong></div>
-            <div>🧵 Silk: <strong>35</strong></div>
-            <div>🛡️ Military: <strong>75 (Apex)</strong></div>
-            <div>❤️ Vitality: <strong>80</strong></div>
-            <div>🏛️ Standing: <strong>55</strong></div>
-          </div>
-          <div class="overview-directive-box">
-            <strong>🔒 Strategic Role & Agenda:</strong> Martial guardian. Must preserve domestic order and command the continent's undisputed premier military host (Military &ge; 80).
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </section>
-
-  <!-- ========================================================================= -->
-  <!-- SECTION 4: ECONOMY, FORMULAS & SOCIOECONOMIC LAWS -->
-  <!-- ========================================================================= -->
-  <section id="resources" style="margin-bottom: 36px; scroll-margin-top: 110px;">
-    <div class="card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-        <h2 style="font-size: 1.25rem; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">
-          4. Economic Engine & Mathematical Formulas
-        </h2>
-        <span class="badge">RULES CHEAT SHEET</span>
-      </div>
-
-      <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 18px;">
-        The simulation is governed by strict, transparent socioeconomic algorithms executed at the close of every operational turn:
+      <div class="card-title" style="margin-bottom: 10px;">Sovereign Delegations Roster</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 18px;">
+        Each nation commands distinct endowments, geographic terrain, and an underlying strategic challenge:
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
 
-        <!-- Formula 1: Voting Weight -->
+        <!-- Sylvan -->
+        <div class="overview-realm-card" style="border-top: 3px solid #10b981;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Sylvan Concordat</h3>
+              <span class="badge">2 VOTES</span>
+            </div>
+            <div style="font-size: 0.75rem; color: #10b981; font-family: var(--font-mono); margin-bottom: 8px;">
+              Verdant Lowlands & Greatweald Basin
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
+              Stewards of the ancient Greatweald. Master bio-herbalists with massive alchemical grain silos, but vulnerable to military coercion.
+            </p>
+          </div>
+          <div class="overview-stats-grid">
+            <div>Grain: <strong>70 (Abundant)</strong></div>
+            <div>Cores: <strong>35 (Operational)</strong></div>
+            <div>Silk: <strong>40 (Modest)</strong></div>
+            <div>Military: <strong>30 (Defenseless)</strong></div>
+            <div>Vitality: <strong>80</strong></div>
+            <div>Standing: <strong>60</strong></div>
+          </div>
+          <div class="overview-directive-box">
+            <strong>Strategic Focus:</strong> Agricultural Granary. Must protect national grain reserves (Grain &ge; 75) against continental famine.
+          </div>
+        </div>
+
+        <!-- Val-Khor -->
+        <div class="overview-realm-card" style="border-top: 3px solid #f59e0b;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Iron Val-Khor</h3>
+              <span class="badge">2 VOTES</span>
+            </div>
+            <div style="font-size: 0.75rem; color: #f59e0b; font-family: var(--font-mono); margin-bottom: 8px;">
+              Mount Khor Volcanic Spine & Mistveil Chasm
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
+              Mountainous civilization of master smiths and geothermal turbines. Rich in heavy metallurgy and energy, but dangerously short on food.
+            </p>
+          </div>
+          <div class="overview-stats-grid">
+            <div>Grain: <strong>30 (Depleted!)</strong></div>
+            <div>Cores: <strong>60 (Surplus)</strong></div>
+            <div>Silk: <strong>25 (Negligible)</strong></div>
+            <div>Military: <strong>65 (Formidable)</strong></div>
+            <div>Vitality: <strong>70</strong></div>
+            <div>Standing: <strong>50</strong></div>
+          </div>
+          <div class="overview-directive-box">
+            <strong>Strategic Focus:</strong> Industrial Titan. Must trade for food immediately or rush Cores to 75+ to unlock Tech Efficiency.
+          </div>
+        </div>
+
+        <!-- Solaris -->
+        <div class="overview-realm-card" style="border-top: 3px solid #eab308;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Solaris Ascendancy</h3>
+              <span class="badge">3 VOTES (SUPERPOWER)</span>
+            </div>
+            <div style="font-size: 0.75rem; color: #eab308; font-family: var(--font-mono); margin-bottom: 8px;">
+              Solar Plateau & Sun Marble Terraces
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
+              Marble sun towers and aristocratic courts. Solaris commands supreme diplomatic prestige, cultural silk reserves, and 3 Assembly votes.
+            </p>
+          </div>
+          <div class="overview-stats-grid">
+            <div>Grain: <strong>50 (Sufficient)</strong></div>
+            <div>Cores: <strong>45 (Operational)</strong></div>
+            <div>Silk: <strong>65 (Lavish)</strong></div>
+            <div>Military: <strong>50 (Armed)</strong></div>
+            <div>Vitality: <strong>85</strong></div>
+            <div>Standing: <strong>85 (Supreme)</strong></div>
+          </div>
+          <div class="overview-directive-box">
+            <strong>Strategic Focus:</strong> Diplomatic Hegemon. Must preserve moral leadership, bribe swing realms, and maintain Standing &ge; 80.
+          </div>
+        </div>
+
+        <!-- Umbra -->
+        <div class="overview-realm-card" style="border-top: 3px solid #8b5cf6;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Umbral Enclave</h3>
+              <span class="badge">2 VOTES</span>
+            </div>
+            <div style="font-size: 0.75rem; color: #8b5cf6; font-family: var(--font-mono); margin-bottom: 8px;">
+              Abyssal Rift & Subterranean Catacombs
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
+              Clandestine sanctuary of void researchers and energy synthesizers. Boasts unmatched core reserves and covert intelligence.
+            </p>
+          </div>
+          <div class="overview-stats-grid">
+            <div>Grain: <strong>40 (Sufficient)</strong></div>
+            <div>Cores: <strong>70 (Surplus)</strong></div>
+            <div>Silk: <strong>30 (Modest)</strong></div>
+            <div>Military: <strong>45 (Armed)</strong></div>
+            <div>Vitality: <strong>65</strong></div>
+            <div>Standing: <strong>45</strong></div>
+          </div>
+          <div class="overview-directive-box">
+            <strong>Strategic Focus:</strong> Arcane Balancer. Keeper of equilibrium; task is to ensure no rival nation ever holds 3 or more Assembly votes.
+          </div>
+        </div>
+
+        <!-- Aquila -->
+        <div class="overview-realm-card" style="border-top: 3px solid #06b6d4;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Aquila Maritime League</h3>
+              <span class="badge">2 VOTES</span>
+            </div>
+            <div style="font-size: 0.75rem; color: #06b6d4; font-family: var(--font-mono); margin-bottom: 8px;">
+              Sea of Glass Archipelago & Whispering Straits
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
+              Opulent island league of commercial merchant fleets, silk guilds, and bankers. Controls luxury silk routes and liquid wealth.
+            </p>
+          </div>
+          <div class="overview-stats-grid">
+            <div>Grain: <strong>45 (Sufficient)</strong></div>
+            <div>Cores: <strong>40 (Operational)</strong></div>
+            <div>Silk: <strong>80 (Monopoly)</strong></div>
+            <div>Military: <strong>55 (Armed)</strong></div>
+            <div>Vitality: <strong>75</strong></div>
+            <div>Standing: <strong>65</strong></div>
+          </div>
+          <div class="overview-directive-box">
+            <strong>Strategic Focus:</strong> Financial Plutocrat. Must maximize total tangible wealth to reign as the Continental Plutocrat.
+          </div>
+        </div>
+
+        <!-- Aethelgard -->
+        <div class="overview-realm-card" style="border-top: 3px solid #ec4899;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Aethelgard Dominion</h3>
+              <span class="badge">2 VOTES</span>
+            </div>
+            <div style="font-size: 0.75rem; color: #ec4899; font-family: var(--font-mono); margin-bottom: 8px;">
+              Northern Rocky Steppes & Frontier Citadels
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
+              Chivalric feudal knights and frontier fortresses. Possesses supreme military force and iron domestic stability.
+            </p>
+          </div>
+          <div class="overview-stats-grid">
+            <div>Grain: <strong>60 (Abundant)</strong></div>
+            <div>Cores: <strong>50 (Operational)</strong></div>
+            <div>Silk: <strong>35 (Modest)</strong></div>
+            <div>Military: <strong>75 (Apex)</strong></div>
+            <div>Vitality: <strong>80</strong></div>
+            <div>Standing: <strong>55</strong></div>
+          </div>
+          <div class="overview-directive-box">
+            <strong>Strategic Focus:</strong> Sovereign Iron Shield. Must maintain supreme continental military force (Military &ge; 80) and stability &ge; 70.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- TAB 4: ECONOMY & FORMULAS -->
+  <!-- ======================================================================= -->
+  <div id="tab-economy" class="overview-tab-content">
+    <div class="card">
+      <div class="card-title" style="margin-bottom: 10px;">Socioeconomic Algorithms & Formulas</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 18px;">
+        The simulation engine executes transparent, deterministic socioeconomic equations at each turn settlement:
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
+
         <div class="overview-rule-box">
-          <div class="rule-title">🗳️ Dynamic Voting Weights</div>
+          <div class="rule-title">Dynamic Voting Weights</div>
           <div class="rule-math">
-            Standing &ge; 80 &rarr; <strong>3 Votes</strong><br>
-            Standing 45–79 &rarr; <strong>2 Votes</strong><br>
-            Standing &lt; 45 &rarr; <strong>1 Vote</strong><br>
-            <span style="color: #38bdf8;">+1 Bonus Vote for Continental Plutocrat</span>
+            Standing &ge; 80 &rarr; 3 Votes<br>
+            Standing 45–79 &rarr; 2 Votes<br>
+            Standing &lt; 45 &rarr; 1 Vote<br>
+            +1 Bonus Vote for Continental Plutocrat
           </div>
           <p class="rule-desc">
-            Your influence in the Plenary Assembly is directly tied to your sovereign moral standing and wealth supremacy.
+            Derived directly from national diplomatic standing. High standing confers assembly veto power and multilateral influence.
           </p>
         </div>
 
-        <!-- Formula 2: Grain Consumption & Starvation -->
         <div class="overview-rule-box">
-          <div class="rule-title">🌾 Baseline Consumption & Famine</div>
+          <div class="rule-title">Baseline Consumption & Famine</div>
           <div class="rule-math">
-            Turn Consumption = <strong>-20 Grain</strong> (Standard)<br>
-            With Tech Efficiency = <strong>-15 Grain</strong> (-25% cut)<br>
-            <span style="color: #ef4444;">If Grain &le; 0: -25 Vitality, -20 Stability</span>
+            Turn Consumption = -20 Grain (Standard)<br>
+            With Tech Efficiency = -15 Grain (-25% cut)<br>
+            If Grain &le; 0: -25 Vitality, -20 Stability
           </div>
           <p class="rule-desc">
-            Populations demand feeding every turn. Running out of grain triggers immediate domestic starvation riots.
+            Civil populations consume grain every turn. Running out of grain triggers immediate domestic starvation riots.
           </p>
         </div>
 
-        <!-- Formula 3: Technological Efficiency -->
         <div class="overview-rule-box">
-          <div class="rule-title">⚡ Technological Efficiency</div>
+          <div class="rule-title">Technological Efficiency</div>
           <div class="rule-math">
-            Condition: <strong>Aether Cores &ge; 75</strong><br>
-            Effect: Permanent <strong>-25% Grain Consumption</strong><br>
-            Status: Broadcasted to Continental Wire
+            Threshold: Aether Cores &ge; 75<br>
+            Effect: Permanent -25% Grain Consumption<br>
+            Status: Broadcasted to Continental News Wire
           </div>
           <p class="rule-desc">
-            Industrializing with 75+ active energy matrices enables alchemical automation that permanently reduces food needs.
+            Industrializing with 75+ active aether matrices unlocks automation that permanently cuts food consumption from 20 to 15.
           </p>
         </div>
 
-        <!-- Formula 4: Plutocratic Drift -->
         <div class="overview-rule-box">
-          <div class="rule-title">💰 Plutocratic Drift & Inequality</div>
+          <div class="rule-title">Plutocratic Drift</div>
           <div class="rule-math">
-            Condition: <strong>Highest Total Tangible Wealth</strong><br>
-            Tangible Wealth = (Grain + Cores + Silk)<br>
-            Reward: <strong>+1 Assembly Vote</strong><br>
-            Penalty: <strong>-5 Civil Stability per Turn</strong>
+            Condition: Highest Tangible Wealth (Grain+Cores+Silk)<br>
+            Reward: +1 Assembly Vote<br>
+            Penalty: -5 Civil Stability per Turn
           </div>
           <p class="rule-desc">
-            Runaway wealth buys political leverage in the Spire, but breeds bitter domestic labor discontent at home.
+            The single wealthiest nation gains an extra vote from sheer financial clout, but domestic inequality erodes stability.
           </p>
         </div>
 
-        <!-- Formula 5: Complacency Paradox -->
         <div class="overview-rule-box">
-          <div class="rule-title">🛋️ The Complacency Paradox</div>
+          <div class="rule-title">The Complacency Paradox</div>
           <div class="rule-math">
-            Condition: <strong>Vitality &ge; 85 AND Stability &ge; 85</strong><br>
-            Effect: <strong>-10% Output Slump</strong> each turn<br>
-            Cure: Expending luxury Echo Silk (Grand Galas)
+            Condition: Vitality &ge; 85 AND Stability &ge; 85<br>
+            Effect: -10% Domestic Output Slump<br>
+            Remedy: Expending Echo Silk (Hosting Grand Galas)
           </div>
           <p class="rule-desc">
-            When populations grow too peaceful and comfortable, civic drive stagnates unless cultural stimulus is injected.
+            When populations grow overly comfortable, productivity slumps unless luxury silk is expended to maintain social energy.
           </p>
         </div>
 
-        <!-- Formula 6: Qualitative Fog of War -->
         <div class="overview-rule-box">
-          <div class="rule-title">🌫️ Qualitative Fog of War Tiers</div>
+          <div class="rule-title">Qualitative Fog of War Tiers</div>
           <div class="rule-math">
-            &ge; 60: <strong>Abundant / Surplus / Lavish</strong><br>
-            25–59: <strong>Sufficient / Operational / Modest</strong><br>
-            &lt; 25: <strong>Depleted / Scarce / Negligible</strong>
+            &ge; 60: Abundant / Surplus / Lavish<br>
+            25–59: Sufficient / Operational / Modest<br>
+            &lt; 25: Depleted / Scarce / Negligible
           </div>
           <p class="rule-desc">
-            The auditorium projector and foreign dossiers display qualitative tiers rather than exact numbers to preserve tension and bluffing.
+            Projector and foreign registries show qualitative tiers rather than exact values to preserve negotiation tension and bluffing.
           </p>
         </div>
 
       </div>
     </div>
-  </section>
+  </div>
 
-  <!-- ========================================================================= -->
-  <!-- SECTION 5: DOMESTIC GOVERNANCE LEVERS -->
-  <!-- ========================================================================= -->
-  <section id="levers" style="margin-bottom: 36px; scroll-margin-top: 110px;">
+  <!-- ======================================================================= -->
+  <!-- TAB 5: DOMESTIC DECREES -->
+  <!-- ======================================================================= -->
+  <div id="tab-levers" class="overview-tab-content">
     <div class="card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-        <h2 style="font-size: 1.25rem; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">
-          5. Sovereign Domestic Governance Levers
-        </h2>
-        <span class="badge">INTERNAL ACTIONS</span>
-      </div>
-
-      <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 18px;">
-        During <strong>Working Sessions</strong>, delegations can execute sovereign state decrees from their mobile cockpit to convert surplus resources into domestic health, security, or military power:
+      <div class="card-title" style="margin-bottom: 10px;">Internal Domestic Decrees</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
+        During Working Sessions, delegations can enact internal state decrees on their mobile cockpit to convert surplus resources into national health, security, or military strength:
       </p>
 
       <div style="display: flex; flex-direction: column; gap: 10px;">
-
-        <!-- Lever 1 -->
         <div class="overview-lever-row">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.4rem;">🌾</span>
-            <div>
-              <strong style="color: #fff; font-size: 0.9rem;">Emergency Grain Rationing (Relief)</strong>
-              <div style="color: var(--text-muted); font-size: 0.78rem;">Releases stored grain from national silos to domestic breadlines.</div>
-            </div>
+          <div>
+            <strong style="color: var(--text-primary); font-size: 0.9rem;">Emergency Grain Rationing (Relief)</strong>
+            <div style="color: var(--text-muted); font-size: 0.78rem;">Releases stored alchemical grain from national silos to domestic breadlines.</div>
           </div>
-          <div style="display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 0.8rem;">
+          <div style="font-family: var(--font-mono); font-size: 0.82rem;">
             <span style="color: #ef4444;">-15 Grain</span>
-            <span style="color: var(--text-muted);">&rarr;</span>
-            <span style="color: #10b981; font-weight: 800;">+15 Public Vitality</span>
+            <span style="color: var(--text-muted); margin: 0 6px;">&rarr;</span>
+            <span style="color: #10b981; font-weight: 700;">+15 Public Vitality</span>
           </div>
         </div>
 
-        <!-- Lever 2 -->
         <div class="overview-lever-row">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.4rem;">🔥</span>
-            <div>
-              <strong style="color: #fff; font-size: 0.9rem;">Stoke Arcane Forges (Fabrication)</strong>
-              <div style="color: var(--text-muted); font-size: 0.78rem;">Mobilizes industrial blast furnaces using grain fuel and silk insulation.</div>
-            </div>
+          <div>
+            <strong style="color: var(--text-primary); font-size: 0.9rem;">Stoke Arcane Forges (Fabrication)</strong>
+            <div style="color: var(--text-muted); font-size: 0.78rem;">Mobilizes industrial blast furnaces using grain fuel and silk insulation.</div>
           </div>
-          <div style="display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 0.8rem;">
+          <div style="font-family: var(--font-mono); font-size: 0.82rem;">
             <span style="color: #ef4444;">-10 Grain, -10 Silk</span>
-            <span style="color: var(--text-muted);">&rarr;</span>
-            <span style="color: #38bdf8; font-weight: 800;">+15 Aether Cores</span>
+            <span style="color: var(--text-muted); margin: 0 6px;">&rarr;</span>
+            <span style="color: #38bdf8; font-weight: 700;">+15 Aether Cores</span>
           </div>
         </div>
 
-        <!-- Lever 3 -->
         <div class="overview-lever-row">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.4rem;">🎭</span>
-            <div>
-              <strong style="color: #fff; font-size: 0.9rem;">Host Grand Cultural Gala (Diplomacy)</strong>
-              <div style="color: var(--text-muted); font-size: 0.78rem;">Throws lavish banquets with gossamer silk to elevate prestige and calm populace.</div>
-            </div>
+          <div>
+            <strong style="color: var(--text-primary); font-size: 0.9rem;">Host Grand Cultural Gala (Diplomacy)</strong>
+            <div style="color: var(--text-muted); font-size: 0.78rem;">Hosts lavish banquets with gossamer silk to elevate international prestige and social calm.</div>
           </div>
-          <div style="display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 0.8rem;">
+          <div style="font-family: var(--font-mono); font-size: 0.82rem;">
             <span style="color: #ef4444;">-15 Silk</span>
-            <span style="color: var(--text-muted);">&rarr;</span>
-            <span style="color: #eab308; font-weight: 800;">+10 Standing, +10 Stability</span>
+            <span style="color: var(--text-muted); margin: 0 6px;">&rarr;</span>
+            <span style="color: #eab308; font-weight: 700;">+10 Standing, +10 Stability</span>
           </div>
         </div>
 
-        <!-- Lever 4 -->
         <div class="overview-lever-row">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.4rem;">🛡️</span>
-            <div>
-              <strong style="color: #fff; font-size: 0.9rem;">Mobilize Civil Guard (Security)</strong>
-              <div style="color: var(--text-muted); font-size: 0.78rem;">Powers regional security wardens with aether batteries to suppress riots.</div>
-            </div>
+          <div>
+            <strong style="color: var(--text-primary); font-size: 0.9rem;">Mobilize Civil Guard (Security)</strong>
+            <div style="color: var(--text-muted); font-size: 0.78rem;">Powers regional security wardens with aether batteries to suppress domestic riots.</div>
           </div>
-          <div style="display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 0.8rem;">
+          <div style="font-family: var(--font-mono); font-size: 0.82rem;">
             <span style="color: #ef4444;">-10 Cores</span>
-            <span style="color: var(--text-muted);">&rarr;</span>
-            <span style="color: #10b981; font-weight: 800;">+15 Civil Stability</span>
+            <span style="color: var(--text-muted); margin: 0 6px;">&rarr;</span>
+            <span style="color: #10b981; font-weight: 700;">+15 Civil Stability</span>
           </div>
         </div>
 
-        <!-- Lever 5 -->
         <div class="overview-lever-row">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.4rem;">⚔️</span>
-            <div>
-              <strong style="color: #fff; font-size: 0.9rem;">Muster Sovereign Regiments (Military)</strong>
-              <div style="color: var(--text-muted); font-size: 0.78rem;">Levies knightly battalions and fortifies frontier border garrisons.</div>
-            </div>
+          <div>
+            <strong style="color: var(--text-primary); font-size: 0.9rem;">Muster Sovereign Regiments (Military)</strong>
+            <div style="color: var(--text-muted); font-size: 0.78rem;">Levies knightly battalions and fortifies territorial garrisons.</div>
           </div>
-          <div style="display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 0.8rem;">
+          <div style="font-family: var(--font-mono); font-size: 0.82rem;">
             <span style="color: #ef4444;">-10 Grain, -10 Cores</span>
-            <span style="color: var(--text-muted);">&rarr;</span>
-            <span style="color: #ec4899; font-weight: 800;">+15 Military Power</span>
+            <span style="color: var(--text-muted); margin: 0 6px;">&rarr;</span>
+            <span style="color: #ec4899; font-weight: 700;">+15 Military Power</span>
           </div>
         </div>
-
       </div>
     </div>
-  </section>
+  </div>
 
-  <!-- ========================================================================= -->
-  <!-- SECTION 6: PLENARY MOTIONS & STATUTORY RESOLUTIONS -->
-  <!-- ========================================================================= -->
-  <section id="plenary" style="margin-bottom: 36px; scroll-margin-top: 110px;">
+  <!-- ======================================================================= -->
+  <!-- TAB 6: PLENARY ASSEMBLY & QUIZZES -->
+  <!-- ======================================================================= -->
+  <div id="tab-assembly" class="overview-tab-content">
     <div class="card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-        <h2 style="font-size: 1.25rem; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">
-          6. Parliamentary Law & Statutory Resolutions
-        </h2>
-        <span class="badge">PLENARY DOCKET</span>
-      </div>
-
-      <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 14px;">
-        Any sovereign nation can sponsor a statutory declaration, but to prevent filibustering and chaotic docket clutter, the Spire enforces the strict <strong>Two-Country Endorsement Rule</strong>:
+      <div class="card-title" style="margin-bottom: 10px;">Statutory Motions & Two-Sponsor Mandate</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 14px;">
+        Any nation can author a statutory declaration, but to prevent filibustering, a motion only qualifies for a plenary vote once a <strong>different sovereign nation seconds it</strong>:
       </p>
 
-      <div style="background: var(--bg-surface-sunken); border-left: 3px solid #eab308; padding: 12px 16px; margin-bottom: 18px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;">
-        <strong style="color: #eab308; font-size: 0.85rem; text-transform: uppercase;">The Second Sponsor Mandate:</strong>
-        <p style="color: var(--text-secondary); font-size: 0.82rem; margin-top: 4px; line-height: 1.45;">
-          A motion remains a private draft until a <em>different sovereign nation</em> inspects it in their Declarations tab and clicks <strong>"Second Motion"</strong>. Once seconded, the motion immediately advances to the Plenary Floor docket for a continental vote!
-        </p>
-      </div>
-
-      <!-- Statutory Types Grid -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
-
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 20px;">
         <div class="overview-resolution-card">
-          <div class="res-badge">HUMANITARIAN GRAIN TRANSFER</div>
-          <h4 style="font-size: 0.95rem; font-weight: 800; color: #fff; margin: 6px 0;">Emergency Grain Redistribution</h4>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 10px;">
-            Mandates wealthy silos contribute food to avert continental famine.
+          <span class="badge" style="color: #10b981; border-color: #10b981;">HUMANITARIAN GRAIN TRANSFER</span>
+          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Emergency Grain Redistribution</h4>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">
+            Mandates wealthy grain silos contribute emergency food to starving provinces.
           </p>
-          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface-sunken); padding: 8px; border-radius: var(--radius-xs);">
-            Realms with &gt;50 Grain lose -10 Grain; realms with &lt;25 Grain receive +15 Grain.
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
+            Realms with &gt;50 Grain lose -10 Grain; realms with &lt;25 Grain gain +15 Grain.
           </div>
         </div>
 
         <div class="overview-resolution-card">
-          <div class="res-badge" style="color: #ef4444; border-color: #ef4444;">PLUTOCRATIC RESTRAINTS</div>
-          <h4 style="font-size: 0.95rem; font-weight: 800; color: #fff; margin: 6px 0;">Continental Wealth Surtax & Embargo</h4>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 10px;">
-            Imposes coordinated commercial sanctions on runaway oligarchs.
+          <span class="badge" style="color: #ef4444; border-color: #ef4444;">PLUTOCRATIC RESTRAINTS</span>
+          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Continental Wealth Surtax & Embargo</h4>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">
+            Imposes commercial trade sanctions on runaway oligarchic dominance.
           </p>
-          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface-sunken); padding: 8px; border-radius: var(--radius-xs);">
-            The single wealthiest realm suffers -15 Civil Stability as trade routes are choked.
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
+            Wealthiest realm suffers -15 Civil Stability as trade routes are choked.
           </div>
         </div>
 
         <div class="overview-resolution-card">
-          <div class="res-badge" style="color: #38bdf8; border-color: #38bdf8;">DIPLOMATIC ELEVATION</div>
-          <h4 style="font-size: 0.95rem; font-weight: 800; color: #fff; margin: 6px 0;">Sovereign Relief Mission</h4>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 10px;">
-            Multilateral humanitarian initiative spearheaded by the sponsoring delegation.
+          <span class="badge" style="color: #38bdf8; border-color: #38bdf8;">DIPLOMATIC ELEVATION</span>
+          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Sovereign Relief Mission</h4>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">
+            Multilateral relief initiative organized by the sponsoring delegation.
           </p>
-          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface-sunken); padding: 8px; border-radius: var(--radius-xs);">
-            Sponsoring realm gains +10 Diplomatic Standing for leadership in the Spire.
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
+            Sponsoring realm gains +10 Diplomatic Standing for international leadership.
           </div>
         </div>
 
         <div class="overview-resolution-card">
-          <div class="res-badge" style="color: #ec4899; border-color: #ec4899;">BORDER QUARANTINE</div>
-          <h4 style="font-size: 0.95rem; font-weight: 800; color: #fff; margin: 6px 0;">Frontier Defense & Quarantine Cordon</h4>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 10px;">
-            Fortifies borders to insulate against refugee surges, famine spillover, or contagion.
+          <span class="badge" style="color: #ec4899; border-color: #ec4899;">BORDER QUARANTINE</span>
+          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Frontier Defense & Quarantine Cordon</h4>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">
+            Militarizes frontier checkpoints to insulate against refugee surges or crisis.
           </p>
-          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface-sunken); padding: 8px; border-radius: var(--radius-xs);">
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
             Targeted realm borders quarantined (blocks foreign trade) and gains +10 Stability.
           </div>
         </div>
-
       </div>
+
+      <div class="card-title" style="margin-bottom: 10px;">Knowledge Dossiers & Trivia Quizzes</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+        Delegations can access 8 historical dossiers in the <strong>Lore & Intel</strong> mobile tab. Each contains a high-stakes quiz:
+      </p>
+      <ul style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.6; margin-left: 20px; margin-top: 6px;">
+        <li><strong style="color: #10b981;">Correct Answer:</strong> Awards an instant bounty of <strong>+15 Resources</strong> (Grain, Cores, or Silk) directly to national reserves.</li>
+        <li><strong style="color: #ef4444;">Incorrect Answer:</strong> Incurs a penalty of <strong>-5 Diplomatic Standing</strong> and permanently locks the dossier.</li>
+      </ul>
     </div>
-  </section>
+  </div>
 
-  <!-- ========================================================================= -->
-  <!-- SECTION 7: KNOWLEDGE BOUNTIES & GEOGRAPHIC CATASTROPHES -->
-  <!-- ========================================================================= -->
-  <section id="quizzes-catastrophes" style="margin-bottom: 36px; scroll-margin-top: 110px;">
+  <!-- ======================================================================= -->
+  <!-- TAB 7: HARDWARE & WORKSHOP ROLES -->
+  <!-- ======================================================================= -->
+  <div id="tab-roles" class="overview-tab-content">
     <div class="card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-        <h2 style="font-size: 1.25rem; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">
-          7. Knowledge Bounties & Geographic Hazards
-        </h2>
-        <span class="badge">INTEL & CATASTROPHES</span>
-      </div>
+      <div class="card-title" style="margin-bottom: 10px;">Hardware Deployment & Workshop Roles</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
+        The simulation operates across three primary devices over the local Wi-Fi router:
+      </p>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
-        <!-- Lore Quizzes -->
-        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px;">
-          <h3 style="font-size: 1rem; font-weight: 800; color: #38bdf8; margin-bottom: 8px;">
-            📚 High-Stakes Lore Quizzes
-          </h3>
-          <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5; margin-bottom: 12px;">
-            In the mobile <strong>Lore & Intel</strong> tab, delegations can study 8 historical dossiers detailing Spire geography, faction science, and cultural history. Each dossier features an interactive high-stakes quiz:
-          </p>
-          <ul style="color: var(--text-secondary); font-size: 0.8rem; margin-left: 20px; line-height: 1.6;">
-            <li><strong style="color: #10b981;">Correct Answer:</strong> Awards an instant bounty of <strong>+15 Resources</strong> (Grain, Cores, or Silk) directly to national reserves.</li>
-            <li><strong style="color: #ef4444;">Incorrect Answer:</strong> Suffers a diplomatic embarrassment penalty of <strong>-5 Diplomatic Standing</strong> and locks the dossier permanently.</li>
-          </ul>
-        </div>
-
-        <!-- Geographic Hazards -->
-        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px;">
-          <h3 style="font-size: 1rem; font-weight: 800; color: #f59e0b; margin-bottom: 8px;">
-            🌋 Terrain-Linked Catastrophes
-          </h3>
-          <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5; margin-bottom: 12px;">
-            Disasters are not random—they strike according to <strong>terrain and geographic affinities</strong>:
-          </p>
-          <ul style="color: var(--text-secondary); font-size: 0.8rem; margin-left: 20px; line-height: 1.6;">
-            <li><strong>Tsubduction Earthquakes:</strong> Strike volcanic peaks and abyssal chasms (Val-Khor, Umbra, Aethelgard).</li>
-            <li><strong>Oceanic Tsunamis:</strong> Flood coastal archipelagos and lowlands (Aquila, Sylvan).</li>
-            <li><strong>Agricultural Blights & Wildfires:</strong> Scorch verdant lowlands and solar terraces (Sylvan, Solaris).</li>
-            <li><strong>Aether Reactor Breaches:</strong> Rupture energy synthesizers in high-core nations.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ========================================================================= -->
-  <!-- SECTION 8: PARTICIPANT INTERFACE & FACILITATOR GUIDE -->
-  <!-- ========================================================================= -->
-  <section id="architecture" style="margin-bottom: 36px; scroll-margin-top: 110px;">
-    <div class="card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-        <h2 style="font-size: 1.25rem; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">
-          8. Hardware Roles & How to Run the Workshop
-        </h2>
-        <span class="badge">SYSTEM SETUP</span>
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
-
-        <!-- 1. Participant Smartphones -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px;">
         <div class="overview-role-card">
-          <div style="font-size: 1.4rem; margin-bottom: 6px;">📱</div>
-          <h4 style="font-size: 1rem; font-weight: 800; color: #fff;">Participant Mobile Cockpit</h4>
-          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 8px;">URL: /realm/&lt;id&gt; (PIN Protected)</div>
+          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Participant Screen</div>
+          <h4 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); margin: 4px 0 8px;">Mobile Cockpit (/realm/&lt;id&gt;)</h4>
           <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
-            Delegates connect their smartphones to the local room Wi-Fi and scan the projected QR code. Features 5 tactile tabs:
+            Accessed by students on smartphones via 4-digit PIN authentication. 5 persistent navigation tabs:
           </p>
-          <div style="margin-top: 8px; font-size: 0.76rem; font-family: var(--font-mono); color: var(--text-primary); line-height: 1.6;">
-            1. <strong>Overview:</strong> Resources, metrics, domestic levers, secret directive.<br>
-            2. <strong>News:</strong> Live wire dispatches and catastrophe alerts.<br>
-            3. <strong>Trade:</strong> Bilateral P2P proposal builder with atomic transfer.<br>
-            4. <strong>Motions:</strong> Draft and second statutory resolutions.<br>
-            5. <strong>Lore & Intel:</strong> Reading dossiers and resource trivia bounties.
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); line-height: 1.6; margin-top: 8px;">
+            1. Overview: Resources, metrics, domestic decrees, secret directive.<br>
+            2. News: Live breaking wire and crisis alerts.<br>
+            3. Trade: Bilateral atomic P2P proposal hub.<br>
+            4. Motions: Sponsor and second statutory resolutions.<br>
+            5. Lore: Historical reading dossiers and quiz bounties.
           </div>
         </div>
 
-        <!-- 2. Auditorium Projector -->
         <div class="overview-role-card">
-          <div style="font-size: 1.4rem; margin-bottom: 6px;">📽️</div>
-          <h4 style="font-size: 1rem; font-weight: 800; color: #fff;">Auditorium Projector Display</h4>
-          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 8px;">URL: /projector (Auditorium Screen)</div>
+          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Auditorium Display</div>
+          <h4 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); margin: 4px 0 8px;">Projector Screen (/projector)</h4>
           <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
-            Broadcasted on the central classroom or hall projector. High-visibility zero-scroll design featuring:
+            Displayed on room projector. High-visibility zero-scroll design:
           </p>
-          <div style="margin-top: 8px; font-size: 0.76rem; font-family: var(--font-mono); color: var(--text-primary); line-height: 1.6;">
-            • Massive digital turn clock and session indicator.<br>
-            • Continental Diplomatic Standing board with Fog-of-War tiers.<br>
-            • Live streaming breaking news ticker with sound cues.<br>
-            • Room Wi-Fi gateway QR code for effortless student onboarding.<br>
-            • Full-screen roll-call visualizer during Plenary voting.
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); line-height: 1.6; margin-top: 8px;">
+            • Giant turn clock and active session indicator.<br>
+            • Continental Diplomatic Standing board with Fog of War tiers.<br>
+            • Live streaming news ticker with synthesized audio cues.<br>
+            • LAN QR code for fast mobile onboarding.<br>
+            • Full-screen parliamentary roll-call visualizer during votes.
           </div>
         </div>
 
-        <!-- 3. Facilitator Command Deck -->
         <div class="overview-role-card">
-          <div style="font-size: 1.4rem; margin-bottom: 6px;">💻</div>
-          <h4 style="font-size: 1rem; font-weight: 800; color: #fff;">Facilitator Command Deck</h4>
-          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 8px;">URL: /admin (Facilitator Laptop)</div>
+          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Facilitator Laptop</div>
+          <h4 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); margin: 4px 0 8px;">Command Deck (/admin)</h4>
           <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
-            Gives the educator total operational command over the simulation:
+            Master operations deck for the workshop instructor:
           </p>
-          <div style="margin-top: 8px; font-size: 0.76rem; font-family: var(--font-mono); color: var(--text-primary); line-height: 1.6;">
-            • Master timer controls (Start, Pause, Reset, Extend +60s).<br>
-            • One-click Turn advancement with automatic socioeconomic processing.<br>
-            • Crisis injection deck (Trigger catalog crises or roll catastrophes).<br>
-            • Live resource telemetry overrides (+ / - buttons).<br>
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); line-height: 1.6; margin-top: 8px;">
+            • Master timer controls (Start, Pause, Reset, +60s).<br>
+            • One-click Turn advancement with automated equation processing.<br>
+            • Crisis injection deck from narrative catalog.<br>
+            • Real-time resource overrides (+ / - buttons).<br>
             • Passcode inspection and PIN reset utility.
           </div>
         </div>
-
       </div>
     </div>
-  </section>
-
-  <!-- Bottom CTA -->
-  <div style="text-align: center; margin-top: 30px;">
-    <a href="/" class="btn btn-primary" style="padding: 12px 32px; font-size: 1rem; font-weight: 800;">
-      Enter Sovereign Lobby 🏛️
-    </a>
   </div>
 
 </div>
 {% endblock %}
 
 {% block scripts %}
-<style>
-  .overview-stat-pill {
-    background: var(--bg-surface-sunken);
-    border: 1px solid var(--border-subtle);
-    padding: 6px 14px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .overview-stat-pill .pill-label {
-    font-size: 0.65rem;
-    font-family: var(--font-mono);
-    color: var(--text-muted);
-    letter-spacing: 0.05em;
-  }
-  .overview-stat-pill .pill-val {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--text-primary);
-  }
-  .overview-jump-link {
-    font-size: 0.76rem;
-    font-family: var(--font-mono);
-    font-weight: 700;
-    color: var(--text-secondary);
-    background: var(--bg-surface-sunken);
-    border: 1px solid var(--border-subtle);
-    padding: 6px 12px;
-    border-radius: var(--radius-pill);
-    white-space: nowrap;
-    transition: all 0.15s ease;
-  }
-  .overview-jump-link:hover, .overview-jump-link.active {
-    color: #fff;
-    border-color: var(--border-strong);
-    background: var(--bg-surface-raised);
-  }
-  .overview-realm-card {
-    background: var(--bg-surface-sunken);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-  .overview-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    background: var(--bg-surface);
-    padding: 8px 10px;
-    border-radius: var(--radius-xs);
-    border: 1px solid var(--border-subtle);
-    margin-bottom: 12px;
-  }
-  .overview-stats-grid strong {
-    color: var(--text-primary);
-  }
-  .overview-directive-box {
-    font-size: 0.78rem;
-    color: var(--text-muted);
-    line-height: 1.4;
-    border-top: 1px dashed var(--border-subtle);
-    padding-top: 8px;
-  }
-  .overview-rule-box {
-    background: var(--bg-surface-sunken);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    padding: 14px;
-  }
-  .overview-rule-box .rule-title {
-    font-size: 0.85rem;
-    font-weight: 800;
-    color: #fff;
-    margin-bottom: 8px;
-  }
-  .overview-rule-box .rule-math {
-    font-family: var(--font-mono);
-    font-size: 0.78rem;
-    line-height: 1.6;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    padding: 8px 10px;
-    border-radius: var(--radius-xs);
-    color: var(--text-primary);
-    margin-bottom: 8px;
-  }
-  .overview-rule-box .rule-desc {
-    font-size: 0.76rem;
-    color: var(--text-muted);
-    line-height: 1.4;
-  }
-  .overview-lever-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    background: var(--bg-surface-sunken);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    padding: 10px 14px;
-  }
-  .overview-resolution-card {
-    background: var(--bg-surface-sunken);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    padding: 14px;
-  }
-  .res-badge {
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    font-weight: 800;
-    letter-spacing: 0.05em;
-    color: #10b981;
-    border: 1px solid #10b981;
-    padding: 2px 6px;
-    border-radius: var(--radius-xs);
-    display: inline-block;
-  }
-  .overview-role-card {
-    background: var(--bg-surface-sunken);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    padding: 16px;
-  }
-</style>
 <script>
-  // Dynamic active jump link highlighter
-  document.addEventListener('DOMContentLoaded', function() {
-    const jumpLinks = document.querySelectorAll('.overview-jump-link');
-    const sections = document.querySelectorAll('section[id]');
-
-    function onScroll() {
-      let scrollPos = window.scrollY + 130;
-      sections.forEach(sec => {
-        let top = sec.offsetTop;
-        let height = sec.offsetHeight;
-        let id = sec.getAttribute('id');
-        if (scrollPos >= top && scrollPos < top + height) {
-          jumpLinks.forEach(link => {
-            if (link.getAttribute('href') === '#' + id) {
-              link.classList.add('active');
-            } else {
-              link.classList.remove('active');
-            }
-          });
-        }
-      });
-    }
-    window.addEventListener('scroll', onScroll);
-  });
+  function switchOverviewTab(tabId) {
+    document.querySelectorAll('.overview-tab-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.tab === tabId);
+    });
+    document.querySelectorAll('.overview-tab-content').forEach(c => {
+      c.classList.toggle('active', c.id === tabId);
+    });
+  }
 </script>
 {% endblock %}
