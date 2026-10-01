@@ -12,6 +12,10 @@ A lightweight, real-time web application built for live educational simulations.
   - Continental Delegations Board showing public standing, vitality, stability, votes, and conditions (never reveals secret agendas!).
   - Live breaking news ticker and room Wi-Fi QR code.
   - Dynamic Plenary Floor mode: when a Flash Assembly is active, it transforms into a full-screen roll-call visualizer with real-time weighted voting bars.
+- **Comprehensive Game Overview & Guide (`/overview`)**:
+  - Detailed simulation primer explaining the 6 sovereign nations, starting endowments, and geography.
+  - Socioeconomic formulas and mathematical laws cheat sheet (starvation thresholds, technological efficiency, plutocratic drift, complacency paradox).
+  - Parliamentary statutory resolution dockets, domestic governance levers, high-stakes lore quizzes, and room setup guide.
 - **Mobile Participant Cockpit (`/realm/<id>`)**:
   - **Persistent Bottom Navigation Bar**: Seamless switching between **Overview & Directive**, **News & Dispatches**, **P2P Trade**, **Motions & Assembly**, and **Continental Registry**.
   - Secret Uncomfortable Domestic Directive (classified expandable drawer).
@@ -70,6 +74,7 @@ The server binds to `0.0.0.0:5000` and displays:
 =================================================================
   * Host LAN IP:    http://192.168.1.50:5000
   * Participant UI: http://192.168.1.50:5000
+  * Game Overview:  http://192.168.1.50:5000/overview
   * DM Command Deck:http://192.168.1.50:5000/admin
   * Projector View: http://192.168.1.50:5000/projector
   * Local Loopback: http://127.0.0.1:5000

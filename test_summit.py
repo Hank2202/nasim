@@ -550,5 +550,27 @@ for (var id in map.realmsData) {
         self.assertTrue(aethel_eval["directive_achieved"])
         self.assertIn("military", aethel_eval["stats"])
 
+    def test_game_overview_page_endpoint(self):
+        """Verify the /overview page renders successfully and aliases redirect properly."""
+        client = app.test_client()
+        resp = client.get("/overview")
+        self.assertEqual(resp.status_code, 200)
+        content = resp.get_data(as_text=True)
+        self.assertIn("The Summit of Realms", content)
+        self.assertIn("Sylvan Concordat", content)
+        self.assertIn("Iron Val-Khor", content)
+        self.assertIn("Solaris Ascendancy", content)
+        self.assertIn("Umbral Enclave", content)
+        self.assertIn("Aquila Maritime League", content)
+        self.assertIn("Aethelgard Dominion", content)
+        self.assertIn("Dynamic Voting Weights", content)
+        self.assertIn("Emergency Grain Rationing", content)
+
+        # Test aliases /rules and /guide redirect to /overview
+        for alias in ["/rules", "/guide"]:
+            r = client.get(alias)
+            self.assertEqual(r.status_code, 302)
+            self.assertEqual(r.headers.get("Location"), "/overview")
+
 if __name__ == "__main__":
     unittest.main()

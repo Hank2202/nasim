@@ -19,7 +19,7 @@ from typing import Dict, Any
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response, make_response
 
 from models import Database, DEFAULT_REALMS
-from engine import SummitEngine
+from engine import SummitEngine, load_scenario_config
 from qr_generator import generate_qr_svg
 
 app = Flask(__name__)
@@ -139,6 +139,29 @@ def admin_view():
         host_ip=lan_ip,
         port=port
     )
+
+@app.route("/overview")
+def overview_view():
+    state = engine.get_full_state()
+    cfg = load_scenario_config()
+    lan_ip = get_lan_ip()
+    port = request.environ.get("SERVER_PORT", "5000")
+    server_url = f"http://{lan_ip}:{port}"
+    return render_template(
+        "overview.html",
+        state=state,
+        cfg=cfg,
+        realms=state["realms"],
+        meta=state["meta"],
+        server_url=server_url,
+        lan_ip=lan_ip,
+        port=port
+    )
+
+@app.route("/rules")
+@app.route("/guide")
+def rules_redirect():
+    return redirect(url_for("overview_view"))
 
 @app.route("/qr")
 def qr_code_endpoint():
@@ -462,6 +485,7 @@ if __name__ == "__main__":
     print("=" * 65)
     print(f"  * Host LAN IP:    http://{lan_ip}:{port}")
     print(f"  * Participant UI: http://{lan_ip}:{port}")
+    print(f"  * Game Overview:  http://{lan_ip}:{port}/overview")
     print(f"  * DM Deck:        http://{lan_ip}:{port}/admin")
     print(f"  * Projector View: http://{lan_ip}:{port}/projector")
     print(f"  * Local Loopback: http://127.0.0.1:{port}")
