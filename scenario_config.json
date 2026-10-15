@@ -43,49 +43,88 @@
       "name": "Emergency Grain Redistribution",
       "summary": "Mandates wealthy grain silos transfer emergency grain to starving provinces across the continent.",
       "effect_badge": "HUMANITARIAN GRAIN TRANSFER",
-      "statutory_effect": "Realms with >50 Grain contribute -10 Grain; realms with <25 Grain receive +15 Grain."
+      "statutory_effect": "Realms with >50 Grain contribute -10 Grain; realms with <25 Grain receive +15 Grain.",
+      "player_selectable": true,
+      "icon": "🌾",
+      "needs_target": false,
+      "default_title": "Continental Granary Accord",
+      "effect_plain": "Every nation with more than 50 Grain gives 10 Grain; every nation with less than 25 Grain receives 15 Grain.",
+      "default_terms": "Recognising that hunger anywhere threatens peace everywhere, the signatory nations agree that well-stocked granaries shall share with the starving. Each nation holding more than 50 Grain contributes 10 Grain, and each nation holding less than 25 Grain receives 15 Grain."
     },
     {
       "id": "embargo",
       "name": "Continental Wealth Surtax & Embargo",
       "summary": "Imposes commercial trade sanctions on the single wealthiest realm to curb runaway oligarchic dominance.",
       "effect_badge": "PLUTOCRATIC RESTRAINTS",
-      "statutory_effect": "The wealthiest realm suffers -15 Civil Stability as trade routes are legally choked."
+      "statutory_effect": "The wealthiest realm suffers -15 Civil Stability as trade routes are legally choked.",
+      "player_selectable": true,
+      "icon": "⚖️",
+      "needs_target": false,
+      "default_title": "Charter Against Hoarded Wealth",
+      "effect_plain": "The single wealthiest nation (Grain + Cores + Silk) loses 15 Stability.",
+      "default_terms": "No single realm shall grow so rich that it can bend the Assembly to its will. The Summit imposes trade restrictions on the wealthiest nation until its fortune is shared more fairly."
     },
     {
       "id": "aid",
       "name": "Sovereign Relief Mission",
       "summary": "The sponsoring realm organizes a multilateral relief fund, providing emergency aid to enhance diplomatic standing.",
       "effect_badge": "DIPLOMATIC ELEVATION",
-      "statutory_effect": "Sponsoring realm gains +10 Diplomatic Standing for leadership in the Spire."
+      "statutory_effect": "Sponsoring realm gains +10 Diplomatic Standing for leadership in the Spire.",
+      "player_selectable": true,
+      "icon": "🕊️",
+      "needs_target": false,
+      "default_title": "Spire Relief Mission",
+      "effect_plain": "The nation that tables this motion gains 10 Diplomatic Standing for leading the relief effort.",
+      "default_terms": "Our nation will organise and lead a relief mission to the regions worst struck by the failed harvest, coordinating aid from all willing signatories."
     },
     {
       "id": "cordon",
       "name": "Frontier Defense & Quarantine Cordon",
       "summary": "Militarizes frontier checkpoints along borders to insulate against refugee surges and civil unrest.",
       "effect_badge": "BORDER QUARANTINE",
-      "statutory_effect": "Targeted realm's borders are quarantined (is_quarantined = true) and gain +10 Stability."
+      "statutory_effect": "Targeted realm's borders are quarantined (is_quarantined = true) and gain +10 Stability.",
+      "player_selectable": true,
+      "icon": "🛡️",
+      "needs_target": true,
+      "target_label": "Nation whose borders are guarded",
+      "default_title": "Frontier Watch Covenant",
+      "effect_plain": "The chosen nation is quarantined (its borders sealed against trade with outsiders) and gains 10 Stability.",
+      "default_terms": "To keep unrest from spreading, the borders of the named nation shall be guarded and its frontier checkpoints reinforced until the crisis passes."
     },
     {
       "id": "custom",
       "name": "General Sovereign Concordat",
       "summary": "A mutually drafted statutory pact establishing sovereign cooperation on common issues.",
       "effect_badge": "MUTUAL ACCORD",
-      "statutory_effect": "Sponsoring realm gains +5 Diplomatic Standing and +5 Civil Stability."
+      "statutory_effect": "Sponsoring realm gains +5 Diplomatic Standing and +5 Civil Stability.",
+      "player_selectable": true,
+      "icon": "📜",
+      "needs_target": false,
+      "default_title": "Concord of the Spire",
+      "effect_plain": "The nation that tables this motion gains 5 Standing and 5 Stability. Write any further promises in the terms; the nations involved keep them by hand.",
+      "default_terms": "The signatory nations pledge to … (write your agreement here: who gives what, who promises what, and for how long)."
     },
     {
       "id": "emergency_food_a",
       "name": "Emergency Redistribution Act (Continental Food Act A)",
       "summary": "Every country with more than 50 Grain before final consumption transfers the surplus to countries below 20 Grain.",
       "effect_badge": "EMERGENCY SURPLUS SHARING",
-      "statutory_effect": "Surplus grain from realms >50 is distributed proportionally among starving realms <20."
+      "statutory_effect": "Surplus grain from realms >50 is distributed proportionally among starving realms <20.",
+      "player_selectable": false,
+      "icon": "🌾",
+      "needs_target": false,
+      "effect_plain": "Every nation above 50 Grain gives its surplus to nations below 20 Grain."
     },
     {
       "id": "emergency_food_b",
       "name": "Emergency Industrial Agriculture Act (Continental Food Act B)",
       "summary": "Each country contributes 10 Cores. If at least 50 Cores are gathered, every country receives +15 Grain.",
       "effect_badge": "INDUSTRIAL CROP ACCELERATION",
-      "statutory_effect": "All realms pay 10 Cores; if quota is met, all realms receive +15 Grain."
+      "statutory_effect": "All realms pay 10 Cores; if quota is met, all realms receive +15 Grain.",
+      "player_selectable": false,
+      "icon": "⚙️",
+      "needs_target": false,
+      "effect_plain": "Every nation pays 10 Cores; if enough is collected, every nation receives 15 Grain."
     }
   ],
   "qualitative_thresholds": {

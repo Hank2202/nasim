@@ -28,6 +28,15 @@
     </div>
   </div>
 
+  <!-- Roster: which nations take part (always visible, the first thing to set) -->
+  <section class="roster-card">
+    <div>
+      <div class="card-title">Nations at this summit <span id="roster-count" class="muted"></span></div>
+      <p class="section-sub">Tap a nation to add or remove it. Missions, quotas, trade lists, the projector map and votes adjust automatically.</p>
+    </div>
+    <div id="roster-chips" class="roster-chips"></div>
+  </section>
+
   <!-- Functional Workspace Tabs -->
   <div class="admin-tab-nav" style="display: flex; gap: 6px; border-bottom: 2px solid var(--border-subtle); margin-bottom: 18px; overflow-x: auto;">
     <button class="admin-tab-btn active" data-tab="tab-pacing">Pacing & Timers</button>
@@ -46,7 +55,7 @@
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <div>
           <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase;">Current Simulation Phase</div>
-          <div id="admin-phase-display" style="font-size: 1.25rem; font-weight: 900; font-family: var(--font-mono); color: #fff; margin-top: 2px;">
+          <div id="admin-phase-display" style="font-size: 1.25rem; font-weight: 900; font-family: var(--font-mono); color: var(--text-primary); margin-top: 2px;">
             WORKING SESSION (5 MINUTES)
           </div>
         </div>
@@ -114,8 +123,8 @@
           <strong>End-of-Turn Routine Executes:</strong>
           <ul style="padding-left: 18px; margin-top: 6px;">
             <li>Deducts baseline grain (-20 Grain default, -15 with Efficiency).</li>
-            <li>Enforces Starvation penalties if grain $\le 0$ (-25 Vitality, -20 Stability).</li>
-            <li>Enforces Complacency penalties if stability & vitality $\ge 85$ without 10 Silk.</li>
+            <li>Enforces Starvation penalties if grain ≤ 0 (-25 Vitality, -20 Stability).</li>
+            <li>Enforces Complacency penalties if stability & vitality ≥ 85 without 10 Silk.</li>
             <li>Calculates Plutocratic Drift (+1 bonus vote, -5 Stability).</li>
             <li>Resets working session timer to 5:00.</li>
           </ul>
@@ -329,7 +338,7 @@
       <div>
         <div class="card">
           <div class="card-title">Network Gateway</div>
-          <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 8px 10px; border-radius: var(--radius-xs); margin: 8px 0; font-family: var(--font-mono); font-size: 0.82rem; color: #fff; display:flex; justify-content:space-between; align-items:center;">
+          <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 8px 10px; border-radius: var(--radius-xs); margin: 8px 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-primary); display:flex; justify-content:space-between; align-items:center;">
             <span id="server-url-display">{{ server_url }}</span>
             <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('{{ server_url }}'); showToast('URL copied to clipboard', 'info');">Copy</button>
           </div>
@@ -369,7 +378,7 @@
 <!-- Modal for editing a realm stats & flags -->
 <div id="edit-realm-modal" class="modal-overlay" style="display:none;">
   <div class="modal-card" style="max-width: 480px;">
-    <h3 id="edit-modal-title" style="color: #fff; margin-bottom: 12px; font-size: 1.1rem; text-transform: uppercase;">Edit Delegation</h3>
+    <h3 id="edit-modal-title" style="color: var(--text-primary); margin-bottom: 12px; font-size: 1.1rem; text-transform: uppercase;">Edit Delegation</h3>
     <form id="edit-realm-form" onsubmit="adminApp.handleSaveRealmEdit(event)">
       <input type="hidden" id="edit-realm-id">
       
@@ -416,7 +425,7 @@
 <div id="modal-confirm-reset" class="modal-overlay" style="display: none;" onclick="if(event.target===this) adminApp.closeResetModal()">
   <div class="modal-card" style="max-width: 420px; text-align: center;">
     <div style="font-size: 2rem; margin-bottom: 8px;">⚠️</div>
-    <h3 style="font-size: 1.2rem; font-weight: 900; color: #fff; text-transform: uppercase;">Confirm Simulation Reset</h3>
+    <h3 style="font-size: 1.2rem; font-weight: 900; color: var(--text-primary); text-transform: uppercase;">Confirm Simulation Reset</h3>
     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.45;">
       Are you sure you want to reset the simulation back to Turn 1? All ongoing treaties, passed resolutions, and event dispatches will be cleared.
     </p>

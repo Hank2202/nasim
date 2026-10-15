@@ -186,7 +186,7 @@ class TestSummitEngine(unittest.TestCase):
         """Verify cordon resolution ratifies quarantine protection."""
         ok, msg, pid = self.engine.draft_proposal(
             "aethelgard", "Frontier Quarantine Cordon",
-            "Militarize frontiers and seal refugee spillovers.", "cordon", "sylvan"
+            "Militarize frontiers and seal refugee spillovers.", "cordon", None, "sylvan"
         )
         self.assertTrue(ok)
         self.engine.support_proposal(pid, "sylvan")
@@ -197,6 +197,52 @@ class TestSummitEngine(unittest.TestCase):
 
         sylvan = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
         self.assertTrue(sylvan["is_quarantined"])
+
+    def test_motion_templates_validation(self):
+        """Players draft from templates: food acts are facilitator-only, cordon needs a target, title/terms required."""
+        ok, msg, _ = self.engine.draft_proposal("sylvan", "Food", "Terms", "emergency_food_a")
+        self.assertFalse(ok)
+        ok, msg, _ = self.engine.draft_proposal("sylvan", "Watch", "Terms", "cordon")
+        self.assertFalse(ok)
+        self.assertIn("Choose the nation", msg)
+        ok, msg, _ = self.engine.draft_proposal("sylvan", "  ", "Terms", "aid")
+        self.assertFalse(ok)
+        ok, msg, pid = self.engine.draft_proposal("sylvan", "Watch", "Terms", "cordon", None, "umbra")
+        self.assertTrue(ok)
+        prop = next(p for p in self.engine.get_full_state()["proposals"] if p["id"] == pid)
+        self.assertEqual(prop["target_realm_name"], "Umbral Enclave")
+
+    def test_inactive_nations_are_left_out(self):
+        """With fewer nations: no trades with absent nations, nation-specific secret missions are skipped."""
+        self.engine.admin_set_active_realm_count(4)  # sylvan, val_khor, solaria, umbra
+        ok, msg = self.engine.create_trade("sylvan", "aquila", "grain", 5, "silk", 5)
+        self.assertFalse(ok)
+        realms = {r["id"]: r for r in self.engine.get_full_state()["realms"]}
+        sylvan_ids = [m["id"] for m in realms["sylvan"]["active_secret_missions"]]
+        self.assertNotIn("sylvan_defense", sylvan_ids)  # depends on Aethelgard, which is not playing
+        ok, msg = self.engine.admin_toggle_realm("umbra", False)
+        self.assertTrue(ok)
+        self.engine.admin_toggle_realm("solaria", False)
+        ok, msg = self.engine.admin_toggle_realm("val_khor", False)
+        self.assertFalse(ok)  # at least two nations must remain
+
+    def test_trade_amounts_must_be_sane(self):
+        ok, _ = self.engine.create_trade("sylvan", "aquila", "grain", -50, "silk", 5)
+        self.assertFalse(ok)
+        ok, _ = self.engine.create_trade("sylvan", "aquila", "grain", 0, "silk", 0)
+        self.assertFalse(ok)
+
+    def test_decided_motions_never_return_to_ballot(self):
+        ok, _, pid = self.engine.draft_proposal("sylvan", "Relief", "Terms", "aid")
+        self.engine.support_proposal(pid, "aquila")
+        ok, _ = self.engine.start_plenary_session()
+        self.assertTrue(ok)
+        self.engine.conclude_quick_plenary()
+        meta = self.engine.db.get_state("meta", {})
+        meta["phase"] = "working"
+        self.engine.db.set_state("meta", meta)
+        ok, msg = self.engine.start_plenary_session()
+        self.assertFalse(ok)
 
     def test_conclude_summit_verdict_and_secret_directive_evaluation(self):
         """Verify conclude_summit computes verdict, honours, and secret directive evaluations."""
@@ -347,8 +393,8 @@ class TestFlaskEndpoints(unittest.TestCase):
         
         # Encyclopedia (reading) and Quiz (answering) live in separate tabs
         self.assertIn(b"Spireopedia Quiz", resp_auth.data)
-        self.assertIn(b"Continental Registry", resp_auth.data)
-        self.assertIn(b"Domestic Decrees", resp_auth.data)
+        self.assertIn(b"The nations at the summit", resp_auth.data)
+        self.assertIn(b"Royal decrees", resp_auth.data)
 
         # 3. Facilitator Command Deck
         resp = self.client.get("/admin")
@@ -427,57 +473,18 @@ class TestFlaskEndpoints(unittest.TestCase):
         self.assertIn(b"nav-motions-badge", resp_realm.data)
         self.assertIn(b"quiz-container", resp_realm.data)
         self.assertIn(b"wiki-body", resp_realm.data)
-        self.assertIn(b"trade-preview-box", resp_realm.data)
+        self.assertIn(b"trade-partner-chips", resp_realm.data)
 
-    def test_projector_3d_canvas_rendering(self):
-        """Verify projector displays 3D world canvas, controls, and 3D projection stays safely within screen bounds."""
+    def test_projector_map_rendering(self):
+        """Projector shows the parchment map of the Continent and the council of nations."""
         resp = self.client.get("/projector")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"world-3d-canvas", resp.data)
-        self.assertIn(b"world3d.js", resp.data)
+        self.assertIn(b'id="realm-map"', resp.data)
+        self.assertIn(b"realm_map.js", resp.data)
+        self.assertIn(b"projector-realms-list", resp.data)
         self.assertIn(b"btn-open-settings", resp.data)
         self.assertIn(b"proj-settings-modal", resp.data)
-        self.assertIn(b"btn-camera-drift", resp.data)
-        self.assertIn(b"btn-camera-speed", resp.data)
-
-        # Run 3D projection math in JSC to ensure center and all 6 realm capitals project within visible screen bounds
-        import subprocess
-        js_code = '''
-var window = this;
-window.addEventListener = function() {};
-window.requestAnimationFrame = function() {};
-var document = {
-  getElementById: function(id) {
-    if (id === "world-3d-canvas") {
-      return {
-        clientWidth: 1200, clientHeight: 800, width: 1200, height: 800,
-        getContext: function() { return { setTransform: function() {} }; },
-        addEventListener: function() {},
-        getBoundingClientRect: function() { return { left: 0, top: 0, width: 1200, height: 800 }; }
-      };
-    }
-    return { classList: { toggle: function() {} }, style: {}, innerText: "" };
-  }
-};
-eval($.NSString.stringWithContentsOfFileEncodingError("static/world3d.js", $.NSUTF8StringEncoding, null).js);
-var map = new World3DMap("world-3d-canvas");
-var centerP = map.project(0, 0, 0);
-if (!centerP || centerP.x < 100 || centerP.x > 1100 || centerP.y < 100 || centerP.y > 700) {
-  throw new Error("Center out of visible screen bounds: " + JSON.stringify(centerP));
-}
-for (var id in map.realmsData) {
-  var cap = map.realmsData[id].capital.pos;
-  var p = map.project(cap[0], cap[1], cap[2]);
-  if (!p || p.x < 50 || p.x > 1150 || p.y < 50 || p.y > 750) {
-    throw new Error("Capital " + id + " out of bounds: " + JSON.stringify(p));
-  }
-}
-"PROJECTION_VERIFIED";
-'''
-        cmd = ["osascript", "-l", "JavaScript", "-e", js_code]
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        self.assertEqual(res.returncode, 0, f"3D Projection Error: {res.stderr}")
-        self.assertIn("PROJECTION_VERIFIED", res.stdout)
+        self.assertNotIn(b"world3d.js", resp.data)
 
     def test_minute_catastrophe_simulation_and_geography_placement(self):
         """Verify scenario_config.json contains 3D geography and realistic catastrophes catalog."""
@@ -551,11 +558,11 @@ for (var id in map.realmsData) {
         self.assertIn("reward_label", data["data"])
 
     def test_js_syntax_integrity(self):
-        """Ensure static/app.js and static/world3d.js are free of JavaScript syntax errors using macOS JavaScriptCore evaluator."""
+        """Ensure static/app.js and static/realm_map.js are free of JavaScript syntax errors using macOS JavaScriptCore evaluator."""
         import subprocess
         cmd = [
             "osascript", "-l", "JavaScript", "-e",
-            'var window = this; var document = { getElementById: function() { return null; }, querySelectorAll: function() { return []; }, addEventListener: function() {} }; eval($.NSString.stringWithContentsOfFileEncodingError("static/world3d.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/app.js", $.NSUTF8StringEncoding, null).js); "OK"'
+            'var window = this; var document = { getElementById: function() { return null; }, querySelectorAll: function() { return []; }, addEventListener: function() {} }; eval($.NSString.stringWithContentsOfFileEncodingError("static/realm_map.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/app.js", $.NSUTF8StringEncoding, null).js); "OK"'
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, f"JS Syntax Error detected: {result.stderr}")

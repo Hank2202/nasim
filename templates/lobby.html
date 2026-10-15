@@ -8,7 +8,8 @@
   <div class="page-head centered">
     <span class="eyebrow">Neutral Spire &middot; Year 304 AC</span>
     <h1 class="page-title" style="font-size: 1.8rem;">The Summit of Realms</h1>
-    <p class="lede">Six nations, one failing harvest, three rounds of negotiation. Choose your delegation to begin.</p>
+    {% set playing = realms | selectattr('active', 'ne', false) | list %}
+    <p class="lede">{{ playing|length }} nations, one failing harvest, three rounds of negotiation. Choose your delegation to begin.</p>
   </div>
 
   <div class="card">
@@ -30,12 +31,12 @@
 
   <div class="lobby-grid" id="lobby-grid">
     {% for r in realms if r.active != false %}
-    <div class="lobby-realm-card" id="card-{{ r.id }}" role="button" tabindex="0"
+    <div class="lobby-realm-card" style="--nc: {{ r.theme_color or '#8c7a5e' }};" id="card-{{ r.id }}" role="button" tabindex="0"
          onclick="handleCardClick('{{ r.id }}', {{ r.name|tojson|forceescape }}, {{ 'true' if r.is_capacity_full else 'false' }})"
          onkeydown="if (event.key === 'Enter') this.click();">
       <div>
         <div class="row-between" style="align-items: flex-start; margin-bottom: 6px;">
-          <h3 class="lobby-realm-name"><span class="lobby-realm-emoji">{{ r.emoji or '🏛️' }}</span>{{ r.name }}</h3>
+          <h3 class="lobby-realm-name"><span class="crest small">{{ r.emoji or '🏛️' }}</span>{{ r.name }}</h3>
           <span class="badge">{{ r.assembly_votes }} VOTE{{ 'S' if r.assembly_votes != 1 else '' }}</span>
         </div>
         <p class="small" style="color: var(--text-secondary); line-height: 1.4; margin-bottom: 12px;">{{ r.ethos }}</p>

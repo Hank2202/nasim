@@ -115,6 +115,10 @@ def enforce_api_auth():
         actor = next((data[k] for k in _ACTOR_KEYS if data.get(k)), None)
         if not actor or not (is_realm_authed(actor) or is_admin()):
             return jsonify({"success": False, "message": "Delegation authentication required."}), 401
+        if not is_admin():
+            actor_realm = next((r for r in engine.db.get_state("realms", []) if r["id"] == actor), None)
+            if not actor_realm or not actor_realm.get("active", True):
+                return jsonify({"success": False, "message": "Your nation is not taking part in this summit."}), 403
     return None
 
 def sanitize_state(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -192,7 +196,7 @@ def index():
 def realm_view(realm_id: str):
     state = sanitize_state(engine.get_full_state())
     realm = next((r for r in state["realms"] if r["id"] == realm_id), None)
-    if not realm:
+    if not realm or not realm.get("active", True):
         return redirect(url_for("index"))
 
     # Verify delegation auth cookie (or allow override via query param ?auth=1)
@@ -495,7 +499,9 @@ def api_proposal_create():
     effect_type = data.get("effect_type", "custom")
     target_seconder_id = data.get("target_seconder_id")
 
-    success, msg, prop_id = engine.draft_proposal(proposer_id, title, description, effect_type, target_seconder_id)
+    target_realm_id = data.get("target_realm_id")
+    success, msg, prop_id = engine.draft_proposal(proposer_id, title, description, effect_type,
+                                                  target_seconder_id, target_realm_id)
     return jsonify({"success": success, "message": msg, "proposal_id": prop_id}), (200 if success else 400)
 
 @app.route("/api/proposal/<prop_id>/support", methods=["POST"])
