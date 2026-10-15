@@ -14,8 +14,8 @@
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
-      background: #0b0f19;
-      color: #f1f5f9;
+      background: var(--bg-base);
+      color: var(--text-primary);
     }
     .projector-main-grid {
       flex: 1;
@@ -40,52 +40,24 @@
     }
   </style>
 </head>
-<body class="theme-dark" style="background: #0b0f19; color: #f8fafc;">
+<body class="theme-light">
 
   <!-- Auditorium Master Topbar -->
   <div class="auditorium-topbar">
     <div class="auditorium-brand">
-      <span style="color: #38bdf8; font-size: 1.15rem;">⬢</span>
+      <span style="color: var(--accent); font-size: 1.15rem;">&#10022;</span>
       <div>
-        <span style="font-weight: 900; letter-spacing: 0.12em; color: #f8fafc;">THE SUMMIT OF REALMS</span>
-        <span class="proj-brand-sub" style="font-size: 0.72rem; color: #64748b; font-family: var(--font-mono); margin-left: 8px;">CONTINENTAL PLENARY</span>
-      </div>
-    </div>
-
-    <!-- Cycling Realm Spotlight Indicators -->
-    <div class="auditorium-realms-strip">
-      <div id="pill-sylvan" class="realm-indicator-pill">
-        <span class="realm-indicator-dot" style="background: #10b981;"></span>
-        <span>SYLVAN</span>
-      </div>
-      <div id="pill-val_khor" class="realm-indicator-pill">
-        <span class="realm-indicator-dot" style="background: #f59e0b;"></span>
-        <span>VAL-KHOR</span>
-      </div>
-      <div id="pill-solaria" class="realm-indicator-pill">
-        <span class="realm-indicator-dot" style="background: #eab308;"></span>
-        <span>SOLARIS</span>
-      </div>
-      <div id="pill-umbra" class="realm-indicator-pill">
-        <span class="realm-indicator-dot" style="background: #8b5cf6;"></span>
-        <span>UMBRA</span>
-      </div>
-      <div id="pill-aquila" class="realm-indicator-pill">
-        <span class="realm-indicator-dot" style="background: #06b6d4;"></span>
-        <span>AQUILA</span>
-      </div>
-      <div id="pill-aethelgard" class="realm-indicator-pill active">
-        <span class="realm-indicator-dot" style="background: #ec4899;"></span>
-        <span>AETHELGARD</span>
+        <span style="font-weight: 900; letter-spacing: 0.12em; color: var(--text-primary);">THE SUMMIT OF REALMS</span>
+        <span class="proj-brand-sub" style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); margin-left: 8px;">CONTINENTAL PLENARY</span>
       </div>
     </div>
 
     <!-- Session Status, Clock & Single Settings Gear -->
     <div class="auditorium-top-metrics">
-      <div class="projector-turn" id="proj-turn" style="font-size: 0.85rem; padding: 4px 10px; background: rgba(19, 27, 46, 0.8); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 4px; color: #38bdf8; font-weight: 700; font-family: var(--font-mono);">
+      <div class="projector-turn" id="proj-turn" style="font-size: 0.85rem; padding: 4px 10px; background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-xs); color: var(--primary); font-weight: 700; font-family: var(--font-display);">
         TURN {{ state.meta.current_turn }} • WORKING SESSION
       </div>
-      <div class="projector-timer" id="proj-timer" style="font-size: 1.45rem; font-weight: 900; color: #f8fafc; font-family: var(--font-mono); line-height: 1;">05:00</div>
+      <div class="projector-timer" id="proj-timer" style="font-size: 1.45rem; font-weight: 900; color: var(--text-primary); font-family: var(--font-display); line-height: 1; font-variant-numeric: lining-nums tabular-nums;">05:00</div>
       <button class="btn btn-primary btn-sm" onclick="toggleQrModal()" title="Show the QR code delegates scan to join">Join QR</button>
       <button id="btn-open-settings" class="btn btn-secondary btn-sm" onclick="toggleSettingsModal()" title="Auditorium Settings">Settings</button>
     </div>
@@ -133,19 +105,15 @@
   <!-- ========================================================================= -->
   <!-- QUICK PLENARY VOTING SCREEN (ROUNDS 1 & 2: RAPID BETWEEN-ROUND VOTES) -->
   <!-- ========================================================================= -->
-  <div id="proj-quick-plenary-stage" style="display: none; flex: 1; min-height: 0; overflow-y: auto;">
-    <div class="card" style="border: 2px solid var(--border-white); padding: 18px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <span class="badge" style="background:var(--border-white); color:var(--bg-base); font-size: 0.82rem; padding: 4px 12px;">
-          BETWEEN-ROUNDS PLENARY: SOVEREIGN VOTING SESSION
-        </span>
-        <span style="font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-muted);">
-          ALL MOTIONS WITH ≥2 SOVEREIGN ENDORSEMENTS
-        </span>
+  <div id="proj-quick-plenary-stage" class="assembly-stage" style="display: none;">
+    <div class="assembly-head">
+      <div>
+        <div class="atlas-heading">The Assembly is in session</div>
+        <h1 class="assembly-title">Vote on the motions</h1>
       </div>
-
-      <div id="proj-quick-plenary-docket-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+      <p class="assembly-hint">Each nation votes on its phone. A motion passes when its votes for outweigh its votes against.</p>
     </div>
+    <div id="proj-quick-plenary-docket-list" class="assembly-docket"></div>
   </div>
 
   <!-- ========================================================================= -->
@@ -210,72 +178,40 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- MAIN PROJECTOR LAYOUT: ORGANIC WORLD MAP & 3-BAR GRAPHICAL SPOTLIGHT -->
+  <!-- WORKING SESSION: map of the Continent + council of nations -->
   <!-- ========================================================================= -->
-  <div id="proj-main-layout" class="auditorium-viewport">
-    <!-- Hardware-Accelerated Cartographic World Canvas -->
-    <canvas id="world-3d-canvas" class="auditorium-canvas"></canvas>
+  <div id="proj-main-layout" class="atlas">
+    <canvas id="realm-map" class="atlas-canvas" aria-label="Animated map of the Continent"></canvas>
 
-    <!-- Floating Spotlight Card: Kept hidden so 3D in-canvas floating cards take full stage -->
-    <div id="proj-spotlight-card" class="auditorium-spotlight-card" style="display: none;">
-      <div id="spotlight-bar" class="spotlight-crest-bar" style="background: #ec4899;"></div>
-      <div class="spotlight-title-row">
-        <span id="spotlight-name" class="spotlight-realm-name">AETHELGARD DOMINION</span>
-        <span id="spotlight-votes" class="badge" style="font-size: 0.65rem; padding: 2px 6px; border-color: rgba(255,255,255,0.2);">1 VOTE</span>
-      </div>
-      <div id="spotlight-capital" class="spotlight-capital">Aethelhold • Northern Rocky Steppes</div>
-
-      <!-- 4 Core Resources with 3-Bar Graphical Gauges (Low / Med / High) -->
-      <div class="spotlight-resource-grid">
-        <div class="resource-bar-row">
-          <div class="resource-label-group"><span>🌾</span><span>GRAIN</span></div>
-          <div id="meter-grain"></div>
-        </div>
-        <div class="resource-bar-row">
-          <div class="resource-label-group"><span>⚡</span><span>CORES</span></div>
-          <div id="meter-cores"></div>
-        </div>
-        <div class="resource-bar-row">
-          <div class="resource-label-group"><span>🧣</span><span>SILK</span></div>
-          <div id="meter-silk"></div>
-        </div>
-        <div class="resource-bar-row">
-          <div class="resource-label-group"><span>⚔️</span><span>MILITARY</span></div>
-          <div id="meter-military"></div>
-        </div>
-      </div>
-
-      <!-- Vitality, Stability & Quarantine Status -->
-      <div class="spotlight-footer">
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <span style="color: #64748b;">CIVIL STATE:</span>
-          <span id="spotlight-stability" class="badge" style="font-size: 0.65rem; padding: 2px 6px;">STABLE</span>
-        </div>
-        <span id="spotlight-hazard" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: #10b981; font-size: 0.65rem; padding: 2px 6px;">ALL CLEAR</span>
-      </div>
+    <!-- Map controls: zoom, whole-continent view; drag the map to pan, click a banner to select -->
+    <div class="map-controls" role="group" aria-label="Map controls">
+      <button type="button" onclick="projApp.map && projApp.map.zoomBy(1.25)" title="Zoom in (+)">+</button>
+      <button type="button" onclick="projApp.map && projApp.map.zoomBy(0.8)" title="Zoom out (−)">&minus;</button>
+      <button type="button" onclick="projApp.map && projApp.map.home()" title="Whole continent and resume the tour (0)">&#8962;</button>
+    </div>
+    <div id="tour-paused" class="tour-paused" style="display: none;">
+      Exploring the map &middot; <button type="button" onclick="projApp.map && projApp.map.home()">Resume tour</button>
     </div>
 
-    <!-- Master Bottom Timeline & Motions Ticker -->
-    <div class="auditorium-bottombar" style="position: absolute; bottom: 0; left: 0; right: 0;">
-      <div class="timeline-milestones">
-        <span class="milestone-item current">● Turn 1 [Session]</span>
-        <span class="milestone-item">○ Turn 2 [Trade]</span>
-        <span class="milestone-item">○ Plenary [Debate]</span>
-        <span class="milestone-item">○ Turn 3 [Assembly]</span>
-        <span class="milestone-item">○ Debrief</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="color: #64748b; font-size: 0.68rem;">QUALIFIED MOTIONS:</span>
-        <div id="projector-qualified-motions-list" style="display: flex; gap: 6px;"></div>
+    <!-- One nation at a time, large enough to read from the back of the room -->
+    <aside class="atlas-side">
+      <div class="atlas-heading"><span class="flourish">&#10086;</span> Realm in Focus <span class="flourish">&#10086;</span></div>
+      <div id="spotlight" class="spotlight"></div>
+      <div id="projector-realms-list" class="spot-chips" aria-label="Choose a nation"></div>
+    </aside>
+    <div class="atlas-foot">
+      <div id="proj-timeline" class="timeline"></div>
+      <div class="atlas-motions">
+        <span class="atlas-motions-label">On the ballot</span>
+        <div id="projector-qualified-motions-list" class="atlas-motions-list"></div>
       </div>
     </div>
+  </div>
 
-    <!-- Hidden compatibility elements -->
-    <div id="projector-news-list" style="display: none;"></div>
-    <div id="projector-realms-list" style="display: none;"></div>
-    <div id="proj-hero-headline" style="display: none;"></div>
-    <div id="proj-hero-detail" style="display: none;"></div>
-    <div id="proj-hero-time" style="display: none;"></div>
+  <!-- World news ticker: runs along the bottom on every projector screen -->
+  <div class="news-ticker" aria-live="off">
+    <div class="ticker-label">&#10022; News from the Spire</div>
+    <div class="ticker-track"><div id="news-ticker-content" class="ticker-content"></div></div>
   </div>
 
   <!-- Auditorium Controls & Settings Modal Overlay -->
@@ -288,37 +224,30 @@
         <button class="btn btn-secondary btn-sm" onclick="toggleSettingsModal()" style="padding: 2px 8px;">✕</button>
       </div>
 
-      <!-- 3D Camera Controls -->
-      <div style="margin-bottom: 16px;">
-        <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
-          3D World Camera
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <button id="btn-camera-drift" class="btn btn-secondary btn-sm" onclick="toggleWorldDrift()">
-            CAM: DRIFT
-          </button>
-          <button id="btn-camera-speed" class="btn btn-secondary btn-sm" onclick="toggleWorldSpeed()">
-            SPEED: SERENE
-          </button>
-        </div>
-        <button class="btn btn-secondary btn-sm btn-block" onclick="resetWorldCamera()" style="margin-top: 8px;">
-          ↺ Reset Birds-Eye View
-        </button>
-      </div>
-
       <!-- Display & Projection Controls -->
       <div style="margin-bottom: 16px;">
         <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
           Display & Projection
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <button id="btn-theme-toggle" class="btn btn-secondary btn-sm" onclick="toggleProjectorTheme()">
-            Theme Toggle
-          </button>
           <button class="btn btn-secondary btn-sm" onclick="toggleFullscreen()">
             Fullscreen
           </button>
         </div>
+      </div>
+
+      <!-- Map events: the facilitator can summon any of the map's events -->
+      <div style="margin-bottom: 16px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+        <div class="form-label">Summon on the map</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+          <button class="btn btn-secondary btn-sm" onclick="summon('dragon')">Dragon (D)</button>
+          <button class="btn btn-secondary btn-sm" onclick="summon('storm')">Storm (S)</button>
+          <button class="btn btn-secondary btn-sm" onclick="summon('tornado')">Tornado (T)</button>
+          <button class="btn btn-secondary btn-sm" onclick="summon('battle')">Sea battle (B)</button>
+          <button class="btn btn-secondary btn-sm" onclick="summon('serpent')">Serpent (N)</button>
+          <button class="btn btn-secondary btn-sm" onclick="summon('whale')">Whale (W)</button>
+        </div>
+        <p class="section-sub" style="margin-top: 6px;">Map: scroll or +/− to zoom, drag to move, click a banner to show that nation, 0 for the whole continent.</p>
       </div>
 
       <!-- Delegate Gateway Access -->
@@ -360,7 +289,7 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='world3d.js') }}"></script>
+  <script src="{{ url_for('static', filename='realm_map.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
   <script>
     function toggleSettingsModal() {
@@ -368,11 +297,6 @@
       modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
     }
 
-    function resetWorldCamera() {
-      if (window.projApp && window.projApp.world3d) {
-        window.projApp.world3d.resetCamera();
-      }
-    }
 
     function toggleFullscreen() {
       if (!document.fullscreenElement) {
@@ -382,38 +306,27 @@
       }
     }
 
-    function toggleProjectorTheme() {
-      const isLight = document.body.classList.toggle('theme-light');
-      localStorage.setItem('projector_theme', isLight ? 'light' : 'dark');
+
+    function summon(type) {
+      if (window.projApp && window.projApp.map) window.projApp.map.summon(type);
     }
+    // Facilitator shortcuts for map events
+    window.addEventListener('keydown', e => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const map = { d: 'dragon', s: 'storm', t: 'tornado', b: 'battle', n: 'serpent', w: 'whale' }[e.key.toLowerCase()];
+      if (map) summon(map);
+    });
 
     function toggleQrModal() {
       const modal = document.getElementById('proj-qr-modal');
       modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
     }
 
-    function toggleWorldDrift() {
-      if (window.projApp && window.projApp.world3d) {
-        const isDrifting = window.projApp.world3d.toggleDrift();
-        const btn = document.getElementById('btn-camera-drift');
-        if (btn) btn.innerText = isDrifting ? 'CAM: DRIFT' : 'CAM: PAUSED';
-      }
-    }
 
-    function toggleWorldSpeed() {
-      if (window.projApp && window.projApp.world3d) {
-        const mode = window.projApp.world3d.toggleSpeed();
-        const btn = document.getElementById('btn-camera-speed');
-        if (btn) btn.innerText = `SPEED: ${mode}`;
-      }
-    }
 
-    const savedTheme = localStorage.getItem('projector_theme');
-    if (savedTheme === 'light') {
-      document.body.classList.add('theme-light');
-    } else {
-      document.body.classList.remove('theme-light');
-    }
+    // The projector always uses the parchment theme (an old saved "dark" setting would hide text).
+    document.body.classList.add('theme-light');
+    try { localStorage.removeItem('projector_theme'); } catch (e) {}
 
     const projApp = new ProjectorApp();
     window.projApp = projApp;

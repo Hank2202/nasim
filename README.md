@@ -6,8 +6,8 @@ A lightweight, real-time web application built for live educational simulations.
 
 ## 🌟 Key Features
 
-- **Self-Contained (works offline or hosted)**: Zero reliance on external CDNs or web fonts. Pure flat UI design (no gradients), crisp typography, embedded SVG vector emblems, and synthesized Web Audio bells.
-- **Dedicated Projector Screen (`/projector`)**: Designed for classroom/auditorium projectors. Features:
+- **Self-Contained (works offline or hosted)**: Zero reliance on external CDNs or web fonts. Light parchment-and-gold fantasy theme with storybook serif headings (system fonts), embedded SVG emblems, and synthesized Web Audio bells.
+- **Dedicated Projector Screen (`/projector`)**: parchment map of the Continent (nations not playing shown as unclaimed lands) with a Council of Nations panel. Designed for classroom/auditorium projectors. Features:
   - Big Turn indicator and giant countdown timer.
   - Continental Delegations Board showing public standing, vitality, stability, votes, and conditions (never reveals secret agendas!).
   - Live breaking news ticker and room Wi-Fi QR code.
@@ -205,3 +205,7 @@ Notes:
 - **Quiz** (phone **Quiz** tab): one shared bank in `lore_quiz.json` — every nation gets the same questions. Questions unlock by turn (`turn` field); each nation has **one attempt per question**. Correct: `reward_amount` of `reward_resource`. Wrong: `quiz_fail_penalty_amount` (5) of `quiz_fail_penalty_metric` (Standing) from `scenario_config.json`, and the question locks for that nation.
 - Answers never reach the browser before submission: `GET /api/quiz/<realm_id>` (delegation login required) omits `correct_index`/`explanation` for unanswered questions; `POST /api/lore/quiz` checks the answer on the server.
 - Every question names the article that contains its answer; `pytest` checks slugs, option counts and links.
+
+## 📜 Motions
+
+Players propose motions from **templates** (`resolution_types` in `scenario_config.json`): each template is shown written out with its plain-language effect ("If passed: …"), ready-made title and terms. The player picks one, edits the title and terms, chooses a target nation if the template needs one (e.g. the Frontier Watch cordon), and optionally limits who may co-sponsor. A motion needs a second nation's co-sponsorship to reach the ballot. Decided motions show how each nation voted (votes and nation count). Continental Food Acts A/B are facilitator-only (`player_selectable: false`) and are tabled automatically in Round 3.

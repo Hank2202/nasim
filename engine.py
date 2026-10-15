@@ -37,6 +37,15 @@ def load_events_catalog() -> List[Dict[str, Any]]:
     config = load_scenario_config()
     return config.get("events_catalog", [])
 
+# Secret missions that only make sense when another nation takes part in the summit.
+MISSION_REQUIRES = {
+    "sylvan_defense": ("aethelgard",),
+    "valkhor_contain_military": ("aethelgard",),
+    "solaris_contain_valkhor": ("val_khor",),
+    "umbra_challenge": ("solaria",),
+    "aethelgard_contain_valkhor": ("val_khor",),
+}
+
 RESOURCE_FIELDS = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk",
                    "military": "military_power", "standing": "diplomatic_standing", "stability": "civil_stability"}
 RESOURCE_LABELS = {"grain": "Grain", "cores": "Cores", "silk": "Silk", "military": "Military",
@@ -254,9 +263,13 @@ class SummitEngine:
 
         pool = realm.get("secret_missions_pool") or []
         player_count = max(1, int(realm.get("player_count", 1)))
+        active_ids = {r.get("id") for r in active_realms}
+        # A secret mission about another nation only makes sense if that nation is playing.
+        playable_pool = [sm for sm in pool
+                         if all(dep in active_ids for dep in MISSION_REQUIRES.get(sm.get("id", ""), ()))]
 
         active_secrets = []
-        for sm in pool[:player_count]:
+        for sm in playable_pool[:player_count]:
             sm_copy = dict(sm)
             sm_id = sm_copy.get("id", "")
             if sm_id == "aquila_trade_network":
@@ -1149,6 +1162,14 @@ class SummitEngine:
         receiver = next((r for r in realms if r["id"] == receiver_id), None)
         if not sender or not receiver:
             return False, "Invalid sender or receiver delegation."
+        if not sender.get("active", True) or not receiver.get("active", True):
+            return False, "That nation is not taking part in this summit."
+        try:
+            offer_amt, request_amt = int(offer_amt), int(request_amt)
+        except (TypeError, ValueError):
+            return False, "Amounts must be whole numbers."
+        if offer_amt < 0 or request_amt < 0 or offer_amt + request_amt == 0 or max(offer_amt, request_amt) > 500:
+            return False, "Amounts must be between 0 and 500, and the trade cannot be empty."
 
         res_key_map = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk", "military": "military_power"}
         sender_res_key = res_key_map.get(offer_res)
@@ -1296,17 +1317,35 @@ class SummitEngine:
     # -------------------------------------------------------------------------
     def draft_proposal(self, proposer_id: str, title: str, description: str,
                        effect_type: str = "custom",
-                       target_seconder_id: Optional[str] = None) -> Tuple[bool, str, Optional[str]]:
+                       target_seconder_id: Optional[str] = None,
+                       target_realm_id: Optional[str] = None) -> Tuple[bool, str, Optional[str]]:
         realms = self.db.get_state("realms", [])
         proposer = next((r for r in realms if r["id"] == proposer_id), None)
         if not proposer:
             return False, "Proposer realm not found.", None
 
+        # Players table motions from the templates in scenario_config.json (resolution_types).
+        template = next((t for t in load_scenario_config().get("resolution_types", [])
+                         if t["id"] == effect_type and t.get("player_selectable", True)), None)
+        if not template:
+            return False, "Choose one of the motion templates.", None
+        title = (title or "").strip()[:100]
+        description = (description or "").strip()[:1000]
+        if not title or not description:
+            return False, "Give the motion a title and terms.", None
+
+        target_realm = None
+        if template.get("needs_target"):
+            target_realm = next((r for r in realms if r["id"] == target_realm_id and r.get("active", True)), None)
+            if not target_realm:
+                return False, f"Choose the nation for this motion ({template.get('target_label', 'target nation')}).", None
+
         target_name = None
         if target_seconder_id:
-            target_realm = next((r for r in realms if r["id"] == target_seconder_id), None)
-            if target_realm:
-                target_name = target_realm["name"]
+            target_realm = next((r for r in realms if r["id"] == target_seconder_id and r.get("active", True)), None)
+            if not target_realm:
+                return False, "The nation you asked to co-sponsor is not taking part.", None
+            target_name = target_realm["name"]
 
         meta = self.db.get_state("meta", {})
         prop_id = str(uuid.uuid4())[:8]
@@ -1319,6 +1358,8 @@ class SummitEngine:
             "effect_type": effect_type,
             "target_seconder_id": target_seconder_id or None,
             "target_seconder_name": target_name,
+            "target_realm_id": target_realm["id"] if target_realm else None,
+            "target_realm_name": target_realm["name"] if target_realm else None,
             "support_list": [proposer_id],
             "supporters": [{"id": proposer_id, "name": proposer["name"]}],
             "is_qualified": False,
@@ -1398,7 +1439,9 @@ class SummitEngine:
         meta = self.db.get_state("meta", {})
         proposals = self.db.get_state("proposals", [])
 
-        qualified = [p for p in proposals if len(p.get("support_list", [])) >= 2 or p.get("is_qualified")]
+        # Only motions still awaiting a vote; motions already passed/rejected never return to the ballot.
+        qualified = [p for p in proposals if p.get("status") in ("draft", "qualified")
+                     and (len(p.get("support_list", [])) >= 2 or p.get("is_qualified"))]
         if not qualified:
             return False, "No resolutions met the threshold of support from at least two countries."
 
@@ -1640,7 +1683,7 @@ class SummitEngine:
                 return f"Embargo sanctions enforced against {wealthiest['name']} (-15 Stability)."
 
         elif effect_type == "cordon":
-            target_id = prop.get("target_seconder_id")
+            target_id = prop.get("target_realm_id") or prop.get("target_seconder_id")
             if target_id:
                 target_realm = next((r for r in realms if r["id"] == target_id), None)
                 if target_realm:
@@ -1773,11 +1816,14 @@ class SummitEngine:
             return False, "Realm not found."
 
         new_val = not realm.get("active", True) if active is None else bool(active)
+        if not new_val and sum(1 for r in realms if r.get("active", True) and r["id"] != realm_id) < 2:
+            return False, "At least two nations must take part in the summit."
         realm["active"] = new_val
         self._recalculate_all_realms(realms)
         self.db.set_state("realms", realms)
-        status_str = "activated" if new_val else "deactivated"
-        return True, f"{realm['name']} has been {status_str}."
+        status_str = "joins the summit" if new_val else "is no longer taking part"
+        self.add_news("diplomacy", "SUMMIT ROSTER CHANGED", f"{realm['name']} {status_str}.")
+        return True, f"{realm['name']} {status_str}."
 
     def admin_set_player_count(self, realm_id: str, count: int) -> Tuple[bool, str]:
         """Sets delegation member count and auto-scales secret missions accordingly."""

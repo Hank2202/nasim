@@ -142,6 +142,7 @@ function formatSeconds(secs) {
   return `${mins.toString().padStart(2, '0')}:${rem.toString().padStart(2, '0')}`;
 }
 
+const RESOURCE_ICONS = { grain: '🌾', cores: '⚙️', silk: '🧵', military: '⚔️' };
 const RESOURCE_SHORT = { grain: 'Grain', cores: 'Cores', silk: 'Silk', military: 'Military', standing: 'Standing', stability: 'Stability' };
 
 function escapeHtml(value) {
@@ -173,6 +174,10 @@ class RealmApp {
   }
 
   switchView(viewId) {
+    const current = document.querySelector('.mobile-view.active');
+    if (current && current.id !== 'view-wiki' && viewId === 'view-wiki') this.viewBeforeWiki = current.id;
+    // Reading mode: the encyclopedia takes the whole screen, game chrome is hidden.
+    document.body.classList.toggle('wiki-mode', viewId === 'view-wiki');
     document.querySelectorAll('.bottom-nav-item').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.view === viewId);
     });
@@ -208,46 +213,82 @@ class RealmApp {
     });
   }
 
-  handleEndorsementModeChange(mode) {
-    const group = document.getElementById('proposal-target-realm-group');
-    if (group) {
-      group.style.display = mode === 'targeted' ? 'block' : 'none';
+  // ---------------------------------------------------------------------------
+  // Motions: template gallery -> editable draft
+  // ---------------------------------------------------------------------------
+  renderMotionTemplates(types) {
+    const box = document.getElementById('motion-templates');
+    if (!box || this.motionTemplatesRendered || !types || !types.length) return;
+    this.motionTypes = Object.fromEntries(types.map(t => [t.id, t]));
+    const esc = escapeHtml;
+    box.innerHTML = types.filter(t => t.player_selectable).map(t => `
+      <button type="button" class="motion-template" onclick="realmApp.chooseMotionTemplate('${esc(t.id)}')">
+        <span class="motion-template-icon">${esc(t.icon || '📜')}</span>
+        <span class="grow">
+          <span class="motion-template-name">${esc(t.name)}</span>
+          <span class="motion-template-summary">${esc(t.summary)}</span>
+          <span class="motion-effect"><span>If passed:</span> ${esc(t.effect_plain || t.statutory_effect)}</span>
+        </span>
+        <span class="motion-template-go">Use &rsaquo;</span>
+      </button>`).join('');
+    this.motionTemplatesRendered = true;
+  }
+
+  chooseMotionTemplate(typeId) {
+    const form = document.getElementById('proposal-form');
+    const gallery = document.getElementById('motion-templates');
+    if (!typeId) {
+      form.style.display = 'none';
+      gallery.style.display = '';
+      return;
     }
+    const t = (this.motionTypes || {})[typeId];
+    if (!t) return;
+    document.getElementById('proposal-type').value = t.id;
+    document.getElementById('motion-chosen-name').innerText = `${t.icon || ''} ${t.name}`;
+    document.getElementById('motion-chosen-effect').innerText = t.effect_plain || t.statutory_effect;
+    document.getElementById('proposal-title').value = t.default_title || t.name;
+    document.getElementById('proposal-desc').value = t.default_terms || t.summary;
+    const targetGroup = document.getElementById('proposal-target-nation-group');
+    targetGroup.style.display = t.needs_target ? 'block' : 'none';
+    document.getElementById('proposal-target-nation').required = !!t.needs_target;
+    document.getElementById('proposal-target-nation').value = '';
+    document.getElementById('proposal-target-nation-label').innerText = t.target_label || 'Nation';
+    gallery.style.display = 'none';
+    form.style.display = 'block';
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   async handleDraftProposal(e) {
     e.preventDefault();
-    const title = document.getElementById('proposal-title').value;
     const effectType = document.getElementById('proposal-type').value;
-    const mode = document.getElementById('proposal-target-mode').value;
-    const targetRealmSelect = document.getElementById('proposal-target-realm');
-    const targetSeconderId = (mode === 'targeted' && targetRealmSelect) ? targetRealmSelect.value : null;
-    const description = document.getElementById('proposal-desc').value;
-
+    const t = (this.motionTypes || {})[effectType] || {};
+    const body = {
+      proposer_id: this.realmId,
+      title: document.getElementById('proposal-title').value,
+      effect_type: effectType,
+      description: document.getElementById('proposal-desc').value,
+      target_seconder_id: document.getElementById('proposal-target-realm').value || null,
+      target_realm_id: t.needs_target ? document.getElementById('proposal-target-nation').value : null
+    };
     try {
       const resp = await fetch('/api/proposal/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proposer_id: this.realmId,
-          title,
-          effect_type: effectType,
-          description,
-          target_seconder_id: targetSeconderId
-        })
+        body: JSON.stringify(body)
       });
       const res = await resp.json();
       if (res.success) {
-        showToast('Resolution filed on floor', 'info');
+        showToast('Motion tabled. Now find a nation to co-sponsor it!', 'success');
         synth.playChime();
         document.getElementById('proposal-form').reset();
-        this.handleEndorsementModeChange('open');
+        this.chooseMotionTemplate(null);
         this.pollState();
       } else {
         showToast(res.message, 'danger');
       }
     } catch (err) {
-      showToast('Failed to file motion', 'danger');
+      showToast('Failed to table the motion', 'danger');
     }
   }
 
@@ -270,6 +311,7 @@ class RealmApp {
   renderState(state) {
     const { meta, realms, trades, proposals, news_feed } = state;
     const realm = realms.find(r => r.id === this.realmId);
+    this._lastRealms = realms;
 
     // Audio cues
     if (meta.audio_cue && meta.audio_cue.seq !== undefined) {
@@ -287,6 +329,7 @@ class RealmApp {
     if (turnElem) turnElem.innerText = `TURN ${meta.current_turn}`;
     const timerElem = document.getElementById('timer-display');
     if (timerElem) timerElem.innerText = formatSeconds(meta.turn_timer_remaining);
+    this.renderPhaseCard(meta);
 
     // Mini Breaking News Banner
     if (news_feed && news_feed.length > 0) {
@@ -304,6 +347,10 @@ class RealmApp {
 
     if (!realm) return;
 
+    // Live lists of the nations actually playing (the facilitator can change the roster mid-game)
+    this.renderTradePartners(realms);
+    this.renderMotionNationOptions(realms);
+
     // Telemetry - Exact values for own country
     this._setVal('grain-val', realm.alchemical_grain);
     this._setVal('cores-val', realm.aether_cores);
@@ -318,8 +365,8 @@ class RealmApp {
     // Assembly votes
     const votesBadge = document.getElementById('votes-badge');
     if (votesBadge) {
-      let voteText = `${realm.assembly_votes} ASSEMBLY VOTE${realm.assembly_votes > 1 ? 'S' : ''}`;
-      if (realm.is_plutocrat) voteText += ` (+1 PLUTOCRAT)`;
+      let voteText = `${realm.assembly_votes} vote${realm.assembly_votes === 1 ? '' : 's'} in the Assembly`;
+      if (realm.is_plutocrat) voteText += ` · richest nation (+1)`;
       votesBadge.innerText = voteText;
     }
 
@@ -333,6 +380,7 @@ class RealmApp {
     this.renderTrades(trades, realm);
 
     // Motions Tab
+    this.renderMotionTemplates(state.resolution_types);
     this.renderProposals(proposals, realm);
 
     // Plenary Session Callout on Mobile
@@ -342,10 +390,81 @@ class RealmApp {
     this.renderConcludedDebrief(state, realm);
 
     // Quiz: refresh when a new turn unlocks questions (or on first load for the badge)
-    if (this.quizTurn !== meta.current_turn && !this.quizLoading) {
+    // ...or when a teammate on another phone answered (one attempt per question per nation).
+    const answeredCount = (realm.claimed_lore || []).length + (realm.failed_lore || []).length;
+    const teammateAnswered = this.quizAnswered !== undefined && answeredCount !== this.quizAnswered;
+    this.quizAnswered = answeredCount;
+    if ((this.quizTurn !== meta.current_turn || teammateAnswered) && !this.quizLoading) {
       this.quizLoading = true;
       this.loadQuiz().finally(() => { this.quizLoading = false; });
     }
+  }
+
+  renderPhaseCard(meta) {
+    const phases = {
+      working: ['Working session', 'Trade, negotiate, enact decrees and table motions before the bell.'],
+      plenary_quick: ['The Assembly votes', 'Vote on every motion at the top of your screen.'],
+      grand_plenary_discussion: ['Grand Plenary: debate', 'Argue for or against the motion on the floor. Voting opens soon.'],
+      grand_plenary_voting: ['Grand Plenary: vote', 'Cast your vote on the motion at the top of your screen.'],
+      turn_summary: ['Between turns', 'The Assembly has spoken. The facilitator will start the next turn.'],
+      summit_concluded: ['The summit has ended', 'See how your nation fared below.'],
+    };
+    const [title, hint] = phases[meta.phase] || phases.working;
+    this._setVal('phase-kicker', `Turn ${meta.current_turn} of ${meta.max_turns || 3}`);
+    this._setVal('phase-title', title);
+    this._setVal('phase-hint', hint);
+    const bar = document.getElementById('phase-progress');
+    if (bar) {
+      const total = meta.turn_timer_total || 0;
+      const left = meta.turn_timer_remaining || 0;
+      bar.style.width = (meta.phase === 'working' && total > 0) ? `${Math.max(0, Math.min(100, 100 * left / total))}%` : '0%';
+    }
+  }
+
+  _activeOthers(realms) {
+    return (realms || []).filter(r => r.active !== false && r.id !== this.realmId);
+  }
+
+  renderTradePartners(realms) {
+    const box = document.getElementById('trade-partner-chips');
+    const hidden = document.getElementById('trade-receiver');
+    if (!box || !hidden) return;
+    const others = this._activeOthers(realms);
+    if (!others.some(r => r.id === hidden.value)) hidden.value = '';
+    const key = others.map(r => r.id).join(',') + '|' + hidden.value;
+    if (key === this._partnerKey) return;  // avoid re-rendering every second
+    this._partnerKey = key;
+    this._realmNames = Object.fromEntries((realms || []).map(r => [r.id, r.name]));
+    box.innerHTML = others.length ? others.map(r => `
+      <button type="button" class="partner-chip ${r.id === hidden.value ? 'active' : ''}" style="--chip-color:${escapeHtml(r.theme_color || '#8c7a5e')}"
+              onclick="realmApp.selectTradePartner('${escapeHtml(r.id)}')">
+        <span>${escapeHtml(r.emoji || '🏛️')}</span>${escapeHtml(r.name)}
+      </button>`).join('') : '<p class="empty-state">No other nations are playing.</p>';
+    this.updateTradePreview();
+  }
+
+  selectTradePartner(realmId) {
+    document.getElementById('trade-receiver').value = realmId;
+    this._partnerKey = null;
+    this.renderTradePartners(this._lastRealms || []);
+  }
+
+  renderMotionNationOptions(realms) {
+    const others = this._activeOthers(realms);
+    const playing = (realms || []).filter(r => r.active !== false);
+    const key = playing.map(r => r.id).join(',');
+    if (key === this._motionNationKey) return;
+    this._motionNationKey = key;
+    const fill = (id, list, first, label) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const keep = sel.value;
+      sel.innerHTML = `<option value="">${first}</option>` + list.map(r =>
+        `<option value="${escapeHtml(r.id)}">${escapeHtml(label(r))}</option>`).join('');
+      if (list.some(r => r.id === keep)) sel.value = keep;
+    };
+    fill('proposal-target-realm', others, 'Any nation', r => `Only ${r.name}`);
+    fill('proposal-target-nation', playing, 'Choose a nation…', r => `${r.emoji || ''} ${r.name}`);
   }
 
   _setVal(id, val) {
@@ -377,18 +496,19 @@ class RealmApp {
       news_feed;
 
     if (filtered.length === 0) {
-      newsContainer.innerHTML = '<p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono); padding:10px 0;">No dispatches in this category.</p>';
+      newsContainer.innerHTML = '<p class="empty-state">No news of this kind yet.</p>';
       return;
     }
 
+    const icons = { crisis: '⚡', trade: '🤝', assembly: '📜', lore: '📖', turn: '🔔', diplomacy: '🕊️' };
     newsContainer.innerHTML = filtered.map(n => `
-      <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-sunken); border-radius: 4px; padding: 10px 12px;">
-        <div style="display:flex; justify-content:space-between; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">
-          <strong style="color: var(--text-primary);">[${n.type.toUpperCase()}] ${n.headline}</strong>
-          <span>${n.time_str}</span>
+      <article class="news-item">
+        <span class="news-item-icon">${icons[n.type] || '✦'}</span>
+        <div class="grow">
+          <div class="news-item-head"><strong>${escapeHtml(n.headline)}</strong><span>${escapeHtml(n.time_str)}</span></div>
+          <p>${escapeHtml(n.detail)}</p>
         </div>
-        <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 4px; line-height: 1.4;">${n.detail}</p>
-      </div>
+      </article>
     `).join('');
   }
 
@@ -422,7 +542,7 @@ class RealmApp {
       pubHtml = `
         <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px; border-radius:var(--radius-xs); margin-bottom:8px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="font-size:0.82rem; color:#fff;">PUBLIC: ${pm.title}</strong>
+            <strong style="font-size:0.82rem; color: var(--text-primary);">PUBLIC: ${pm.title}</strong>
             ${pm.achieved ? 
               '<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ACHIEVED</span>' : 
               '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">✗ FAILED</span>'}
@@ -439,7 +559,7 @@ class RealmApp {
       secretsHtml = myEval.secret_missions_eval.map((sm, i) => `
         <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px; border-radius:var(--radius-xs); margin-bottom:6px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="font-size:0.82rem; color:#fff;">SECRET #${i+1}: ${sm.title}</strong>
+            <strong style="font-size:0.82rem; color: var(--text-primary);">SECRET #${i+1}: ${sm.title}</strong>
             ${sm.achieved ? 
               '<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ACHIEVED</span>' : 
               '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">✗ FAILED</span>'}
@@ -466,7 +586,7 @@ class RealmApp {
     container.innerHTML = `
       <div class="card" style="border: 2px solid ${verdictColor}; padding: 16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <span class="badge" style="background:#fff; color:#000; font-weight:800;">SUMMIT CONCLUDED</span>
+          <span class="badge" style="background:var(--text-primary); color:var(--bg-surface); font-weight:800;">SUMMIT CONCLUDED</span>
           <span class="badge" style="font-size:0.75rem; background:${verdictColor}; color:#fff; font-weight:800;">
             ${myEval.success_ratio || ''} MANDATES (${myEval.score} PTS)
           </span>
@@ -501,6 +621,13 @@ class RealmApp {
       if (!resp.ok) throw new Error('quiz fetch failed');
       const data = await resp.json();
       this.quizData = data;
+      if (this.quizPending) {
+        const pend = data.questions.find(q => q.id === this.quizPending.id);
+        if (!pend || pend.status !== 'open') {
+          this.quizPending = null;
+          showToast('A teammate already answered that question for your nation.', 'warning');
+        }
+      }
       this.quizTurn = data.current_turn;
       this.renderQuiz();
     } catch (err) {
@@ -696,6 +823,10 @@ class RealmApp {
     }
   }
 
+  wikiClose() {
+    this.switchView(this.viewBeforeWiki || 'view-overview');
+  }
+
   wikiBack() {
     const prev = (this.wikiHistory || []).pop();
     if (!prev || prev.type === 'home') return this.wikiHome();
@@ -747,20 +878,23 @@ class RealmApp {
     const list = document.getElementById('registry-list');
     if (!list) return;
     const esc = escapeHtml;
+    const level = t => ({ LOW: 1, MEDIUM: 2, HIGH: 3 }[t] || 0);
+    const pips = (icon, label, tier) => `<span class="pips" title="${label}: ${esc(tier || '?')}">
+        <i>${icon}</i>${[1, 2, 3].map(n => `<em class="${n <= level(tier) ? 'on' : ''}"></em>`).join('')}</span>`;
     list.innerHTML = realms.filter(r => r.active !== false).map(r => {
       const mine = r.id === this.realmId;
-      const cell = (label, tierKey, exactKey) =>
-        `<span>${label} <strong>${esc(mine ? r[exactKey] : (r[tierKey] || '?'))}</strong></span>`;
-      return `<div class="inset registry-item">
-        <div class="row-between">
-          <strong>${esc(r.emoji || '')} ${esc(r.name)}${mine ? ' <span class="status-pill open">You</span>' : ''}</strong>
-          <span class="badge">${r.assembly_votes} VOTE${r.assembly_votes === 1 ? '' : 'S'}</span>
+      return `<div class="nation-card" style="--nc:${esc(r.theme_color || '#8c7a5e')}">
+        <div class="nation-card-head">
+          <span class="crest small">${esc(r.emoji || '🏛️')}</span>
+          <div class="grow"><strong>${esc(r.name)}</strong>${mine ? ' <span class="status-pill open">You</span>' : ''}
+            <div class="nation-card-sub">${esc(r.public_mission ? r.public_mission.title : r.ethos || '')}</div></div>
+          <span class="vote-seal" title="Assembly votes">${r.assembly_votes}</span>
         </div>
-        <div class="section-sub" style="text-transform:none;">${esc(r.ethos || '')}</div>
-        <div class="registry-grid">
-          ${cell('GRAIN', 'grain_tier', 'alchemical_grain')}${cell('CORES', 'cores_tier', 'aether_cores')}${cell('SILK', 'silk_tier', 'echo_silk')}
-          ${cell('MILITARY', 'military_tier', 'military_power')}${cell('STANDING', 'standing_tier', 'diplomatic_standing')}${cell('STABILITY', 'stability_tier', 'civil_stability')}
+        <div class="nation-card-pips">
+          ${pips('🌾', 'Grain', r.grain_tier)}${pips('⚙️', 'Cores', r.cores_tier)}${pips('🧵', 'Silk', r.silk_tier)}${pips('⚔️', 'Military', r.military_tier)}
+          ${pips('🤝', 'Standing', r.standing_tier)}${pips('🏛️', 'Stability', r.stability_tier)}
         </div>
+        ${r.is_starving ? '<div class="flag bad mt-1">🥀 Starving</div>' : ''}
       </div>`;
     }).join('');
   }
@@ -770,156 +904,139 @@ class RealmApp {
     if (!container) return;
 
     let html = '';
-    if (realm.is_starving) html += `<span class="badge badge-danger">[STARVING]</span>`;
-    if (realm.complacency_warning) html += `<span class="badge">[COMPLACENCY RISK]</span>`;
-    if (realm.is_plutocrat) html += `<span class="badge">[PLUTOCRAT: +1 VOTE]</span>`;
-    if (realm.tech_efficiency_unlocked) html += `<span class="badge">[EFFICIENCY: -25% GRAIN]</span>`;
-    if (realm.is_quarantined) html += `<span class="badge badge-danger">[QUARANTINED]</span>`;
-    if (realm.is_striking) html += `<span class="badge badge-danger">[STRIKE ACTIVE]</span>`;
+    if (realm.is_starving) html += `<span class="flag bad">🥀 Starving</span>`;
+    if (realm.complacency_warning) html += `<span class="flag warn">😴 Complacency risk: spend Silk on a Gala</span>`;
+    if (realm.is_plutocrat) html += `<span class="flag good">👑 Richest nation: +1 vote</span>`;
+    if (realm.tech_efficiency_unlocked) html += `<span class="flag good">✨ Efficient: eats 25% less Grain</span>`;
+    if (realm.is_quarantined) html += `<span class="flag bad">🚧 Borders sealed</span>`;
+    if (realm.is_striking) html += `<span class="flag bad">✊ Workers on strike</span>`;
 
     container.innerHTML = html;
   }
 
   renderTrades(trades, realm) {
-    const incomingContainer = document.getElementById('incoming-trades-list');
-    const outgoingContainer = document.getElementById('outgoing-trades-list');
-
+    const esc = escapeHtml;
+    const res = r => `${RESOURCE_ICONS[r] || ''} ${RESOURCE_SHORT[r] || r}`;
     const incoming = trades.filter(t => t.receiver_id === this.realmId && t.status === 'pending');
     const outgoing = trades.filter(t => t.sender_id === this.realmId && t.status === 'pending');
 
     const badgeEl = document.getElementById('nav-trade-badge');
     if (badgeEl) {
-      if (incoming.length > 0) {
-        badgeEl.innerText = incoming.length;
-        badgeEl.style.display = 'inline-block';
-      } else {
-        badgeEl.style.display = 'none';
-      }
+      badgeEl.innerText = incoming.length;
+      badgeEl.style.display = incoming.length ? 'inline-block' : 'none';
     }
+    const note = t => t.note ? `<p class="trade-note">“${esc(t.note)}”</p>` : '';
 
+    const incomingContainer = document.getElementById('incoming-trades-list');
     if (incomingContainer) {
-      if (incoming.length === 0) {
-        incomingContainer.innerHTML = '<p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono);">No pending incoming proposals.</p>';
-      } else {
-        incomingContainer.innerHTML = incoming.map(t => {
-          const offName = RESOURCE_FRIENDLY[t.offer_resource] || t.offer_resource;
-          const reqName = RESOURCE_FRIENDLY[t.request_resource] || t.request_resource;
-          return `
-            <div class="trade-card">
-              <div class="trade-header">
-                <span>FROM: <strong>${t.sender_name}</strong></span>
-                <span>${t.time_str}</span>
-              </div>
-              <div class="trade-details">
-                <span>Offers: ${t.offer_amount} ${offName}</span>
-                <span style="color:var(--text-muted);">for</span>
-                <span>Demands: ${t.request_amount} ${reqName}</span>
-              </div>
-              ${t.note ? `<div style="font-size:0.75rem; font-style:italic; color:var(--text-secondary); margin-top:4px; margin-bottom:8px; padding:6px 10px; background:var(--bg-surface); border-radius:3px; border-left: 2px solid var(--border-white);">"${t.note}"</div>` : ''}
-              <div class="trade-actions">
-                <button class="btn btn-primary btn-sm btn-block" onclick="realmApp.respondTrade('${t.id}', 'accept')">Accept Treaty</button>
-                <button class="btn btn-secondary btn-sm btn-block" onclick="realmApp.respondTrade('${t.id}', 'decline')">Decline</button>
-              </div>
-            </div>
-          `;
-        }).join('');
-      }
+      incomingContainer.innerHTML = incoming.length ? incoming.map(t => `
+        <div class="offer-card">
+          <div class="offer-head"><strong>${esc(t.sender_name)}</strong><span>${esc(t.time_str || '')}</span></div>
+          <div class="offer-swap">
+            <div><span>You get</span><b>${t.offer_amount} ${esc(res(t.offer_resource))}</b></div>
+            <div class="offer-arrow">⇄</div>
+            <div><span>You give</span><b>${t.request_amount} ${esc(res(t.request_resource))}</b></div>
+          </div>
+          ${note(t)}
+          <div class="row mt-1">
+            <button class="btn btn-primary btn-sm grow" onclick="realmApp.respondTrade('${esc(t.id)}', 'accept')">Accept</button>
+            <button class="btn btn-secondary btn-sm grow" onclick="realmApp.respondTrade('${esc(t.id)}', 'decline')">Decline</button>
+          </div>
+        </div>`).join('') : '<p class="empty-state">No offers waiting for you.</p>';
     }
 
+    const outgoingContainer = document.getElementById('outgoing-trades-list');
     if (outgoingContainer) {
-      if (outgoing.length === 0) {
-        outgoingContainer.innerHTML = '<p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono);">No active outgoing proposals.</p>';
-      } else {
-        outgoingContainer.innerHTML = outgoing.map(t => {
-          const offName = RESOURCE_FRIENDLY[t.offer_resource] || t.offer_resource;
-          const reqName = RESOURCE_FRIENDLY[t.request_resource] || t.request_resource;
-          return `
-            <div class="trade-card">
-              <div class="trade-header">
-                <span>TO: <strong>${t.receiver_name}</strong></span>
-                <span>PENDING</span>
-              </div>
-              <div class="trade-details">
-                <span>Offering ${t.offer_amount} ${offName} for ${t.request_amount} ${reqName}</span>
-              </div>
-              ${t.note ? `<div style="font-size:0.75rem; font-style:italic; color:var(--text-muted); margin-top:4px; margin-bottom:8px;">"${t.note}"</div>` : ''}
-              <button class="btn btn-secondary btn-sm" onclick="realmApp.respondTrade('${t.id}', 'cancel')">Cancel Offer</button>
-            </div>
-          `;
-        }).join('');
-      }
+      outgoingContainer.innerHTML = outgoing.length ? outgoing.map(t => `
+        <div class="offer-card">
+          <div class="offer-head"><strong>To ${esc(t.receiver_name)}</strong><span>Waiting…</span></div>
+          <div class="offer-swap">
+            <div><span>You give</span><b>${t.offer_amount} ${esc(res(t.offer_resource))}</b></div>
+            <div class="offer-arrow">⇄</div>
+            <div><span>You get</span><b>${t.request_amount} ${esc(res(t.request_resource))}</b></div>
+          </div>
+          ${note(t)}
+          <button class="btn btn-secondary btn-sm mt-1" onclick="realmApp.respondTrade('${esc(t.id)}', 'cancel')">Withdraw offer</button>
+        </div>`).join('') : '<p class="empty-state">You have no open offers.</p>';
     }
   }
 
   renderProposals(proposals, realm) {
+    const esc = escapeHtml;
+    const types = this.motionTypes || {};
+    const open = proposals.filter(p => p.status === 'draft' || p.status === 'qualified');
+    const decided = proposals.filter(p => p.status === 'passed' || p.status === 'rejected');
+    const canEndorse = p => !(p.support_list || []).includes(this.realmId)
+      && (!p.target_seconder_id || p.target_seconder_id === this.realmId);
+
     const motionsBadge = document.getElementById('nav-motions-badge');
     if (motionsBadge) {
-      const pendingEndorsement = proposals.filter(p => {
-        const supportList = p.support_list || [];
-        const hasSupported = supportList.includes(this.realmId);
-        const isTargetedToMe = p.target_seconder_id === this.realmId;
-        return !hasSupported && (!p.target_seconder_id || isTargetedToMe);
-      });
-      if (pendingEndorsement.length > 0) {
-        motionsBadge.innerText = pendingEndorsement.length;
-        motionsBadge.style.display = 'inline-block';
-      } else {
-        motionsBadge.style.display = 'none';
-      }
+      const n = open.filter(canEndorse).length;
+      motionsBadge.innerText = n;
+      motionsBadge.style.display = n > 0 ? 'inline-block' : 'none';
     }
+
+    const effectLine = p => {
+      const t = types[p.effect_type] || {};
+      const target = p.target_realm_name ? ` <em>(${esc(p.target_realm_name)})</em>` : '';
+      return `<div class="motion-effect"><span>If passed:</span> ${esc(t.effect_plain || t.statutory_effect || '')}${target}</div>`;
+    };
+    const head = (p, pill) => {
+      const t = types[p.effect_type] || {};
+      return `<div class="row-between" style="align-items:flex-start;">
+          <div class="motion-title">${esc(t.icon || '📜')} ${esc(p.title)}</div>${pill}</div>
+        <div class="motion-sponsor">Tabled by ${esc(p.proposer_name)} &middot; ${esc(t.name || p.effect_type)}</div>`;
+    };
 
     const container = document.getElementById('pending-motions-list');
-    if (!container) return;
-
-    if (proposals.length === 0) {
-      container.innerHTML = '<p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono);">No motions currently on the floor.</p>';
-      return;
+    if (container) {
+      container.innerHTML = open.length ? open.map(p => {
+        const support = p.support_list || [];
+        const qualified = support.length >= 2 || p.is_qualified;
+        const pill = qualified ? '<span class="status-pill ok">On the ballot</span>'
+                               : `<span class="status-pill">${support.length}/2 sponsors</span>`;
+        let action;
+        if (support.includes(this.realmId)) {
+          action = `<span class="section-sub">${p.proposer_id === this.realmId ? 'Your motion' : 'You co-sponsored this'}</span>`;
+        } else if (canEndorse(p)) {
+          action = `<button class="btn btn-primary btn-block btn-sm" onclick="realmApp.supportProposal('${esc(p.id)}')">Co-sponsor this motion</button>`;
+        } else {
+          action = `<span class="section-sub">Only ${esc(p.target_seconder_name)} may co-sponsor</span>`;
+        }
+        const ask = p.target_seconder_id && !qualified
+          ? `<div class="callout ${p.target_seconder_id === this.realmId ? 'warn' : 'neutral'} mt-1">${p.target_seconder_id === this.realmId ? 'Your nation has been asked to co-sponsor this.' : `Waiting for ${esc(p.target_seconder_name)} to co-sponsor.`}</div>` : '';
+        return `<div class="motion-card">${head(p, pill)}${effectLine(p)}
+          <details class="motion-terms"><summary>Read the terms</summary><p>${esc(p.description)}</p></details>
+          <div class="motion-sponsor">Sponsors: ${(p.supporters || []).map(s => esc(s.name)).join(', ')}</div>
+          ${ask}<div class="mt-1">${action}</div></div>`;
+      }).join('') : '<p class="empty-state">No motions on the floor yet. Pick a template above to propose one.</p>';
     }
 
-    container.innerHTML = proposals.map(p => {
-      const supportList = p.support_list || [];
-      const hasSupported = supportList.includes(this.realmId);
-      const isTargetedToMe = p.target_seconder_id === this.realmId;
-      const isQualified = supportList.length >= 2 || p.is_qualified;
+    const decidedCard = document.getElementById('decided-motions-card');
+    const decidedList = document.getElementById('decided-motions-list');
+    if (decidedCard && decidedList) {
+      decidedCard.style.display = decided.length ? '' : 'none';
+      decidedList.innerHTML = decided.map(p => {
+        const votes = Object.values(p.votes || {});
+        const side = c => votes.filter(v => v.choice === c);
+        const sum = c => side(c).reduce((a, v) => a + (v.weight || 1), 0);
+        const line = c => side(c).map(v => esc(v.realm_name)).join(', ') || '—';
+        const pill = p.status === 'passed' ? '<span class="status-pill ok">Passed</span>' : '<span class="status-pill bad">Rejected</span>';
+        return `<div class="motion-card">${head(p, pill)}${effectLine(p)}
+          <div class="vote-breakdown">
+            <div><b>For</b> ${sum('support')} votes &middot; ${side('support').length} nations<br><span>${line('support')}</span></div>
+            <div><b>Against</b> ${sum('oppose')} votes &middot; ${side('oppose').length} nations<br><span>${line('oppose')}</span></div>
+            ${side('abstain').length ? `<div><b>Abstained</b><br><span>${line('abstain')}</span></div>` : ''}
+          </div></div>`;
+      }).join('');
+    }
+  }
 
-      let targetBadge = '';
-      if (p.target_seconder_id) {
-        if (isTargetedToMe) {
-          targetBadge = '<span class="badge" style="background:#ffffff; color:#000000; margin-bottom:6px;">[DIRECT ENVOY: YOUR ENDORSEMENT REQUESTED]</span>';
-        } else {
-          targetBadge = `<span class="badge" style="margin-bottom:6px;">[DIRECT ENVOY TO: ${p.target_seconder_name}]</span>`;
-        }
-      }
-
-      let qualBadge = isQualified ?
-        '<span class="badge" style="border-color:#ffffff; color:#ffffff;">[QUALIFIED FOR PLENARY BALLOT]</span>' :
-        `<span class="badge" style="color:var(--text-muted);">[AWAITING SUPPORT: ${supportList.length}/2]</span>`;
-
-      return `
-        <div class="motion-card">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-            <div class="motion-title">${p.title}</div>
-            ${qualBadge}
-          </div>
-          ${targetBadge ? `<div>${targetBadge}</div>` : ''}
-          <div class="motion-sponsor">SPONSOR: ${p.proposer_name} • ${p.effect_type.toUpperCase()}</div>
-          <div class="motion-desc">${p.description}</div>
-          
-          <div style="font-size:0.75rem; font-family:var(--font-mono); color:var(--text-secondary); margin-bottom:8px;">
-            Endorsers (${supportList.length}): ${(p.supporters || []).map(s => s.name).join(', ')}
-          </div>
-
-          ${hasSupported ? 
-            `<span class="badge">[YOUR ENDORSEMENT LOCKED]</span>` :
-            (!p.target_seconder_id || isTargetedToMe) ?
-              `<button class="btn btn-primary btn-block btn-sm" onclick="realmApp.supportProposal('${p.id}')">
-                ENDORSE RESOLUTION (+1 CO-SPONSOR)
-              </button>` :
-              `<span class="badge" style="color:var(--text-muted);">[TARGETED TO ANOTHER SOVEREIGN]</span>`
-          }
-        </div>
-      `;
-    }).join('');
+  _motionEffectHtml(p) {
+    const t = (this.motionTypes || {})[p.effect_type] || {};
+    const target = p.target_realm_name ? ` (${escapeHtml(p.target_realm_name)})` : '';
+    const text = t.effect_plain || t.statutory_effect;
+    return text ? `<div class="motion-effect"><span>If passed:</span> ${escapeHtml(text)}${target}</div>` : '';
   }
 
   renderPlenarySessionCallout(meta, proposals, realm) {
@@ -955,11 +1072,12 @@ class RealmApp {
           const myVote = votes[this.realmId];
           return `
             <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); border-radius:4px; padding:10px; margin-bottom:8px;">
-              <strong style="color:#fff; font-size:0.9rem;">${p.title}</strong>
-              <p style="font-size:0.75rem; color:var(--text-secondary); margin:2px 0 8px 0;">${p.description}</p>
+              <strong class="motion-title">${escapeHtml(p.title)}</strong>
+              ${this._motionEffectHtml(p)}
+              <details class="motion-terms" style="margin-bottom:8px;"><summary>Read the terms</summary><p>${escapeHtml(p.description)}</p></details>
               
               ${myVote ? `
-                <div class="badge" style="border-color:#fff; color:#fff;">BALLOT CAST: ${myVote.choice.toUpperCase()} (${myVote.weight} VOTES)</div>
+                <div class="badge" style="border-color:var(--accent); color:var(--accent);">BALLOT CAST: ${myVote.choice.toUpperCase()} (${myVote.weight} VOTES)</div>
               ` : `
                 <div style="display:flex; gap:6px;">
                   <button class="btn btn-sm btn-primary" onclick="realmApp.castPlenaryVote('${p.id}', 'support')">SUPPORT (+${realm.assembly_votes})</button>
@@ -983,10 +1101,11 @@ class RealmApp {
       if (activeProp) {
         actionsContainer.innerHTML = `
           <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); border-radius:4px; padding:12px;">
-            <strong style="color:#fff; font-size:1rem;">${activeProp.title}</strong>
-            <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); margin:4px 0;">SPONSOR: ${activeProp.proposer_name}</div>
-            <p style="font-size:0.8rem; color:var(--text-secondary); line-height:1.4;">${activeProp.description}</p>
-            <div style="margin-top:10px; font-size:0.78rem; font-family:var(--font-mono); color:#ffffff;">
+            <strong class="motion-title">${escapeHtml(activeProp.title)}</strong>
+            <div class="motion-sponsor">Tabled by ${escapeHtml(activeProp.proposer_name)}</div>
+            ${this._motionEffectHtml(activeProp)}
+            <p style="font-size:0.82rem; color:var(--text-secondary); line-height:1.45; margin-top:8px; white-space:pre-line;">${escapeHtml(activeProp.description)}</p>
+            <div style="margin-top:10px; font-size:0.78rem; font-family:var(--font-mono); color: var(--text-primary);">
               [FLOOR OPEN FOR VERBAL DELIBERATION]
             </div>
           </div>
@@ -1006,11 +1125,12 @@ class RealmApp {
         const myVote = votes[this.realmId];
         actionsContainer.innerHTML = `
           <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); border-radius:4px; padding:12px;">
-            <strong style="color:#fff; font-size:1rem;">${activeProp.title}</strong>
-            <p style="font-size:0.8rem; color:var(--text-secondary); margin:4px 0 10px 0;">${activeProp.description}</p>
+            <strong class="motion-title">${escapeHtml(activeProp.title)}</strong>
+            ${this._motionEffectHtml(activeProp)}
+            <details class="motion-terms" style="margin-bottom:10px;"><summary>Read the terms</summary><p>${escapeHtml(activeProp.description)}</p></details>
             
             ${myVote ? `
-              <div class="badge" style="border-color:#fff; color:#fff;">BALLOT LOCKED: ${myVote.choice.toUpperCase()} (${myVote.weight} VOTES)</div>
+              <div class="badge" style="border-color:var(--accent); color:var(--accent);">BALLOT LOCKED: ${myVote.choice.toUpperCase()} (${myVote.weight} VOTES)</div>
             ` : `
               <div style="display:flex; gap:8px;">
                 <button class="btn btn-primary btn-block" onclick="realmApp.castPlenaryVote('${activeProp.id}', 'support')">SUPPORT (+${realm.assembly_votes})</button>
@@ -1040,11 +1160,22 @@ class RealmApp {
       });
     }
 
+    document.querySelectorAll('.res-picker').forEach(picker => {
+      picker.addEventListener('click', e => {
+        const btn = e.target.closest('button[data-res]');
+        if (!btn) return;
+        picker.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+        document.getElementById(picker.dataset.target).value = btn.dataset.res;
+        this.updateTradePreview();
+      });
+    });
+
     const tradeForm = document.getElementById('trade-form');
     if (tradeForm) {
       tradeForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const receiverId = document.getElementById('trade-receiver').value;
+        if (!receiverId) { showToast('First choose a nation to trade with.', 'warning'); return; }
         const offerRes = document.getElementById('trade-offer-res').value;
         const offerAmt = parseInt(document.getElementById('trade-offer-amt').value, 10);
         const reqRes = document.getElementById('trade-req-res').value;
@@ -1068,9 +1199,9 @@ class RealmApp {
           });
           const res = await resp.json();
           if (res.success) {
-            showToast('Treaty proposal transmitted', 'info');
+            showToast('Offer sent. Tell them to check their Trade tab!', 'success');
             synth.playChime();
-            tradeForm.reset();
+            document.getElementById('trade-note').value = '';
             this.pollState();
           } else {
             showToast(res.message, 'danger');
@@ -1086,23 +1217,21 @@ class RealmApp {
     const el = document.getElementById(inputId);
     if (!el) return;
     let val = parseInt(el.value, 10) || 0;
-    val = Math.max(1, Math.min(100, val + delta));
+    val = Math.max(0, Math.min(500, val + delta));
     el.value = val;
     this.updateTradePreview();
   }
 
   updateTradePreview() {
-    const offerRes = document.getElementById('trade-offer-res');
-    const offerAmt = document.getElementById('trade-offer-amt');
-    const reqRes = document.getElementById('trade-req-res');
-    const reqAmt = document.getElementById('trade-req-amt');
-    const previewEl = document.getElementById('trade-preview-text');
-    if (offerRes && offerAmt && reqRes && reqAmt && previewEl) {
-      const resLabels = { grain: 'GRAIN', cores: 'CORES', silk: 'SILK', military: 'MILITARY' };
-      const offLabel = resLabels[offerRes.value] || offerRes.value.toUpperCase();
-      const reqLabel = resLabels[reqRes.value] || reqRes.value.toUpperCase();
-      previewEl.innerText = `${offerAmt.value} ${offLabel} ⇄ ${reqAmt.value} ${reqLabel}`;
-    }
+    const el = document.getElementById('trade-preview-text');
+    if (!el) return;
+    const partner = document.getElementById('trade-receiver').value;
+    const name = (this._realmNames || {})[partner];
+    const g = document.getElementById('trade-offer-res').value, ga = document.getElementById('trade-offer-amt').value || 0;
+    const r = document.getElementById('trade-req-res').value, ra = document.getElementById('trade-req-amt').value || 0;
+    el.innerHTML = name
+      ? `You give <b>${escapeHtml(ga)} ${RESOURCE_SHORT[g]}</b> to <b>${escapeHtml(name)}</b> and receive <b>${escapeHtml(ra)} ${RESOURCE_SHORT[r]}</b>.`
+      : 'Choose a nation to trade with.';
   }
 
   async respondTrade(tradeId, action) {
@@ -1196,8 +1325,15 @@ class ProjectorApp {
   }
 
   start() {
-    if (typeof window !== 'undefined' && window.World3DMap && document.getElementById('world-3d-canvas')) {
-      this.world3d = new window.World3DMap('world-3d-canvas');
+    const mapCanvas = document.getElementById('realm-map');
+    if (mapCanvas && window.LivingAtlas) {
+      this.map = new window.LivingAtlas(mapCanvas);
+      // The sidebar follows whichever nation the map visits (tour, click or chip).
+      this.map.onFocus = id => {
+        if (!id) return;                      // whole-continent view keeps the last nation in the sidebar
+        this.spotlightId = id;
+        if (this.lastRealms) this.renderSpotlight(this.lastRealms);
+      };
     }
     this.pollState();
     setInterval(() => this.pollState(), 1000);
@@ -1222,10 +1358,10 @@ class ProjectorApp {
   renderState(state) {
     const { meta, realms, proposals, news_feed } = state;
 
-    // Update 3D World Map
-    if (this.world3d) {
-      this.world3d.updateState(state);
-    }
+    if (this.map) this.map.update(state);
+    this.renderTicker(news_feed || []);
+    this.resolutionTypes = state.resolution_types || this.resolutionTypes;
+    this.renderTimeline(meta);
 
     // Header
     const turnEl = document.getElementById('proj-turn');
@@ -1235,6 +1371,7 @@ class ProjectorApp {
       else if (meta.phase === 'grand_plenary_discussion') phaseLabel = 'GRAND PLENARY: DEBATE';
       else if (meta.phase === 'grand_plenary_voting') phaseLabel = 'GRAND PLENARY: VOTE';
       else if (meta.phase === 'turn_summary') phaseLabel = 'PLENARY CONCLUDED';
+      else if (meta.phase === 'summit_concluded') phaseLabel = 'SUMMIT CONCLUDED';
       turnEl.innerText = `TURN ${meta.current_turn} • ${phaseLabel}`;
     }
 
@@ -1287,7 +1424,7 @@ class ProjectorApp {
       if (concludedStage) concludedStage.style.display = 'none';
       if (quickStage) quickStage.style.display = 'none';
       if (grandStage) grandStage.style.display = 'none';
-      if (mainLayout) mainLayout.style.display = 'flex';
+      if (mainLayout) mainLayout.style.display = 'grid';
       this.renderWorkingSession(meta, proposals, realms, news_feed);
     }
   }
@@ -1311,10 +1448,7 @@ class ProjectorApp {
       verdictIcon = '🟡';
     }
 
-    if (verdictEl) {
-      verdictEl.innerText = `${verdictIcon} ${outcome.continental_verdict}`;
-      verdictEl.style.color = verdictColor;
-    }
+    if (verdictTitle) verdictTitle.style.color = verdictColor;
     if (verdictDesc) verdictDesc.innerText = outcome.continental_desc;
     if (timestampEl) timestampEl.innerText = `CONCLUDED: ${outcome.concluded_time_str}`;
 
@@ -1323,9 +1457,9 @@ class ProjectorApp {
         <span class="badge" style="background:${verdictColor}; color:#fff; padding:4px 10px; font-weight:800;">
           CONTINENTAL OUTCOME: ${outcome.continental_verdict}
         </span>
-        <span class="badge" style="background:#fff; color:#000; padding:4px 10px;">AVERAGE STANDING: ${outcome.avg_standing || 50}%</span>
-        <span class="badge" style="background:#fff; color:#000; padding:4px 10px;">AVERAGE STABILITY: ${outcome.avg_stability}%</span>
-        <span class="badge" style="${outcome.starving_count > 0 ? 'background:#ef4444; color:#fff;' : 'background:#fff; color:#000;'} padding:4px 10px;">
+        <span class="badge" style="background:var(--text-primary); color:var(--bg-surface); padding:4px 10px;">AVERAGE STANDING: ${outcome.avg_standing || 50}%</span>
+        <span class="badge" style="background:var(--text-primary); color:var(--bg-surface); padding:4px 10px;">AVERAGE STABILITY: ${outcome.avg_stability}%</span>
+        <span class="badge" style="${outcome.starving_count > 0 ? 'background:#ef4444; color:#fff;' : 'background:var(--text-primary); color:var(--bg-surface);'} padding:4px 10px;">
           STARVING REALMS: ${outcome.starving_count}
         </span>
       `;
@@ -1338,9 +1472,9 @@ class ProjectorApp {
         if (r.public_mission_eval) {
           const pm = r.public_mission_eval;
           pubHtml = `
-            <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); padding:6px 8px; border-radius:3px; margin-top:4px;">
+            <div style="background:rgba(120, 90, 40, 0.06); border:1px solid var(--border-subtle); padding:6px 8px; border-radius:3px; margin-top:4px;">
               <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:0.75rem; color:#fff;"><strong>Public:</strong> ${pm.title}</span>
+                <span style="font-size:0.75rem; color: var(--text-primary);"><strong>Public:</strong> ${pm.title}</span>
                 ${pm.achieved ? 
                   '<span class="badge" style="background:#10b981; color:#fff; font-size:0.62rem; padding:1px 6px;">✓ ACHIEVED</span>' : 
                   '<span class="badge" style="background:#ef4444; color:#fff; font-size:0.62rem; padding:1px 6px;">✗ FAILED</span>'}
@@ -1353,9 +1487,9 @@ class ProjectorApp {
         let secretsHtml = '';
         if (r.secret_missions_eval && r.secret_missions_eval.length > 0) {
           secretsHtml = r.secret_missions_eval.map((sm, i) => `
-            <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); padding:6px 8px; border-radius:3px; margin-top:3px;">
+            <div style="background:rgba(120, 90, 40, 0.06); border:1px solid var(--border-subtle); padding:6px 8px; border-radius:3px; margin-top:3px;">
               <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:0.75rem; color:#fff;"><strong>Secret #${i+1}:</strong> ${sm.title}</span>
+                <span style="font-size:0.75rem; color: var(--text-primary);"><strong>Secret #${i+1}:</strong> ${sm.title}</span>
                 ${sm.achieved ? 
                   '<span class="badge" style="background:#10b981; color:#fff; font-size:0.62rem; padding:1px 6px;">✓ ACHIEVED</span>' : 
                   '<span class="badge" style="background:#ef4444; color:#fff; font-size:0.62rem; padding:1px 6px;">✗ FAILED</span>'}
@@ -1371,11 +1505,11 @@ class ProjectorApp {
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-family:var(--font-mono); font-weight:900; font-size:1rem; color:var(--text-muted);">#${idx + 1}</span>
               <strong style="font-size:0.95rem; text-transform:uppercase;">${r.name}</strong>
-              <span class="badge" style="font-size:0.72rem; background:rgba(255,255,255,0.1);">${r.success_ratio || ''} MANDATES (${r.score} PTS)</span>
+              <span class="badge" style="font-size:0.72rem; background:rgba(120, 90, 40, 0.12);">${r.success_ratio || ''} MANDATES (${r.score} PTS)</span>
             </div>
             ${r.directive_achieved ? 
               '<span class="badge" style="background:#10b981; color:#fff; font-weight:800; padding:2px 8px;">ALL MANDATES MET</span>' : 
-              `<span class="badge" style="background:rgba(255,255,255,0.1); color:#fff; padding:2px 8px;">${r.achieved_missions}/${r.total_missions} MET</span>`}
+              `<span class="badge" style="background:rgba(120, 90, 40, 0.12); color: var(--text-primary); padding:2px 8px;">${r.achieved_missions}/${r.total_missions} MET</span>`}
           </div>
           ${pubHtml}
           ${secretsHtml}
@@ -1392,17 +1526,17 @@ class ProjectorApp {
       honorsEl.innerHTML = `
         <div style="background:var(--bg-surface-sunken); padding:8px 12px; border-radius:var(--radius-xs); border:1px solid var(--border-subtle);">
           <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted);">ARCH-DIPLOMAT OF THE SPIRE</div>
-          <strong style="font-size:0.9rem; color:#fff;">${outcome.honors.arch_diplomat.name}</strong>
+          <strong style="font-size:0.9rem; color: var(--text-primary);">${outcome.honors.arch_diplomat.name}</strong>
           <span style="font-size:0.75rem; font-family:var(--font-mono); color:var(--text-secondary); margin-left:6px;">(${outcome.honors.arch_diplomat.standing}/100 Standing)</span>
         </div>
         <div style="background:var(--bg-surface-sunken); padding:8px 12px; border-radius:var(--radius-xs); border:1px solid var(--border-subtle);">
           <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted);">INDUSTRIAL HEGEMON</div>
-          <strong style="font-size:0.9rem; color:#fff;">${outcome.honors.industrial_hegemon.name}</strong>
+          <strong style="font-size:0.9rem; color: var(--text-primary);">${outcome.honors.industrial_hegemon.name}</strong>
           <span style="font-size:0.75rem; font-family:var(--font-mono); color:var(--text-secondary); margin-left:6px;">(${outcome.honors.industrial_hegemon.cores} Cores)</span>
         </div>
         <div style="background:var(--bg-surface-sunken); padding:8px 12px; border-radius:var(--radius-xs); border:1px solid var(--border-subtle);">
           <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted);">BREADBASKET OF THE CONTINENT</div>
-          <strong style="font-size:0.9rem; color:#fff;">${outcome.honors.breadbasket.name}</strong>
+          <strong style="font-size:0.9rem; color: var(--text-primary);">${outcome.honors.breadbasket.name}</strong>
           <span style="font-size:0.75rem; font-family:var(--font-mono); color:var(--text-secondary); margin-left:6px;">(${outcome.honors.breadbasket.grain} Grain)</span>
         </div>
       `;
@@ -1424,133 +1558,139 @@ class ProjectorApp {
     }
   }
 
+  // Spotlight: one nation, large enough to read on a projector (public info only: tiers, never numbers)
+  renderSpotlight(realms) {
+    const esc = escapeHtml;
+    const active = realms.filter(r => r.active !== false);
+    if (!active.length) return;
+    if (!active.some(r => r.id === this.spotlightId)) this.spotlightId = active[0].id;
+    const r = active.find(x => x.id === this.spotlightId);
+    const info = (window.LivingAtlas && window.LivingAtlas.info) || { regions: {}, capitals: {} };
+    const level = t => ({ LOW: 1, MEDIUM: 2, HIGH: 3 }[t] || 0);
+    const words = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' };
+    const row = (icon, label, tier) => `<div class="spot-row"><span class="spot-icon">${icon}</span><span class="spot-label">${label}</span>
+      <span class="spot-pips">${[1, 2, 3].map(n => `<em class="${n <= level(tier) ? 'on' : ''}"></em>`).join('')}</span>
+      <span class="spot-word">${words[tier] || '—'}</span></div>`;
+    const flags = [];
+    if (r.is_starving) flags.push('<span class="flag bad">🥀 Famine</span>');
+    if (r.is_plutocrat) flags.push('<span class="flag good">👑 Richest realm · +1 vote</span>');
+    if (r.is_quarantined) flags.push('<span class="flag bad">🚧 Borders sealed</span>');
+    const box = document.getElementById('spotlight');
+    if (box) box.innerHTML = `
+      <div class="spot-head" style="--nc:${esc(r.theme_color || '#8c7a5e')}">
+        <span class="crest spot-crest">${esc(r.emoji || '🏛️')}</span>
+        <div class="grow">
+          <div class="spot-name">${esc(r.name)}</div>
+          <div class="spot-sub">${esc(info.regions[r.id] || '')}${info.capitals[r.id] ? ` · capital ${esc(info.capitals[r.id])}` : ''}</div>
+        </div>
+        <span class="vote-seal spot-seal" title="Assembly votes">${r.assembly_votes}<small>votes</small></span>
+      </div>
+      <div class="spot-mandate"><span>Public mandate</span><b>${esc(r.public_mission ? r.public_mission.title : '')}</b>
+        <p>${esc(r.public_mission ? r.public_mission.description : '')}</p></div>
+      <div class="spot-stats">
+        ${row('🌾', 'Grain', r.grain_tier)}${row('⚙️', 'Cores', r.cores_tier)}${row('🧵', 'Silk', r.silk_tier)}${row('⚔️', 'Military', r.military_tier)}
+        ${row('❤️', 'Vitality', r.vitality_tier)}${row('🤝', 'Standing', r.standing_tier)}${row('🏛️', 'Stability', r.stability_tier)}
+      </div>
+      ${flags.length ? `<div class="spot-flags">${flags.join('')}</div>` : ''}`;
+    const chips = document.getElementById('projector-realms-list');
+    if (chips) chips.innerHTML = active.map(x => `
+      <button type="button" class="spot-chip ${x.id === r.id ? 'on' : ''}" style="--nc:${esc(x.theme_color || '#8c7a5e')}"
+        title="${esc(x.name)}" onclick="projApp.showRealm('${esc(x.id)}')">${esc(x.emoji || '🏛️')}</button>`).join('');
+  }
+
+  showRealm(id) {
+    this.spotlightId = id;
+    if (this.map) this.map.selectRealm(id);
+    if (this.lastRealms) this.renderSpotlight(this.lastRealms);
+  }
+
+  renderTicker(news) {
+    const el = document.getElementById('news-ticker-content');
+    if (!el) return;
+    const items = news.slice(0, 10);
+    const key = items.map(n => n.id || n.headline + n.time_str).join('|');
+    if (key === this._tickerKey) return;   // only rebuild when the news changes, so scrolling stays smooth
+    this._tickerKey = key;
+    const icons = { crisis: '⚡', trade: '🤝', assembly: '📜', lore: '📖', turn: '🔔', diplomacy: '🕊️' };
+    const html = items.map(n => `<span class="ticker-item"><b>${icons[n.type] || '✦'} ${escapeHtml(n.headline)}</b> ${escapeHtml(n.detail)}</span>`).join('');
+    el.innerHTML = html + html;  // duplicated so the loop is seamless
+    const seconds = Math.max(30, el.scrollWidth / 2 / 70);   // ~70 px per second
+    el.style.animationDuration = `${seconds}s`;
+    el.style.animationName = 'none';
+    void el.offsetWidth;
+    el.style.animationName = '';
+  }
+
+  renderTimeline(meta) {
+    const el = document.getElementById('proj-timeline');
+    if (!el) return;
+    const turns = meta.max_turns || 3;
+    const steps = [];
+    for (let t = 1; t <= turns; t++) {
+      steps.push({ key: `turn-${t}`, label: `Turn ${t}` });
+      steps.push({ key: `vote-${t}`, label: t === turns ? 'Grand Plenary' : 'Assembly vote' });
+    }
+    steps.push({ key: 'end', label: 'Debrief' });
+    const voting = ['plenary_quick', 'grand_plenary_discussion', 'grand_plenary_voting', 'turn_summary'].includes(meta.phase);
+    const current = meta.phase === 'summit_concluded' ? 'end' : `${voting ? 'vote' : 'turn'}-${meta.current_turn}`;
+    const idx = steps.findIndex(s => s.key === current);
+    el.innerHTML = steps.map((s, i) => `<span class="tl-step ${i < idx ? 'done' : ''} ${i === idx ? 'now' : ''}">${s.label}</span>`).join('<span class="tl-sep"></span>');
+  }
+
   renderWorkingSession(meta, proposals, realms, news_feed) {
-    const activeRealms = (realms || []).filter(r => r.active !== false);
+    const esc = escapeHtml;
+    this.lastRealms = realms || [];
+    this.renderSpotlight(this.lastRealms);
+    const paused = document.getElementById('tour-paused');
+    if (paused && this.map) paused.style.display = this.map.manual ? 'flex' : 'none';
 
-    // 1. Dominant Hero Breaking Bulletin
-    if (news_feed && news_feed.length > 0) {
-      const topNews = news_feed[0];
-      const heroHead = document.getElementById('proj-hero-headline');
-      const heroDetail = document.getElementById('proj-hero-detail');
-      const heroTime = document.getElementById('proj-hero-time');
-      if (heroHead) heroHead.innerText = topNews.headline;
-      if (heroDetail) heroDetail.innerText = topNews.detail;
-      if (heroTime) heroTime.innerText = topNews.time_str;
-    }
-
-    // 2. Chronological Wire Stream (Compact for zero scrolling)
-    const newsList = document.getElementById('projector-news-list');
-    if (newsList && news_feed) {
-      newsList.innerHTML = news_feed.slice(0, 4).map(n => `
-        <div style="border-bottom: 1px solid var(--border-subtle); padding: 6px 0;">
-          <div style="display:flex; justify-content:space-between; font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted);">
-            <strong style="color:var(--text-primary); font-size:0.78rem;">[${n.type.toUpperCase()}] ${n.headline}</strong>
-            <span>${n.time_str}</span>
-          </div>
-          <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:2px; line-height:1.35;">${n.detail}</p>
-        </div>
-      `).join('');
-    }
-
-    // 3. Qualitative Continental Intel (Fog of War: Zero exact numbers leaked!)
-    const realmsList = document.getElementById('projector-realms-list');
-    if (realmsList) {
-      realmsList.innerHTML = activeRealms.map(r => `
-        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:6px 10px; border-radius:var(--radius-xs);">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="font-size:0.85rem; text-transform:uppercase;">${r.emoji || '🏛️'} ${r.name}</strong>
-            <span class="badge" style="font-size:0.68rem; padding:2px 6px;">${r.assembly_votes} VOTE${r.assembly_votes > 1 ? 'S' : ''}</span>
-          </div>
-          <div style="font-size:0.7rem; color:var(--text-secondary); margin-top:1px;">
-            MANDATE: <strong>${r.public_mission ? r.public_mission.title : r.ethos}</strong>
-          </div>
-          <div style="display:flex; gap:8px; font-size:0.68rem; font-family:var(--font-mono); margin-top:3px; color:var(--text-muted);">
-            <span>GRAIN: <strong style="color:var(--text-primary);">${r.grain_tier}</strong></span>
-            <span>CORES: <strong style="color:var(--text-primary);">${r.cores_tier}</strong></span>
-            <span>SILK: <strong style="color:var(--text-primary);">${r.silk_tier}</strong></span>
-            <span>MIL: <strong style="color:var(--text-primary);">${r.military_tier || 'MED'}</strong></span>
-          </div>
-          <div style="display:flex; gap:8px; font-size:0.68rem; font-family:var(--font-mono); margin-top:2px; color:var(--text-muted);">
-            <span>STAND: <strong style="color:var(--text-primary);">${r.standing_tier}</strong></span>
-            <span>VIT: <strong style="color:var(--text-primary);">${r.vitality_tier}</strong></span>
-            <span>STAB: <strong style="color:var(--text-primary);">${r.stability_tier}</strong></span>
-            ${r.is_starving ? '<span class="badge badge-danger" style="font-size:0.65rem; padding:1px 4px;">FAMINE</span>' : ''}
-          </div>
-        </div>
-      `).join('');
-    }
-
-    // 4. Qualified Motions Ticker
     const motionsTicker = document.getElementById('projector-qualified-motions-list');
     if (motionsTicker) {
-      const qualified = proposals.filter(p => (p.support_list && p.support_list.length >= 2) || p.is_qualified);
-      if (qualified.length === 0) {
-        motionsTicker.innerHTML = '<p class="text-muted" style="font-size:0.78rem; font-family:var(--font-mono);">No resolutions have qualified for the plenary docket yet.</p>';
-      } else {
-        motionsTicker.innerHTML = qualified.map(p => `
-          <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); border-radius:4px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <strong style="font-size:0.85rem;">${p.title}</strong>
-              <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-mono);">Sponsor: ${p.proposer_name}</div>
-            </div>
-            <span class="badge" style="border-color:var(--border-white);">QUALIFIED (${p.support_list.length} CO-SPONSORS)</span>
-          </div>
-        `).join('');
-      }
+      const open = (proposals || []).filter(p => p.status === 'draft' || p.status === 'qualified');
+      motionsTicker.innerHTML = open.length ? open.slice(0, 4).map(p => {
+        const n = (p.support_list || []).length;
+        return `<span class="ballot-chip ${n >= 2 ? 'ok' : ''}">${esc(p.title)} <em>${n >= 2 ? 'on the ballot' : `${n}/2 sponsors`}</em></span>`;
+      }).join('') : '<span class="atlas-motions-empty">No motions yet. Nations table them from their phones.</span>';
     }
   }
 
   renderQuickPlenary(meta, proposals, realms) {
     const list = document.getElementById('proj-quick-plenary-docket-list');
     if (!list) return;
-
+    const esc = escapeHtml;
     const docket = meta.plenary_docket || [];
     const docketProps = proposals.filter(p => docket.includes(p.id));
+    const types = Object.fromEntries((this.resolutionTypes || []).map(t => [t.id, t]));
+    const playing = (realms || []).filter(r => r.active !== false);
 
     list.innerHTML = docketProps.map((p, idx) => {
-      const tallies = p.tallies || { support_weight: 0, oppose_weight: 0, abstain_weight: 0 };
+      const t = types[p.effect_type] || {};
+      const tallies = p.tallies || { support_weight: 0, oppose_weight: 0 };
       const total = tallies.support_weight + tallies.oppose_weight;
       const pct = total > 0 ? (tallies.support_weight / total) * 100 : 50;
-
       const votes = p.votes || {};
-      const ballotsHtml = realms.map(r => {
+      const ballots = playing.map(r => {
         const v = votes[r.id];
-        let badge = '<span class="badge" style="color:var(--text-muted);">VOTE PENDING</span>';
-        if (v) {
-          if (v.choice === 'support') badge = `<span class="badge" style="color:var(--text-primary); border-color:var(--border-white);">SUPPORT (+${v.weight})</span>`;
-          else if (v.choice === 'oppose') badge = `<span class="badge badge-danger">OPPOSE (+${v.weight})</span>`;
-          else badge = `<span class="badge">ABSTAIN</span>`;
-        }
-        return `
-          <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:6px 10px; border-radius:4px; display:flex; justify-content:space-between; align-items:center; font-size:0.75rem;">
-            <strong>${r.name}</strong>
-            ${badge}
-          </div>
-        `;
+        const cls = v ? v.choice : 'pending';
+        const label = !v ? 'Deciding…' : v.choice === 'support' ? `For · ${v.weight}` : v.choice === 'oppose' ? `Against · ${v.weight}` : 'Abstains';
+        return `<div class="ballot ${cls}" style="--nc:${esc(r.theme_color || '#8c7a5e')}">
+          <span class="crest small">${esc(r.emoji || '🏛️')}</span><span class="grow"><b>${esc(r.name)}</b><em>${label}</em></span></div>`;
       }).join('');
-
-      return `
-        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:6px; padding:16px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h3 style="font-size:1.15rem; font-weight:800;">#${idx + 1}: ${p.title}</h3>
-            <span class="badge" style="font-family:var(--font-mono);">${p.support_list.length} CO-SPONSORS</span>
-          </div>
-          <p style="font-size:0.85rem; color:var(--text-secondary); margin:6px 0 12px 0;">${p.description}</p>
-          
-          <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-weight:800; font-size:0.85rem; margin-bottom:4px;">
-            <span>SUPPORT: ${tallies.support_weight}</span>
-            <span>OPPOSE: ${tallies.oppose_weight}</span>
-          </div>
-          <div style="width:100%; height:8px; background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); border-radius:4px; overflow:hidden; margin-bottom:12px;">
-            <div style="height:100%; background:var(--border-white); width:${pct}%;"></div>
-          </div>
-
-          <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px;">
-            ${ballotsHtml}
-          </div>
+      return `<article class="assembly-motion">
+        <div class="row-between" style="align-items:flex-start;">
+          <h2>${esc(t.icon || '📜')} ${esc(p.title)}</h2>
+          <span class="status-pill">Motion ${idx + 1} of ${docketProps.length}</span>
         </div>
-      `;
-    }).join('');
+        <div class="motion-sponsor">Tabled by ${esc(p.proposer_name)} · co-sponsored by ${(p.supporters || []).slice(1).map(s => esc(s.name)).join(', ') || '—'}</div>
+        ${t.effect_plain ? `<div class="motion-effect"><span>If passed:</span> ${esc(t.effect_plain)}${p.target_realm_name ? ` (${esc(p.target_realm_name)})` : ''}</div>` : ''}
+        <div class="balance">
+          <span class="for">For ${tallies.support_weight}</span>
+          <div class="balance-bar"><div style="width:${pct}%"></div></div>
+          <span class="against">${tallies.oppose_weight} Against</span>
+        </div>
+        <div class="ballots">${ballots}</div>
+      </article>`;
+    }).join('') || '<p class="empty-state">No motions qualified for this vote.</p>';
   }
 
   renderGrandPlenary(meta, proposals, realms) {
@@ -1580,7 +1720,7 @@ class ProjectorApp {
 
       const votes = activeProp.votes || {};
       const grid = document.getElementById('proj-grand-rollcall-grid');
-      grid.innerHTML = realms.map(r => {
+      grid.innerHTML = realms.filter(r => r.active !== false).map(r => {
         const v = votes[r.id];
         let badge = '<span class="badge" style="color:var(--text-muted);">VOTE PENDING</span>';
         if (v) {
@@ -1648,6 +1788,7 @@ class AdminApp {
   }
 
   renderState(state) {
+    this.renderRoster(state.realms || []);
     const { meta, realms, proposals, news_feed } = state;
 
     // Header Pills
@@ -1836,7 +1977,7 @@ class AdminApp {
         const connCount = r.connected_players || 0;
         const isFull = !!r.is_capacity_full;
         return `
-        <tr style="${isActive ? '' : 'opacity: 0.55; background: rgba(255,255,255,0.02);'}">
+        <tr style="${isActive ? '' : 'opacity: 0.55; background: rgba(120, 90, 40, 0.04);'}">
           <td>
             <div style="display:flex; align-items:center; gap:6px;">
               <span style="font-size:1.1rem;">${r.emoji || '🏛️'}</span>
@@ -1890,7 +2031,7 @@ class AdminApp {
       newsBox.innerHTML = news_feed.slice(0, 15).map(n => `
         <div style="border-bottom: 1px solid var(--border-subtle); padding: 8px 0; font-size: 0.8rem;">
           <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:0.72rem; color: var(--text-muted);">
-            <strong style="color: #fff;">[${n.type.toUpperCase()}] ${n.headline}</strong>
+            <strong style="color: var(--text-primary);">[${n.type.toUpperCase()}] ${n.headline}</strong>
             <span>${n.time_str}</span>
           </div>
           <p style="color: var(--text-secondary); margin-top: 2px;">${n.detail}</p>
@@ -2218,6 +2359,25 @@ class AdminApp {
     } catch (err) {
       showToast('Failed to conclude summit', 'danger');
     }
+  }
+
+  renderRoster(realms) {
+    const box = document.getElementById('roster-chips');
+    if (!box) return;
+    const playing = realms.filter(r => r.active !== false).length;
+    const count = document.getElementById('roster-count');
+    if (count) count.innerText = `· ${playing} of ${realms.length} playing`;
+    const key = realms.map(r => `${r.id}:${r.active !== false}:${r.connected_players || 0}`).join(',');
+    if (key === this._rosterKey) return;
+    this._rosterKey = key;
+    box.innerHTML = realms.map(r => {
+      const on = r.active !== false;
+      return `<button type="button" class="roster-chip ${on ? 'on' : ''}" style="--nc:${escapeHtml(r.theme_color || '#8c7a5e')}"
+          onclick="adminApp.toggleRealm('${escapeHtml(r.id)}', ${on})" title="${on ? 'Remove from' : 'Add to'} this summit">
+          <span class="crest small">${escapeHtml(r.emoji || '🏛️')}</span>
+          <span><b>${escapeHtml(r.name)}</b><em>${on ? `${r.connected_players || 0}/${r.player_count} seats taken` : 'Not playing'}</em></span>
+        </button>`;
+    }).join('');
   }
 
   async toggleRealm(realmId, currentActive) {
