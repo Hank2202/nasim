@@ -1,0 +1,19 @@
+# Render.com blueprint — free web service. Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+services:
+  - type: web
+    name: summit-of-realms
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # ONE worker: game state + timers live in a single SQLite file / process.
+    startCommand: gunicorn -w 1 --threads 8 -b 0.0.0.0:$PORT app:app
+    healthCheckPath: /healthz
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_PASSCODE
+        sync: false        # set in the Render dashboard (facilitator password)
+      - key: SUMMIT_DB_PATH
+        value: /tmp/summit.db
+      - key: PYTHON_VERSION
+        value: 3.11.9

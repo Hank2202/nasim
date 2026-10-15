@@ -166,12 +166,12 @@ class World3DMap {
     // ── Realm metadata ──
     this.realmsData = {};
     const names = {
-      aethelgard: ['Aethelgard Dominion',   'Valenhold Citadel'],
-      val_khor:   ['Iron Val-Khor',         'Mount Khor Foundry'],
-      solaria:    ['Solaris Ascendancy',     'Solaris Sun Terraces'],
-      umbra:      ['Umbral Enclave',         'Abyssal Catacombs'],
-      aquila:     ['Aquila Maritime League', 'Glass Harbor Sea-Gate'],
-      sylvan:     ['Sylvan Concordat',       'Sylva Arbor Canopy'],
+      aethelgard: ['Aethelgard Dominion',   'Aethelhold'],
+      val_khor:   ['Iron Val-Khor',         'Khorgate'],
+      solaria:    ['Solaris Ascendancy',     'Helion'],
+      umbra:      ['Umbral Enclave',         'Lanternfall'],
+      aquila:     ['Aquila Maritime League', 'Halcyon Quay'],
+      sylvan:     ['Sylvan Concordat',       'Rootholm'],
     };
     for (const id of this.tour) {
       const [wx, wy] = this._caps[id];
@@ -839,9 +839,19 @@ class World3DMap {
     if (rd.ethos) {
       ctx.fillStyle = this.textCol; ctx.font = '12px monospace'; ctx.textAlign = 'left';
       ctx.fillText('ETHOS', tx, ty);
-      ctx.font = 'bold 11px monospace'; ctx.textAlign = 'right';
-      ctx.fillStyle = this.mutedTxt;
-      ctx.fillText(rd.ethos.toUpperCase(), tx + tw, ty);
+      ty += 18;
+      // Word-wrap the ethos below its label so it never overlaps other rows.
+      ctx.font = 'bold 11px monospace'; ctx.fillStyle = this.mutedTxt;
+      let line = '';
+      for (const word of rd.ethos.toUpperCase().split(' ')) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > tw && line) {
+          ctx.fillText(line, tx, ty); ty += 15; line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) ctx.fillText(line, tx, ty);
     }
 
     // ── Leader line from panel to capital ──

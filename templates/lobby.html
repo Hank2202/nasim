@@ -3,101 +3,84 @@
 {% block title %}The Summit of Realms - Sovereign Login{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 900px; text-align: center;">
+<div class="container" style="max-width: 920px;">
 
-  <div style="margin-bottom: 24px;">
-    <h1 style="font-size: 1.8rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;">
-      The Summit of Realms
-    </h1>
-    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
-      Live Educational Geopolitical Simulation Platform • Host Terminal
-    </p>
-    <div style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 4px 12px; border-radius: var(--radius-pill); margin-top: 10px;">
-      <span>SESSION GATEWAY: {{ server_url }}</span>
+  <div class="page-head centered">
+    <span class="eyebrow">Neutral Spire &middot; Year 304 AC</span>
+    <h1 class="page-title" style="font-size: 1.8rem;">The Summit of Realms</h1>
+    <p class="lede">Six nations, one failing harvest, three rounds of negotiation. Choose your delegation to begin.</p>
+  </div>
+
+  <div class="card">
+    <div class="row-between wrap">
+      <div class="grow" style="min-width: 220px;">
+        <div class="card-title">New to the summit?</div>
+        <p class="small" style="color: var(--text-secondary); margin-top: 4px;">Read the rules in the Guide, and the history of every nation in the Spireopedia &mdash; the quiz questions come from it.</p>
+      </div>
+      <div class="row wrap">
+        <a href="/overview" class="btn btn-secondary btn-sm">Game Guide</a>
+        <a href="/wiki" class="btn btn-secondary btn-sm">Spireopedia</a>
+      </div>
     </div>
   </div>
 
-  <div class="card" style="text-align: left; margin-bottom: 20px; border: 1px solid var(--border-strong); background: var(--bg-surface-raised);">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-      <div>
-        <div class="card-title" style="margin-bottom: 4px;">📖 New to the Simulation?</div>
-        <p style="color: var(--text-secondary); font-size: 0.82rem;">
-          Explore the comprehensive guide: the 6 sovereign nations, economic formulas, plenary statutes, and turn phases.
-        </p>
-      </div>
-      <a href="/overview" class="btn btn-secondary btn-sm" style="white-space: nowrap;">
-        Simulation Overview & Rules &rarr;
-      </a>
-    </div>
+  <div class="row-between" style="margin: 22px 0 10px;">
+    <div class="card-title">Select your delegation</div>
+    <span class="section-sub hide-sm" style="margin: 0;">Tap a nation &middot; enter its passcode</span>
   </div>
 
-  <div class="card" style="text-align: left; margin-bottom: 20px;">
-    <div class="card-title">Select Sovereign Delegation</div>
-    <p style="color: var(--text-secondary); font-size: 0.82rem; margin-top: 4px;">
-      Each delegation commands unique resource endowments, cultural ethos, and a classified domestic directive. Tap your nation and enter your delegation passcode to access your sovereign terminal.
-    </p>
-  </div>
-
-  <div class="lobby-grid" style="text-align: left;">
-    {% for r in realms %}
-    <div class="lobby-realm-card" onclick="openLoginModal('{{ r.id }}', '{{ r.name }}')" style="cursor: pointer;">
+  <div class="lobby-grid" id="lobby-grid">
+    {% for r in realms if r.active != false %}
+    <div class="lobby-realm-card" id="card-{{ r.id }}" role="button" tabindex="0"
+         onclick="handleCardClick('{{ r.id }}', {{ r.name|tojson|forceescape }}, {{ 'true' if r.is_capacity_full else 'false' }})"
+         onkeydown="if (event.key === 'Enter') this.click();">
       <div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-          <h3 style="font-size: 1.1rem; color: #fff; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em;">{{ r.name }}</h3>
-          <span class="badge">
-            {{ r.assembly_votes }} VOTE{{ 'S' if r.assembly_votes > 1 else '' }}
-          </span>
+        <div class="row-between" style="align-items: flex-start; margin-bottom: 6px;">
+          <h3 class="lobby-realm-name"><span class="lobby-realm-emoji">{{ r.emoji or '🏛️' }}</span>{{ r.name }}</h3>
+          <span class="badge">{{ r.assembly_votes }} VOTE{{ 'S' if r.assembly_votes != 1 else '' }}</span>
         </div>
-        <p style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 14px;">
-          {{ r.ethos }}
-        </p>
+        <p class="small" style="color: var(--text-secondary); line-height: 1.4; margin-bottom: 12px;">{{ r.ethos }}</p>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 12px;">
-        <div style="display: flex; gap: 10px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">
-          <span>GRAIN: <strong>{{ r.grain_tier }}</strong></span>
-          <span>CORES: <strong>{{ r.cores_tier }}</strong></span>
-          <span>SILK: <strong>{{ r.silk_tier }}</strong></span>
-        </div>
-        <span class="btn btn-primary btn-sm">
-          Login 🔒
+      <div class="lobby-card-foot">
+        <span class="status-pill {{ 'bad' if r.is_capacity_full else '' }}" id="badge-seats-{{ r.id }}">{{ r.connected_players or 0 }} / {{ r.player_count or 2 }} seats</span>
+        <span id="btn-login-{{ r.id }}">
+          {% if r.is_capacity_full %}<span class="btn btn-sm btn-danger">Full</span>{% else %}<span class="btn btn-primary btn-sm">Join</span>{% endif %}
         </span>
       </div>
     </div>
     {% endfor %}
   </div>
 
-  <div style="margin-top: 24px; font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">
-    <span>Facilitators: <a href="/admin" style="color: var(--text-primary); text-decoration: underline;">Open Command Deck</a> • <a href="/projector" style="color: var(--text-primary); text-decoration: underline;">Open Projector</a> • <a href="/overview" style="color: var(--text-primary); text-decoration: underline;">Game Overview & Guide</a></span>
-  </div>
+  <p class="section-sub" style="text-align: center; margin-top: 26px; text-transform: none;">
+    Facilitators: <a href="/admin" style="text-decoration: underline;">Command Deck</a> &middot;
+    <a href="/projector" style="text-decoration: underline;">Projector</a> &middot;
+    Joining at <span class="mono">{{ server_url }}</span>
+  </p>
 
 </div>
 
 <!-- Authentication PIN Modal -->
 <div id="login-pin-modal" class="modal-overlay" style="display: none;" onclick="if(event.target===this) closeLoginModal()">
   <div class="modal-card" style="max-width: 400px; text-align: center;">
-    <div style="font-size: 1.8rem; margin-bottom: 6px;">🔒</div>
-    <h3 id="modal-realm-name" style="font-size: 1.2rem; font-weight: 900; color: #fff; text-transform: uppercase;">
-      Delegation Access
-    </h3>
-    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; margin-bottom: 16px;">
-      Enter the 4-digit sovereign passcode provided by your facilitator:
-    </p>
+    <span class="eyebrow">Delegation access</span>
+    <h3 id="modal-realm-name" class="page-title" style="font-size: 1.2rem; margin-top: 10px;">Delegation</h3>
+    <p class="small" style="color: var(--text-secondary); margin: 4px 0 16px;">Enter the passcode your facilitator gave your delegation.</p>
 
     <form id="pin-login-form" onsubmit="submitPinLogin(event)">
       <input type="hidden" id="login-realm-id">
       
       <div class="form-group">
-        <input type="password" id="login-realm-pin" class="form-input" placeholder="Passcode (e.g. 1001)" inputmode="numeric" maxlength="10" required style="text-align: center; font-size: 1.3rem; letter-spacing: 0.2em; font-family: var(--font-mono);" autofocus>
+        <input type="password" id="login-realm-pin" class="form-input" placeholder="Passcode" autocomplete="off" inputmode="numeric" maxlength="10" required style="text-align: center; font-size: 1.3rem; letter-spacing: 0.2em; font-family: var(--font-mono);" autofocus>
       </div>
 
-      <div id="login-error-msg" style="display: none; color: #ef4444; font-size: 0.8rem; font-family: var(--font-mono); margin-bottom: 12px;">
+      <div id="login-error-msg" class="callout danger" style="display: none; margin-bottom: 12px;">
         Incorrect passcode. Please try again.
       </div>
 
       <div style="display: flex; gap: 8px;">
         <button type="button" class="btn btn-secondary btn-block" onclick="closeLoginModal()">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-block">Authenticate</button>
+        <button type="submit" class="btn btn-primary btn-block">Enter</button>
       </div>
     </form>
   </div>
@@ -106,6 +89,32 @@
 
 {% block scripts %}
 <script>
+  let activeRealmsData = {{ realms | tojson }};
+
+  function hasRealmCookie(realmId) {
+    return document.cookie.split(';').some(c => c.trim().startsWith(`has_auth_${realmId}=`));
+  }
+
+  function handleCardClick(realmId, realmName, isFull) {
+    // If device is already authenticated, allow direct entrance
+    if (hasRealmCookie(realmId)) {
+      window.location.href = `/realm/${realmId}`;
+      return;
+    }
+
+    const realm = activeRealmsData.find(r => r.id === realmId);
+    const capacityFull = (realm && realm.is_capacity_full) || isFull;
+
+    if (capacityFull) {
+      const conn = realm ? realm.connected_players : 2;
+      const cap = realm ? realm.player_count : 2;
+      alert(`${realmName} is full (${conn}/${cap} seats). Pick another nation or ask the facilitator to add a seat.`);
+      return;
+    }
+
+    openLoginModal(realmId, realmName);
+  }
+
   function openLoginModal(realmId, realmName) {
     document.getElementById('login-realm-id').value = realmId;
     document.getElementById('modal-realm-name').innerText = realmName;
@@ -139,7 +148,9 @@
       } else {
         errorEl.innerText = res.message || 'Invalid passcode.';
         errorEl.style.display = 'block';
-        synth.playAlert();
+        if (window.synth && typeof window.synth.playAlert === 'function') {
+          synth.playAlert();
+        }
       }
     } catch (err) {
       errorEl.innerText = 'Network error contacting host.';
@@ -147,14 +158,58 @@
     }
   }
 
+  async function pollLobbyState() {
+    try {
+      const resp = await fetch('/api/state');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (!data.realms) return;
+      activeRealmsData = data.realms;
+
+      data.realms.forEach(r => {
+        const card = document.getElementById(`card-${r.id}`);
+        if (!card) return;
+
+        if (r.active === false) {
+          card.style.display = 'none';
+          return;
+        } else {
+          card.style.display = '';
+        }
+
+        const seatsBadge = document.getElementById(`badge-seats-${r.id}`);
+        if (seatsBadge) {
+          const conn = r.connected_players || 0;
+          const cap = r.player_count || 2;
+          seatsBadge.innerText = `${conn} / ${cap} seats`;
+          seatsBadge.classList.toggle('bad', !!r.is_capacity_full);
+        }
+
+        const btnDiv = document.getElementById(`btn-login-${r.id}`);
+        if (btnDiv) {
+          if (r.is_capacity_full) {
+            btnDiv.innerHTML = `<span class="btn btn-sm btn-danger">Full</span>`;
+          } else {
+            btnDiv.innerHTML = `<span class="btn btn-primary btn-sm">Join</span>`;
+          }
+        }
+
+        card.onclick = () => handleCardClick(r.id, r.name, !!r.is_capacity_full);
+      });
+    } catch (e) {
+      // background poll
+    }
+  }
+
+  setInterval(pollLobbyState, 3000);
+
   // Auto-open if query param ?login=<id> is present
   const urlParams = new URLSearchParams(window.location.search);
   const autoTarget = urlParams.get('login');
   if (autoTarget) {
-    const realms = {{ realms | tojson }};
-    const target = realms.find(r => r.id === autoTarget);
+    const target = activeRealmsData.find(r => r.id === autoTarget);
     if (target) {
-      openLoginModal(target.id, target.name);
+      handleCardClick(target.id, target.name, !!target.is_capacity_full);
     }
   }
 </script>

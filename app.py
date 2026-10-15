@@ -14,19 +14,125 @@ import json
 import os
 import socket
 import sys
+import threading
+import time
+import uuid
 from typing import Dict, Any
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response, make_response
+from itsdangerous import URLSafeSerializer, BadSignature
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from models import Database, DEFAULT_REALMS
 from engine import SummitEngine, load_scenario_config
+import wiki
 from qr_generator import generate_qr_svg
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "summit-of-realms-secret-key"
+# Behind a hosting proxy (Render etc.) trust X-Forwarded-* so URLs/QR use https + the public host.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-only-insecure-key")
+# Cookies are only marked Secure when served over https (hosted); plain http on a LAN still works.
+IS_HOSTED = bool(os.environ.get("PUBLIC_URL") or os.environ.get("RENDER"))
 
 db = Database()
 engine = SummitEngine(db)
+
+
+# -----------------------------------------------------------------------------
+# Signed-cookie authentication (cookies cannot be forged without SECRET_KEY)
+# -----------------------------------------------------------------------------
+_signer = URLSafeSerializer(app.config["SECRET_KEY"], salt="summit-auth")
+_failed_logins: Dict[str, list] = {}
+
+def _sign(role: str) -> str:
+    return _signer.dumps(role)
+
+def _cookie_role(name: str):
+    raw = request.cookies.get(name)
+    if not raw:
+        return None
+    try:
+        return _signer.loads(raw)
+    except BadSignature:
+        return None
+
+def is_admin() -> bool:
+    return _cookie_role("auth_admin") == "admin"
+
+def is_realm_authed(realm_id: str) -> bool:
+    return bool(realm_id) and _cookie_role(f"auth_{realm_id}") == f"realm:{realm_id}"
+
+def _auth_param_allowed() -> bool:
+    # ?auth=1 shortcut exists only for automated tests / explicit local debugging.
+    return app.config.get("TESTING", False) or os.environ.get("ALLOW_AUTH_PARAM") == "1"
+
+def _login_throttled() -> bool:
+    now = time.time()
+    hits = [t for t in _failed_logins.get(request.remote_addr or "?", []) if now - t < 60]
+    _failed_logins[request.remote_addr or "?"] = hits
+    return len(hits) >= 10
+
+def _note_failed_login() -> None:
+    _failed_logins.setdefault(request.remote_addr or "?", []).append(time.time())
+
+def _set_auth_cookie(resp, name: str, role: str):
+    resp.set_cookie(name, _sign(role), max_age=86400, httponly=True, samesite="Lax", secure=IS_HOSTED)
+
+def public_base_url() -> str:
+    env = os.environ.get("PUBLIC_URL")
+    if env:
+        return env.rstrip("/")
+    return request.host_url.rstrip("/")
+
+_ACTOR_KEYS = ("realm_id", "sender_id", "proposer_id", "supporter_id", "seconder_id")
+
+# The engine does read-modify-write on SQLite JSON blobs; serialise every request that
+# touches game state so concurrent phones (threaded server) cannot lose updates.
+_state_lock = threading.RLock()
+
+@app.before_request
+def acquire_state_lock():
+    if not (request.path.startswith("/static/") or request.path.startswith("/wiki") or request.path == "/healthz"):
+        _state_lock.acquire()
+        request.environ["summit.locked"] = True
+
+@app.teardown_request
+def release_state_lock(_exc=None):
+    if request.environ.pop("summit.locked", False):
+        _state_lock.release()
+
+@app.before_request
+def enforce_api_auth():
+    if app.config.get("TESTING", False) or request.method != "POST":
+        return None
+    path = request.path
+    if path.startswith("/api/admin/"):
+        if not is_admin():
+            return jsonify({"success": False, "message": "Facilitator authentication required."}), 401
+    elif path.startswith("/api/") and not path.startswith("/api/auth/"):
+        data = request.get_json(silent=True) or {}
+        actor = next((data[k] for k in _ACTOR_KEYS if data.get(k)), None)
+        if not actor or not (is_realm_authed(actor) or is_admin()):
+            return jsonify({"success": False, "message": "Delegation authentication required."}), 401
+    return None
+
+def sanitize_state(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Per-viewer filtering: no PINs, secret missions, other realms' exact stocks or quiz answers."""
+    if is_admin() or app.config.get("TESTING", False):
+        return state
+    hidden = ("pin", "secret_missions_pool", "active_secret_missions", "claimed_lore", "failed_lore", "quiz_answers",
+              "alchemical_grain", "aether_cores", "echo_silk", "military_power", "total_wealth")
+    realms = []
+    for r in state["realms"]:
+        if is_realm_authed(r["id"]):
+            r = {k: v for k, v in r.items() if k not in ("pin", "secret_missions_pool")}
+        else:
+            r = {k: v for k, v in r.items() if k not in hidden}
+        realms.append(r)
+    out = dict(state, realms=realms)
+    out.pop("simulation_settings", None)
+    return out
 
 _CACHED_LAN_IP = None
 
@@ -67,10 +173,10 @@ def get_lan_ip() -> str:
 
 @app.route("/")
 def index():
-    state = engine.get_full_state()
+    state = sanitize_state(engine.get_full_state())
     lan_ip = get_lan_ip()
     port = request.environ.get("SERVER_PORT", "5000")
-    server_url = f"http://{lan_ip}:{port}"
+    server_url = public_base_url() if IS_HOSTED else f"http://{lan_ip}:{port}"
     login_target = request.args.get("login", "")
     return render_template(
         "lobby.html",
@@ -84,19 +190,23 @@ def index():
 
 @app.route("/realm/<realm_id>")
 def realm_view(realm_id: str):
-    state = engine.get_full_state()
+    state = sanitize_state(engine.get_full_state())
     realm = next((r for r in state["realms"] if r["id"] == realm_id), None)
     if not realm:
         return redirect(url_for("index"))
 
     # Verify delegation auth cookie (or allow override via query param ?auth=1)
-    auth_cookie = request.cookies.get(f"auth_{realm_id}")
-    has_auth_param = request.args.get("auth") == "1"
-    if not auth_cookie and not has_auth_param:
+    has_auth_param = request.args.get("auth") == "1" and _auth_param_allowed()
+    if not is_realm_authed(realm_id) and not has_auth_param:
         return redirect(f"/?login={realm_id}")
 
-    other_realms = [r for r in state["realms"] if r["id"] != realm_id]
-    return render_template(
+    session_id = request.cookies.get("summit_session_id")
+    if not session_id:
+        session_id = str(uuid.uuid4())
+    engine.register_realm_session(realm_id, session_id)
+
+    other_realms = [r for r in state["realms"] if r["id"] != realm_id and r.get("active", True)]
+    resp = make_response(render_template(
         "realm.html",
         realm=realm,
         other_realms=other_realms,
@@ -106,14 +216,17 @@ def realm_view(realm_id: str):
         proposals=state["proposals"],
         news_feed=state["news_feed"],
         world_lore=state.get("world_lore", {})
-    )
+    ))
+    if not request.cookies.get("summit_session_id"):
+        resp.set_cookie("summit_session_id", session_id, max_age=86400, httponly=False, samesite="Lax")
+    return resp
 
 @app.route("/projector")
 def projector_view():
-    state = engine.get_full_state()
+    state = sanitize_state(engine.get_full_state())
     lan_ip = get_lan_ip()
     port = request.environ.get("SERVER_PORT", "5000")
-    server_url = f"http://{lan_ip}:{port}"
+    server_url = public_base_url() if IS_HOSTED else f"http://{lan_ip}:{port}"
     qr_svg = generate_qr_svg(server_url, box_size=8)
 
     return render_template(
@@ -125,10 +238,15 @@ def projector_view():
 
 @app.route("/admin")
 def admin_view():
+    has_auth_param = request.args.get("auth") == "1" and _auth_param_allowed()
+    is_testing = app.config.get("TESTING", False)
+    if not is_testing and not is_admin() and not has_auth_param:
+        return render_template("admin_login.html")
+
     state = engine.get_full_state()
     lan_ip = get_lan_ip()
     port = request.environ.get("SERVER_PORT", "5000")
-    server_url = f"http://{lan_ip}:{port}"
+    server_url = public_base_url() if IS_HOSTED else f"http://{lan_ip}:{port}"
     qr_svg = generate_qr_svg(server_url, box_size=6)
 
     return render_template(
@@ -140,15 +258,53 @@ def admin_view():
         port=port
     )
 
+# -----------------------------------------------------------------------------
+# Spireopedia (public, read-only lore wiki)
+# -----------------------------------------------------------------------------
+
+app.jinja_env.filters["wiki"] = wiki.render_markup
+app.jinja_env.filters["wiki_inline"] = wiki.render_inline
+app.jinja_env.globals["realm_article"] = wiki.realm_article
+
+def _wiki_page(**ctx):
+    data = wiki.load_wiki()
+    base = dict(article=None, results=None, query=None, linked_from=[], embed=request.args.get("embed") == "1")
+    base.update(ctx)
+    return render_template("wiki.html", meta=data["_meta"], articles=data["articles"], **base)
+
+@app.route("/wiki")
+def wiki_home():
+    return _wiki_page()
+
+@app.route("/wiki/search")
+def wiki_search():
+    q = request.args.get("q", "")
+    if not q.strip():
+        return redirect(url_for("wiki_home", **({"embed": "1"} if request.args.get("embed") == "1" else {})))
+    return _wiki_page(results=wiki.search(q), query=q)
+
+@app.route("/wiki/<slug>")
+def wiki_article(slug: str):
+    article = wiki.load_wiki()["by_slug"].get(slug)
+    if not article:
+        return redirect(url_for("wiki_home"))
+    return _wiki_page(article=article, linked_from=wiki.backlinks(slug))
+
+@app.route("/healthz")
+def healthz():
+    return "ok"
+
 @app.route("/overview")
 def overview_view():
-    state = engine.get_full_state()
+    state = sanitize_state(engine.get_full_state())
     cfg = load_scenario_config()
     lan_ip = get_lan_ip()
     port = request.environ.get("SERVER_PORT", "5000")
-    server_url = f"http://{lan_ip}:{port}"
+    server_url = public_base_url() if IS_HOSTED else f"http://{lan_ip}:{port}"
+    from engine import load_quiz
     return render_template(
         "overview.html",
+        quiz_count=len(load_quiz()["questions"]),
         state=state,
         cfg=cfg,
         realms=state["realms"],
@@ -167,7 +323,7 @@ def rules_redirect():
 def qr_code_endpoint():
     lan_ip = get_lan_ip()
     port = request.environ.get("SERVER_PORT", "5000")
-    server_url = f"http://{lan_ip}:{port}"
+    server_url = public_base_url() if IS_HOSTED else f"http://{lan_ip}:{port}"
     svg_content = generate_qr_svg(server_url, box_size=10)
     return Response(svg_content, mimetype="image/svg+xml")
 
@@ -177,16 +333,75 @@ def qr_code_endpoint():
 
 @app.route("/api/auth/realm", methods=["POST"])
 def api_auth_realm():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     realm_id = data.get("realm_id")
     pin = data.get("pin", "")
 
+    if not realm_id:
+        return jsonify({"success": False, "message": "realm_id is required."}), 400
+
+    session_id = request.cookies.get("summit_session_id")
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    # Check if realm is full and session is NOT already registered for this realm
+    if engine.is_realm_capacity_full(realm_id) and not engine.is_session_registered(realm_id, session_id):
+        realms = engine.db.get_state("realms", [])
+        target = next((r for r in realms if r["id"] == realm_id), None)
+        cap = target.get("player_count", 2) if target else 2
+        occ = engine.get_connected_player_count(realm_id)
+        return jsonify({
+            "success": False,
+            "message": f"Delegation capacity reached ({occ}/{cap} seats occupied). Please choose another realm.",
+            "is_full": True
+        }), 403
+
+    if _login_throttled():
+        return jsonify({"success": False, "message": "Too many failed attempts. Wait a minute."}), 429
     if engine.verify_realm_pin(realm_id, pin):
+        engine.register_realm_session(realm_id, session_id)
         resp = make_response(jsonify({"success": True, "message": "Authentication successful."}))
-        resp.set_cookie(f"auth_{realm_id}", "authenticated", max_age=86400, httponly=False, samesite="Lax")
+        _set_auth_cookie(resp, f"auth_{realm_id}", f"realm:{realm_id}")
+        # Non-secret marker so the lobby page JS can tell this device already logged in.
+        resp.set_cookie(f"has_auth_{realm_id}", "1", max_age=86400, samesite="Lax", secure=IS_HOSTED)
+        resp.set_cookie("summit_session_id", session_id, max_age=86400, httponly=False, samesite="Lax", secure=IS_HOSTED)
         return resp
     else:
+        _note_failed_login()
         return jsonify({"success": False, "message": "Invalid delegation PIN passcode."}), 401
+
+@app.route("/api/auth/realm/logout", methods=["POST"])
+def api_auth_realm_logout():
+    data = request.get_json(silent=True) or {}
+    realm_id = data.get("realm_id")
+    session_id = request.cookies.get("summit_session_id")
+    if realm_id and session_id:
+        engine.remove_realm_session(realm_id, session_id)
+    resp = make_response(jsonify({"success": True, "message": "Logged out from delegation."}))
+    if realm_id:
+        resp.delete_cookie(f"auth_{realm_id}")
+        resp.delete_cookie(f"has_auth_{realm_id}")
+    return resp
+
+@app.route("/api/auth/admin", methods=["POST"])
+def api_auth_admin():
+    data = request.get_json(silent=True) or {}
+    passcode = data.get("passcode", "")
+    if _login_throttled():
+        return jsonify({"success": False, "message": "Too many failed attempts. Wait a minute."}), 429
+    if engine.verify_admin_passcode(passcode):
+        resp = make_response(jsonify({"success": True, "message": "Command Deck unlocked."}))
+        _set_auth_cookie(resp, "auth_admin", "admin")
+        return resp
+    else:
+        _note_failed_login()
+        return jsonify({"success": False, "message": "Invalid facilitator passcode."}), 401
+
+@app.route("/api/auth/admin/logout", methods=["POST"])
+def api_auth_admin_logout():
+    resp = make_response(jsonify({"success": True, "message": "Command Deck locked."}))
+    resp.delete_cookie("auth_admin")
+    return resp
 
 @app.route("/api/admin/pin/reset", methods=["POST"])
 def api_admin_pin_reset():
@@ -202,7 +417,14 @@ def api_admin_pin_reset():
 
 @app.route("/api/state")
 def api_state():
-    return jsonify(engine.get_full_state())
+    session_id = request.cookies.get("summit_session_id")
+    if session_id:
+        for key, val in request.cookies.items():
+            if key.startswith("auth_") and key != "auth_admin":
+                r_id = key[len("auth_"):]
+                if is_realm_authed(r_id):
+                    engine.register_realm_session(r_id, session_id)
+    return jsonify(sanitize_state(engine.get_full_state()))
 
 @app.route("/api/realm/action", methods=["POST"])
 def api_realm_action():
@@ -212,21 +434,32 @@ def api_realm_action():
     success, msg = engine.execute_sovereign_action(realm_id, action_type)
     return jsonify({"success": success, "message": msg}), (200 if success else 400)
 
+@app.route("/api/quiz/<realm_id>")
+def api_quiz(realm_id: str):
+    if not (app.config.get("TESTING", False) or is_realm_authed(realm_id) or is_admin()):
+        return jsonify({"success": False, "message": "Delegation authentication required."}), 401
+    quiz = engine.get_quiz_for_realm(realm_id)
+    if quiz is None:
+        return jsonify({"success": False, "message": "Realm not found."}), 404
+    return jsonify({"success": True, **quiz})
+
 @app.route("/api/lore/quiz", methods=["POST"])
 def api_lore_quiz():
     data = request.get_json() or {}
     realm_id = data.get("realm_id")
-    topic_id = data.get("topic_id")
+    question_id = data.get("question_id") or data.get("topic_id")
     try:
         answer_index = int(data.get("answer_index", -1))
     except (ValueError, TypeError):
         return jsonify({"success": False, "message": "Invalid answer format."}), 400
 
-    if not realm_id or not topic_id or answer_index < 0:
+    if not realm_id or not question_id or answer_index < 0:
         return jsonify({"success": False, "message": "Missing required fields."}), 400
 
-    ok, msg, payload = engine.submit_lore_quiz(realm_id, topic_id, answer_index)
-    return jsonify({"success": ok, "message": msg, "data": payload}), (200 if ok else 400)
+    ok, msg, payload = engine.submit_lore_quiz(realm_id, question_id, answer_index)
+    # A wrong answer is a valid submission (200); 400 only for rejected submissions.
+    status = 200 if payload else 400
+    return jsonify({"success": ok, "message": msg, "data": payload}), status
 
 @app.route("/api/trade/create", methods=["POST"])
 def api_trade_create():
@@ -395,6 +628,38 @@ def api_admin_assembly_control():
     success, msg = engine.admin_assembly_override(action)
     return jsonify({"success": success, "message": msg})
 
+@app.route("/api/admin/realm/toggle", methods=["POST"])
+def api_admin_realm_toggle():
+    data = request.get_json() or {}
+    realm_id = data.get("realm_id")
+    active = data.get("active")
+    success, msg = engine.admin_toggle_realm(realm_id, active)
+    st = engine.get_full_state()
+    target_realm = next((r for r in st["realms"] if r["id"] == realm_id), None)
+    is_active = bool(target_realm.get("active", 1)) if target_realm else False
+    return jsonify({"success": success, "message": msg, "active": is_active}), (200 if success else 400)
+
+@app.route("/api/admin/realm/player_count", methods=["POST"])
+def api_admin_realm_player_count():
+    data = request.get_json() or {}
+    realm_id = data.get("realm_id")
+    try:
+        count = int(data.get("player_count", 1))
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "message": "Invalid player count."}), 400
+    success, msg = engine.admin_set_player_count(realm_id, count)
+    return jsonify({"success": success, "message": msg, "player_count": count}), (200 if success else 400)
+
+@app.route("/api/admin/crisis/round", methods=["POST"])
+def api_admin_crisis_round():
+    data = request.get_json() or {}
+    try:
+        round_num = int(data.get("round") or data.get("round_num") or 1)
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "message": "Invalid round number."}), 400
+    success, msg = engine.trigger_round_crisis(round_num)
+    return jsonify({"success": success, "message": msg, "round": round_num}), (200 if success else 400)
+
 @app.route("/api/admin/realm/add", methods=["POST"])
 def api_admin_realm_add():
     data = request.get_json() or {}
@@ -433,17 +698,42 @@ def api_admin_realm_add():
     engine.add_news("diplomacy", f"NEW DELEGATION ACCREDITED: {name.upper()}", "A new sovereign realm has been seated at the summit table.")
     return jsonify({"success": True, "message": f"{name} admitted."})
 
+@app.route("/api/admin/realm/remove", methods=["POST"])
 @app.route("/api/admin/realm/delete", methods=["POST"])
-def api_admin_realm_delete():
-    data = request.get_json() or {}
+def api_admin_realm_remove():
+    data = request.get_json(silent=True) or {}
     realm_id = data.get("realm_id")
-    realms = db.get_state("realms", [])
-    filtered = [r for r in realms if r["id"] != realm_id]
-    if len(filtered) == len(realms):
-        return jsonify({"success": False, "message": "Realm not found."}), 404
+    if not realm_id:
+        return jsonify({"success": False, "message": "realm_id is required."}), 400
 
-    db.set_state("realms", filtered)
-    return jsonify({"success": True, "message": "Realm deleted."})
+    ok, msg = engine.admin_remove_realm(realm_id)
+    if ok:
+        return jsonify({"success": True, "message": msg, "state": engine.get_full_state()})
+    return jsonify({"success": False, "message": msg}), 400
+
+@app.route("/api/admin/realms/set_count", methods=["POST"])
+def api_admin_realms_set_count():
+    data = request.get_json(silent=True) or {}
+    count = data.get("count")
+    if count is None:
+        return jsonify({"success": False, "message": "count parameter is required."}), 400
+    try:
+        count = int(count)
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "message": "Invalid count parameter."}), 400
+
+    ok, msg = engine.admin_set_active_realm_count(count)
+    if ok:
+        return jsonify({"success": True, "message": msg, "state": engine.get_full_state()})
+    return jsonify({"success": False, "message": msg}), 400
+
+@app.route("/api/admin/realm/clear_sessions", methods=["POST"])
+def api_admin_realm_clear_sessions():
+    data = request.get_json(silent=True) or {}
+    realm_id = data.get("realm_id")
+    engine.clear_realm_sessions(realm_id)
+    msg = f"Active sessions cleared for {realm_id}." if realm_id else "All delegation sessions cleared."
+    return jsonify({"success": True, "message": msg, "state": engine.get_full_state()})
 
 @app.route("/api/events")
 def api_events():

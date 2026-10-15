@@ -2,35 +2,27 @@
 
 {% block title %}Facilitator Command Deck - The Summit of Realms{% endblock %}
 
+{% block nav_links %}
+  <a href="/overview" target="_blank" class="nav-link">Guide</a>
+  <a href="/wiki" target="_blank" class="nav-link">Spireopedia</a>
+  <a href="/projector" target="_blank" class="nav-link">Projector &#8599;</a>
+{% endblock %}
 {% block header_extra %}
-  <a href="/overview" target="_blank" class="btn btn-secondary btn-sm">
-    Game Guide 📖
-  </a>
-  <a href="/projector" target="_blank" class="btn btn-secondary btn-sm">
-    Projector View ↗
-  </a>
-  <button id="btn-sound-chime" class="btn btn-secondary btn-sm" title="Sound chime across all devices">
-    Chime 🔔
-  </button>
-  <button id="btn-end-turn-header" class="btn btn-primary btn-sm" onclick="adminApp.advanceTurn()">
-    Advance Turn ⏩
-  </button>
+  <button id="btn-sound-chime" class="btn btn-secondary btn-sm hide-sm" title="Sound chime across all devices">Chime</button>
+  <button id="btn-end-turn-header" class="btn btn-primary btn-sm" onclick="adminApp.advanceTurn()">Advance Turn</button>
+  <button class="btn btn-danger btn-sm" onclick="adminApp.logout()" title="Lock Command Deck">Lock</button>
 {% endblock %}
 
 {% block content %}
 <div class="container" style="max-width: 1280px;">
 
   <!-- Master Facilitator Header Bar -->
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+  <div class="page-head">
     <div>
-      <h1 style="font-size: 1.4rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #fff;">
-        Facilitator Command Deck
-      </h1>
-      <p style="color: var(--text-muted); font-size: 0.8rem; font-family: var(--font-mono); margin-top: 2px;">
-        MASTER WORKSPACE • SESSION CONTROLS & TELEMETRY
-      </p>
+      <h1 class="page-title">Facilitator Command Deck</h1>
+      <p class="section-sub">Master workspace &middot; session controls & telemetry</p>
     </div>
-    <div style="display:flex; gap: 8px; align-items:center;">
+    <div class="row">
       <span id="admin-turn-display" class="turn-pill" style="font-size: 0.85rem; padding: 6px 12px;">TURN {{ state.meta.current_turn }}</span>
       <span id="admin-timer-display" class="timer-pill" style="font-size: 0.85rem; padding: 6px 12px;">05:00</span>
       <button onclick="adminApp.openResetModal()" class="btn btn-danger btn-sm">Reset Sim</button>
@@ -39,11 +31,11 @@
 
   <!-- Functional Workspace Tabs -->
   <div class="admin-tab-nav" style="display: flex; gap: 6px; border-bottom: 2px solid var(--border-subtle); margin-bottom: 18px; overflow-x: auto;">
-    <button class="admin-tab-btn active" data-tab="tab-pacing">⏱️ Pacing & Timers</button>
-    <button class="admin-tab-btn" data-tab="tab-events">📰 Events & Crises</button>
-    <button class="admin-tab-btn" data-tab="tab-resources">🌾 Resource Overrides</button>
-    <button class="admin-tab-btn" data-tab="tab-resolutions">📜 Resolutions & Docket</button>
-    <button class="admin-tab-btn" data-tab="tab-access">🔐 Delegations & Passcodes</button>
+    <button class="admin-tab-btn active" data-tab="tab-pacing">Pacing & Timers</button>
+    <button class="admin-tab-btn" data-tab="tab-events">Events & Crises</button>
+    <button class="admin-tab-btn" data-tab="tab-resources">Resource Overrides</button>
+    <button class="admin-tab-btn" data-tab="tab-resolutions">Resolutions & Docket</button>
+    <button class="admin-tab-btn" data-tab="tab-access">Delegations & Passcodes</button>
   </div>
 
   <!-- ========================================================================= -->
@@ -88,25 +80,26 @@
         <!-- Quick Adjustment Buttons -->
         <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
           <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(60)">+1 Min</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(120)">+2 Min</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(300)">+5 Min</button>
           <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(-60)">-1 Min</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.controlTimer('reset', 1200)">↺ 20m (Default)</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.controlTimer('reset', 1500)">↺ 25m</button>
           <button class="btn btn-secondary btn-sm" onclick="adminApp.controlTimer('reset', 300)">↺ 5m</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.controlTimer('reset', 600)">↺ 10m</button>
         </div>
 
         <!-- Timer Run/Pause -->
         <div style="display: flex; gap: 8px; margin-top: 12px;">
           <button id="timer-start-btn" class="btn btn-primary btn-block" onclick="adminApp.controlTimer('start')">▶ Resume Timer</button>
-          <button id="timer-pause-btn" class="btn btn-secondary btn-block" onclick="adminApp.controlTimer('pause')">⏸ Pause Timer</button>
+          <button id="timer-pause-btn" class="btn btn-secondary btn-block" onclick="adminApp.controlTimer('pause')">Pause Timer</button>
         </div>
 
         <!-- Room Sound Alerts -->
         <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-subtle);">
           <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 6px;">FACILITATOR ROOM SOUNDS:</div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('chime', 'Attention Sovereign Delegates')">🔔 Chime</button>
-            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('gong', 'Plenary Assembly Called')">⚡ Plenary Gong</button>
-            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('alert', 'Crisis Warning Alert')">🚨 Crisis Siren</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('chime', 'Attention Sovereign Delegates')">Chime</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('gong', 'Plenary Assembly Called')">Plenary Gong</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('alert', 'Crisis Warning Alert')">Crisis Siren</button>
           </div>
         </div>
       </div>
@@ -130,7 +123,7 @@
         </div>
 
         <button class="btn btn-primary btn-block" onclick="adminApp.advanceTurn()" style="padding: 12px; font-weight: 800;">
-          Execute End of Turn Calculations ⏩
+          Execute End of Turn Calculations
         </button>
       </div>
     </div>
@@ -142,6 +135,28 @@
   <div id="tab-events" class="admin-tab-content">
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
       <div>
+        <!-- Official MGV 2026 Scripted Crises -->
+        <div class="card" style="border: 2px solid var(--border-white);">
+          <div class="card-title">Official MGV 2026 Scripted Crises</div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+            One-click triggers for official round-specific scenario broadcasts and rules:
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+            <button class="btn btn-secondary btn-block" style="text-align: left; padding: 10px;" onclick="adminApp.triggerRoundCrisis(1)">
+              🌾 <strong>Round 1: The Failed Harvest</strong><br>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">Broadcast harvest warning. Standard -20 Grain consumption at end.</span>
+            </button>
+            <button class="btn btn-secondary btn-block" style="text-align: left; padding: 10px;" onclick="adminApp.triggerRoundCrisis(2)">
+              ⚔️ <strong>Round 2: The Security Crisis</strong><br>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">Border incident: Military &lt; 50 takes -10 Stability; Grain trades lose 5 in transit.</span>
+            </button>
+            <button class="btn btn-secondary btn-block" style="text-align: left; padding: 10px;" onclick="adminApp.triggerRoundCrisis(3)">
+              🚨 <strong>Round 3: The Great Famine</strong><br>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">Immediate -15 Grain to all states. Puts Emergency Food Acts into Plenary.</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Automated Event Deck -->
         <div class="card">
           <div class="card-title">Automated Event Deck</div>
@@ -151,7 +166,7 @@
 
           <div style="margin-top: 10px;">
             <button class="btn btn-primary btn-block" onclick="adminApp.triggerAutoNextEvent()" style="padding: 10px;">
-              ⚡ Trigger Next Recommended Crisis
+              Trigger Next Recommended Crisis
             </button>
           </div>
 
@@ -264,7 +279,26 @@
   <!-- TAB 5: DELEGATIONS & PASSCODES -->
   <!-- ========================================================================= -->
   <div id="tab-access" class="admin-tab-content">
-    <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px;">
+    <!-- Summit Scale / Active Countries Facilitator Control -->
+    <div class="card" style="margin-bottom: 16px; border: 1px solid var(--border-white);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div class="card-title" style="margin-bottom: 4px;">Participating Sovereign Nations</div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">
+            Set the number of participating countries (MGV standard: 3 to 6 nations). Secret missions and continental quotas automatically rescale for all nations.
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.setActiveRealmCount(3)">3 Nations</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.setActiveRealmCount(4)">4 Nations</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.setActiveRealmCount(5)">5 Nations</button>
+          <button class="btn btn-primary btn-sm" onclick="adminApp.setActiveRealmCount(6)">6 Nations (Full)</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.clearRealmSessions(null, 'all delegations')" title="Reset all connected phone sessions">Clear All Sessions ↺</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px;">
       <!-- Active Delegation PINs -->
       <div class="card">
         <div class="card-title">Delegation Access & Security Passcodes</div>
@@ -277,8 +311,11 @@
             <thead>
               <tr>
                 <th>Delegation</th>
-                <th>Ethos</th>
-                <th>Active PIN</th>
+                <th>Status</th>
+                <th>Connected Seats</th>
+                <th>Capacity</th>
+                <th>Missions</th>
+                <th>PIN</th>
                 <th>Action</th>
               </tr>
             </thead>

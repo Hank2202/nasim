@@ -5,7 +5,7 @@ Validates:
   - Dynamic, non-hardcoded event targeting queries ('highest 1 by alchemical_grain', 'lowest 3 by public_vitality', etc.)
   - Sovereign Domestic Governance Levers (Relief, Forges, Gala, Civil Guard)
   - Unified Single Source of Truth ('scenario_config.json' without redundant 'events.json')
-  - Participant Mobile Console 5 Tabs: Overview, World News, Trade Hub, Declarations, Lore & Intel
+  - Participant Mobile Console 6 Tabs: Realm, World, Trade, Motions, Wiki, Quiz
   - Trade Proposal & Atomic Execution Lifecycle
   - Sovereign Motion Qualification (2-country endorsement rule)
   - Delegation 4-digit PIN authentication & session security
@@ -242,49 +242,79 @@ class TestSummitEngine(unittest.TestCase):
         self.assertIn("simulation_settings", cfg)
         self.assertIn("realms", cfg)
         self.assertIn("resolution_types", cfg)
-        self.assertIn("lore_encyclopedia", cfg)
         self.assertIn("events_catalog", cfg)
-        self.assertGreater(len(cfg["lore_encyclopedia"]), 5)
         self.assertGreater(len(cfg["resolution_types"]), 3)
 
+    def _q(self, qid):
+        from engine import load_quiz
+        return next(q for q in load_quiz()["questions"] if q["id"] == qid)
+
     def test_lore_quiz_correct_answer_awards_resource(self):
-        """Verify correct quiz deduction credits the corresponding resource and records claim."""
-        sylvan = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
-        grain_before = sylvan["alchemical_grain"]
+        """A correct answer credits the question's resource and records the claim."""
+        q = self._q("q01")
+        field = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk"}[q["reward_resource"]]
+        before = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")[field]
 
-        # geo_convergence correct index is 0 (Verdant Lowlands), awards +15 Grain
-        ok, msg, data = self.engine.submit_lore_quiz("sylvan", "geo_convergence", 0)
+        ok, msg, data = self.engine.submit_lore_quiz("sylvan", "q01", q["correct_index"])
         self.assertTrue(ok)
-        self.assertIn("+15 Alchemical Grain", msg)
+        self.assertEqual(data["explanation"], q["explanation"])
 
-        sylvan_after = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
-        self.assertEqual(sylvan_after["alchemical_grain"], grain_before + 15)
-        self.assertIn("geo_convergence", sylvan_after["claimed_lore"])
+        after = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
+        self.assertEqual(after[field], before + q["reward_amount"])
+        self.assertIn("q01", after["claimed_lore"])
 
-        # Subsequent attempts are rejected as already claimed
-        ok_dup, msg_dup, _ = self.engine.submit_lore_quiz("sylvan", "geo_convergence", 0)
+        ok_dup, msg_dup, _ = self.engine.submit_lore_quiz("sylvan", "q01", q["correct_index"])
         self.assertFalse(ok_dup)
-        self.assertIn("already been verified", msg_dup)
+        self.assertIn("already answered", msg_dup)
 
     def test_lore_quiz_incorrect_answer_applies_penalty_and_lockout(self):
-        """Verify flawed intelligence deduction taxes standing and permanently locks the dossier."""
-        sylvan = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
-        standing_before = sylvan["diplomatic_standing"]
+        """A wrong answer costs -5 Standing and permanently locks the question for that realm only."""
+        q = self._q("q02")
+        wrong = (q["correct_index"] + 1) % 4
+        standing_before = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")["diplomatic_standing"]
 
-        # geo_mistveil correct index is 1; pass incorrect index 0
-        ok, msg, data = self.engine.submit_lore_quiz("sylvan", "geo_mistveil", 0)
+        ok, msg, data = self.engine.submit_lore_quiz("sylvan", "q02", wrong)
         self.assertFalse(ok)
-        self.assertIn("Flawed intelligence report", msg)
         self.assertIn("-5 Diplomatic Standing", msg)
+        after = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
+        self.assertEqual(after["diplomatic_standing"], standing_before - 5)
+        self.assertIn("q02", after["failed_lore"])
 
-        sylvan_after = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
-        self.assertEqual(sylvan_after["diplomatic_standing"], standing_before - 5)
-        self.assertIn("geo_mistveil", sylvan_after["failed_lore"])
-
-        # Attempting again is permanently locked
-        ok_lock, msg_lock, _ = self.engine.submit_lore_quiz("sylvan", "geo_mistveil", 1)
+        ok_lock, msg_lock, _ = self.engine.submit_lore_quiz("sylvan", "q02", q["correct_index"])
         self.assertFalse(ok_lock)
-        self.assertIn("Access locked", msg_lock)
+        self.assertIn("Locked", msg_lock)
+
+        # Same question is still open for every other nation (shared bank, per-realm attempts)
+        ok_other, _, _ = self.engine.submit_lore_quiz("val_khor", "q02", q["correct_index"])
+        self.assertTrue(ok_other)
+
+    def test_quiz_turn_gating_and_no_answer_leak(self):
+        quiz = self.engine.get_quiz_for_realm("aquila")
+        self.assertEqual(quiz["current_turn"], 1)
+        for item in quiz["questions"]:
+            self.assertNotIn("correct_index", item)
+            self.assertNotIn("explanation", item)
+            if item["turn"] > 1:
+                self.assertEqual(item["status"], "sealed")
+                self.assertEqual(item["question"], "")
+        later = next(i for i in quiz["questions"] if i["turn"] == 2)
+        ok, msg, _ = self.engine.submit_lore_quiz("aquila", later["id"], 0)
+        self.assertFalse(ok)
+        self.assertIn("unlocks in Turn 2", msg)
+
+    def test_quiz_bank_is_well_formed(self):
+        import wiki
+        from engine import load_quiz
+        slugs = set(wiki.load_wiki()["by_slug"])
+        qs = load_quiz()["questions"]
+        self.assertGreaterEqual(len(qs), 30)
+        self.assertEqual(len({q["id"] for q in qs}), len(qs))
+        for q in qs:
+            self.assertIn(q["article"], slugs)
+            self.assertEqual(len(q["options"]), 4)
+            self.assertEqual(len(set(q["options"])), 4)
+            self.assertIn(q["correct_index"], range(4))
+            self.assertIn(q["turn"], (1, 2, 3))
 
 class TestFlaskEndpoints(unittest.TestCase):
     def setUp(self):
@@ -312,12 +342,13 @@ class TestFlaskEndpoints(unittest.TestCase):
         self.assertIn(b'id="view-news"', resp_auth.data)
         self.assertIn(b'id="view-trades"', resp_auth.data)
         self.assertIn(b'id="view-declarations"', resp_auth.data)
-        self.assertIn(b'id="view-lore"', resp_auth.data)
+        self.assertIn(b'id="view-wiki"', resp_auth.data)
+        self.assertIn(b'id="view-quiz"', resp_auth.data)
         
-        # Verify World Lore and Archive
-        self.assertIn(b"Imperial Intelligence & Lore Archive", resp_auth.data)
-        self.assertIn(b"lore-encyclopedia-container", resp_auth.data)
-        self.assertIn(b"Executive Governance & Domestic Levers", resp_auth.data)
+        # Encyclopedia (reading) and Quiz (answering) live in separate tabs
+        self.assertIn(b"Spireopedia Quiz", resp_auth.data)
+        self.assertIn(b"Continental Registry", resp_auth.data)
+        self.assertIn(b"Domestic Decrees", resp_auth.data)
 
         # 3. Facilitator Command Deck
         resp = self.client.get("/admin")
@@ -330,7 +361,7 @@ class TestFlaskEndpoints(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertNotIn(b"<built-in method values", resp.data)
         self.assertIn(b"theme-light", resp.data)
-        self.assertIn(b"GATEWAY QR", resp.data)
+        self.assertIn(b"Join QR", resp.data)
 
     def test_trade_and_proposal_endpoints(self):
         # Trade endpoint
@@ -394,7 +425,8 @@ class TestFlaskEndpoints(unittest.TestCase):
         self.assertIn(b"mobile-concluded-callout", resp_realm.data)
         self.assertIn(b"trade-note", resp_realm.data)
         self.assertIn(b"nav-motions-badge", resp_realm.data)
-        self.assertIn(b"lore-encyclopedia-container", resp_realm.data)
+        self.assertIn(b"quiz-container", resp_realm.data)
+        self.assertIn(b"wiki-frame", resp_realm.data)
         self.assertIn(b"trade-preview-box", resp_realm.data)
 
     def test_projector_3d_canvas_rendering(self):
@@ -503,10 +535,15 @@ for (var id in map.realmsData) {
         self.assertGreaterEqual(sylvan_after["public_vitality"], 70)
 
     def test_api_lore_quiz(self):
+        from engine import load_quiz
+        q = load_quiz()["questions"][0]
+        listing = self.client.get("/api/quiz/sylvan").json
+        self.assertTrue(listing["success"])
+        self.assertNotIn("correct_index", listing["questions"][0])
         resp = self.client.post("/api/lore/quiz", json={
             "realm_id": "sylvan",
-            "topic_id": "geo_convergence",
-            "answer_index": 0
+            "question_id": q["id"],
+            "answer_index": q["correct_index"]
         })
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.data)
@@ -572,5 +609,410 @@ for (var id in map.realmsData) {
             self.assertEqual(r.status_code, 302)
             self.assertEqual(r.headers.get("Location"), "/overview")
 
+    def test_admin_toggle_realm_api(self):
+        from app import engine
+        # Toggle umbra to inactive
+        resp = self.client.post("/api/admin/realm/toggle", json={"realm_id": "umbra", "active": False})
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertTrue(data["success"])
+        self.assertFalse(data["active"])
+
+        # Check full state
+        st = engine.get_full_state()
+        umbra = next(r for r in st["realms"] if r["id"] == "umbra")
+        self.assertEqual(umbra["active"], 0)
+
+        # Check lobby only includes active realms
+        resp_lobby = self.client.get("/")
+        self.assertEqual(resp_lobby.status_code, 200)
+        self.assertNotIn(b'href="/realm/umbra"', resp_lobby.data)
+
+        # Re-activate umbra
+        resp_act = self.client.post("/api/admin/realm/toggle", json={"realm_id": "umbra", "active": True})
+        self.assertEqual(resp_act.status_code, 200)
+        st_after = engine.get_full_state()
+        umbra_after = next(r for r in st_after["realms"] if r["id"] == "umbra")
+        self.assertEqual(umbra_after["active"], 1)
+
+    def test_admin_set_player_count_and_auto_scaled_missions(self):
+        from app import engine
+        # Set val_khor player count to 2
+        resp = self.client.post("/api/admin/realm/player_count", json={"realm_id": "val_khor", "player_count": 2})
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertTrue(data["success"])
+        self.assertEqual(data["player_count"], 2)
+
+        # Check auto-scaled missions count
+        missions = engine.get_realm_missions("val_khor")
+        self.assertEqual(len(missions["secret_missions"]), 2)
+        self.assertIn("Technological Hegemony", missions["secret_missions"][0]["title"])
+        self.assertIn("Workers' Bread", missions["secret_missions"][1]["title"])
+
+        # Change player count to 3
+        resp3 = self.client.post("/api/admin/realm/player_count", json={"realm_id": "val_khor", "player_count": 3})
+        self.assertEqual(resp3.status_code, 200)
+        missions3 = engine.get_realm_missions("val_khor")
+        self.assertEqual(len(missions3["secret_missions"]), 3)
+        self.assertIn("Strategic Parity", missions3["secret_missions"][2]["title"])
+
+    def test_round_crisis_triggers_and_grain_loss(self):
+        from app import engine
+        # Test Round 1 trigger
+        resp_r1 = self.client.post("/api/admin/crisis/round", json={"round_num": 1})
+        self.assertEqual(resp_r1.status_code, 200)
+        self.assertTrue(json.loads(resp_r1.data)["success"])
+
+        # Test Round 2 trigger
+        resp_r2 = self.client.post("/api/admin/crisis/round", json={"round_num": 2})
+        self.assertEqual(resp_r2.status_code, 200)
+        self.assertTrue(json.loads(resp_r2.data)["success"])
+
+        # In Round 2, trade with Grain incurs 5 Grain loss in transit
+        # Sylvan sends 15 Grain to Val-Khor for 10 Cores
+        sylvan = next(r for r in engine.get_full_state()["realms"] if r["id"] == "sylvan")
+        vk = next(r for r in engine.get_full_state()["realms"] if r["id"] == "val_khor")
+        s_g_before = sylvan["alchemical_grain"]
+        vk_g_before = vk["alchemical_grain"]
+
+        ok_tr, msg_tr = engine.create_trade("sylvan", "val_khor", "grain", 15, "cores", 10)
+        self.assertTrue(ok_tr)
+        trade_id = engine.get_full_state()["trades"][-1]["id"]
+        ok_acc, msg_acc = engine.respond_trade(trade_id, "accept", "val_khor")
+        self.assertTrue(ok_acc)
+
+        st_trade = engine.get_full_state()
+        s_after = next(r for r in st_trade["realms"] if r["id"] == "sylvan")
+        vk_after = next(r for r in st_trade["realms"] if r["id"] == "val_khor")
+        # Sender lost 15 Grain
+        self.assertEqual(s_after["alchemical_grain"], s_g_before - 15)
+        # Receiver got 15 - 5 = 10 Grain
+        self.assertEqual(vk_after["alchemical_grain"], vk_g_before + 10)
+
+        # Test Round 3 trigger: -15 Grain deducted across all active states, Emergency Food Acts injected
+        resp_r3 = self.client.post("/api/admin/crisis/round", json={"round_num": 3})
+        self.assertEqual(resp_r3.status_code, 200)
+        st_r3 = engine.get_full_state()
+        props = st_r3["proposals"]
+        self.assertTrue(any(p["effect_type"] == "emergency_food_a" for p in props))
+        self.assertTrue(any(p["effect_type"] == "emergency_food_b" for p in props))
+
+    def test_continental_emergency_food_acts_resolution(self):
+        from app import engine
+        # Enact emergency_food_a
+        prop_a = {
+            "id": "act_a",
+            "title": "Act A",
+            "proposer_id": "sylvan",
+            "effect_type": "emergency_food_a",
+            "description": "Donations"
+        }
+        res_a = engine._apply_proposal_effect(prop_a)
+        self.assertIn("Redistribution Act", res_a)
+
+        # Enact emergency_food_b
+        prop_b = {
+            "id": "act_b",
+            "title": "Act B",
+            "proposer_id": "val_khor",
+            "effect_type": "emergency_food_b",
+            "description": "Reduced consumption"
+        }
+        res_b = engine._apply_proposal_effect(prop_b)
+        self.assertIn("Industrial Agriculture Act", res_b)
+        self.assertIn("+15 Grain", res_b)
+
+    def test_3_tier_continental_outcome_and_pure_wealth(self):
+        from app import engine
+        engine.reset_simulation()
+        # Verify wealth calculation: Grain + Cores + Silk only (excluding military)
+        sylvan = next(r for r in engine.get_full_state()["realms"] if r["id"] == "sylvan")
+        expected_wealth = sylvan["alchemical_grain"] + sylvan["aether_cores"] + sylvan["echo_silk"]
+        self.assertEqual(sylvan["total_wealth"], expected_wealth)
+
+        # Conclude summit
+        ok, msg, outcome = engine.conclude_summit()
+        self.assertTrue(ok)
+        self.assertIn("continental_verdict", outcome)
+        self.assertIn("continental_desc", outcome)
+        self.assertIn("continental_grade", outcome)
+        self.assertIn("realm_evaluations", outcome)
+        self.assertIn("honors", outcome)
+
+        # Check realm evaluations include public and secret mission results
+        for r_eval in outcome["realm_evaluations"]:
+            self.assertIn("public_mission_eval", r_eval)
+            self.assertIn("secret_missions_eval", r_eval)
+            self.assertIsInstance(r_eval["secret_missions_eval"], list)
+            self.assertEqual(len(r_eval["secret_missions_eval"]), r_eval["player_count"])
+
+    def test_admin_passcode_authentication_and_route_protection(self):
+        # 1. Unauthenticated /admin request when TESTING is False renders admin_login.html
+        app.config["TESTING"] = False
+        try:
+            resp = self.client.get("/admin")
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn(b"Facilitator Master Passcode", resp.data)
+
+            # 2. Rejection of invalid passcode
+            bad_auth = self.client.post("/api/auth/admin", json={"passcode": "wrong_passcode"})
+            self.assertEqual(bad_auth.status_code, 401)
+            self.assertFalse(bad_auth.json["success"])
+
+            # 3. Successful authentication sets cookie
+            good_auth = self.client.post("/api/auth/admin", json={"passcode": "admin2026"})
+            self.assertEqual(good_auth.status_code, 200)
+            self.assertTrue(good_auth.json["success"])
+            self.assertIn("auth_admin", good_auth.headers.get("Set-Cookie", ""))
+
+            # 4. Authenticated request opens Command Deck
+            # login response already set the signed auth_admin cookie on the client
+            authed_resp = self.client.get("/admin")
+            self.assertEqual(authed_resp.status_code, 200)
+            self.assertIn(b"Master workspace", authed_resp.data)
+
+            # 5. Logout clears cookie
+            logout_resp = self.client.post("/api/auth/admin/logout")
+            self.assertEqual(logout_resp.status_code, 200)
+        finally:
+            app.config["TESTING"] = True
+
+    def test_admin_remove_realm_and_dynamic_mission_scaling(self):
+        from app import engine
+        engine.reset_simulation()
+
+        # Initial state: 6 realms
+        st6 = engine.get_full_state()
+        self.assertEqual(len(st6["realms"]), 6)
+        vk6 = next(r for r in st6["realms"] if r["id"] == "val_khor")
+        sol6 = next(r for r in st6["realms"] if r["id"] == "solaria")
+        self.assertIn("4 of 6 nations", vk6["public_mission"]["description"])
+        self.assertIn("4 different nations", sol6["public_mission"]["description"])
+
+        # Remove 1 realm (Umbra) -> 5 active realms
+        rem1 = self.client.post("/api/admin/realm/remove", json={"realm_id": "umbra"})
+        self.assertEqual(rem1.status_code, 200)
+        st5 = engine.get_full_state()
+        self.assertEqual(len(st5["realms"]), 5)
+        vk5 = next(r for r in st5["realms"] if r["id"] == "val_khor")
+        sol5 = next(r for r in st5["realms"] if r["id"] == "solaria")
+        # For N=5: target_cores = round(4 * 5 / 6) = 3
+        self.assertIn("3 of 5 nations", vk5["public_mission"]["description"])
+        # For N=5: support_req = min(5 - 1, 4) = 4
+        self.assertIn("4 different nations", sol5["public_mission"]["description"])
+
+        # Remove another realm (Aquila) -> 4 active realms
+        rem2 = self.client.post("/api/admin/realm/remove", json={"realm_id": "aquila"})
+        self.assertEqual(rem2.status_code, 200)
+        st4 = engine.get_full_state()
+        self.assertEqual(len(st4["realms"]), 4)
+        vk4 = next(r for r in st4["realms"] if r["id"] == "val_khor")
+        sol4 = next(r for r in st4["realms"] if r["id"] == "solaria")
+        # For N=4: target_cores = round(4 * 4 / 6) = 3
+        self.assertIn("3 of 4 nations", vk4["public_mission"]["description"])
+        # For N=4: support_req = min(4 - 1, 4) = 3
+        self.assertIn("3 different nations", sol4["public_mission"]["description"])
+
+        # Conclude summit with 4 realms and check evaluations
+        ok, msg, outcome = engine.conclude_summit()
+        self.assertTrue(ok)
+        self.assertEqual(len(outcome["realm_evaluations"]), 4)
+        for r_eval in outcome["realm_evaluations"]:
+            # Epilogues and evaluations must be purely in English
+            self.assertNotIn("stát", r_eval["epilogue"].lower())
+            self.assertNotIn("splnila", r_eval["epilogue"].lower())
+
+    def test_admin_set_active_realm_count(self):
+        """Facilitator can explicitly set the active country count in the admin console."""
+        from app import engine
+        engine.reset_simulation()
+
+        # Set to 4 active nations
+        resp = self.client.post("/api/admin/realms/set_count", json={"count": 4})
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertTrue(data["success"])
+
+        state = engine.get_full_state()
+        active_realms = [r for r in state["realms"] if r.get("active", True)]
+        inactive_realms = [r for r in state["realms"] if not r.get("active", True)]
+        self.assertEqual(len(active_realms), 4)
+        self.assertEqual(len(inactive_realms), 2)
+        self.assertEqual([r["id"] for r in active_realms], ["sylvan", "val_khor", "solaria", "umbra"])
+
+        # Check dynamic mission rescaling for N=4
+        vk = next(r for r in active_realms if r["id"] == "val_khor")
+        self.assertIn("3 of 4 nations", vk["public_mission"]["description"])
+
+        # Set to 3 active nations
+        resp3 = self.client.post("/api/admin/realms/set_count", json={"count": 3})
+        self.assertEqual(resp3.status_code, 200)
+        state3 = engine.get_full_state()
+        active3 = [r for r in state3["realms"] if r.get("active", True)]
+        self.assertEqual(len(active3), 3)
+        self.assertEqual([r["id"] for r in active3], ["sylvan", "val_khor", "solaria"])
+
+        # Set back to 6 active nations
+        resp6 = self.client.post("/api/admin/realms/set_count", json={"count": 6})
+        self.assertEqual(resp6.status_code, 200)
+        state6 = engine.get_full_state()
+        active6 = [r for r in state6["realms"] if r.get("active", True)]
+        self.assertEqual(len(active6), 6)
+
+    def test_capacity_enforcement_and_sessions(self):
+        """Verify connected seat counts, capacity locking (403), re-entry for existing sessions, and logout."""
+        from app import engine
+        engine.reset_simulation()
+        engine.clear_realm_sessions()
+
+        # Set sylvan capacity to 2 delegates
+        engine.admin_set_player_count("sylvan", 2)
+
+        # Delegate 1 joins
+        client1 = app.test_client()
+        client1.set_cookie("summit_session_id", "sess-sylvan-1")
+        r1 = client1.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+        self.assertEqual(r1.status_code, 200)
+
+        st = engine.get_full_state()
+        sylvan = next(r for r in st["realms"] if r["id"] == "sylvan")
+        self.assertEqual(sylvan["connected_players"], 1)
+        self.assertFalse(sylvan["is_capacity_full"])
+
+        # Delegate 2 joins
+        client2 = app.test_client()
+        client2.set_cookie("summit_session_id", "sess-sylvan-2")
+        r2 = client2.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+        self.assertEqual(r2.status_code, 200)
+
+        st = engine.get_full_state()
+        sylvan = next(r for r in st["realms"] if r["id"] == "sylvan")
+        self.assertEqual(sylvan["connected_players"], 2)
+        self.assertTrue(sylvan["is_capacity_full"])
+
+        # Delegate 3 attempts to join -> 403 Forbidden with is_full: True
+        client3 = app.test_client()
+        client3.set_cookie("summit_session_id", "sess-sylvan-3")
+        r3 = client3.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+        self.assertEqual(r3.status_code, 403)
+        data3 = json.loads(r3.data)
+        self.assertFalse(data3["success"])
+        self.assertTrue(data3.get("is_full"))
+        self.assertIn("capacity reached", data3["message"].lower())
+
+        # Existing Delegate 1 re-authenticates -> allowed without 403
+        r1_reentry = client1.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+        self.assertEqual(r1_reentry.status_code, 200)
+
+        # Delegate 1 logs out -> frees seat
+        r1_logout = client1.post("/api/auth/realm/logout", json={"realm_id": "sylvan"})
+        self.assertEqual(r1_logout.status_code, 200)
+
+        st = engine.get_full_state()
+        sylvan = next(r for r in st["realms"] if r["id"] == "sylvan")
+        self.assertEqual(sylvan["connected_players"], 1)
+        self.assertFalse(sylvan["is_capacity_full"])
+
+        # Now Delegate 3 can join successfully
+        r3_retry = client3.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+        self.assertEqual(r3_retry.status_code, 200)
+
+        # Facilitator clears sessions for sylvan
+        clr_resp = self.client.post("/api/admin/realm/clear_sessions", json={"realm_id": "sylvan"})
+        self.assertEqual(clr_resp.status_code, 200)
+        st = engine.get_full_state()
+        sylvan = next(r for r in st["realms"] if r["id"] == "sylvan")
+        self.assertEqual(sylvan["connected_players"], 0)
+        self.assertFalse(sylvan["is_capacity_full"])
+
+    def test_lobby_shows_capacity_and_seats(self):
+        """Lobby shows connected seat ratio and capacity badge."""
+        from app import engine
+        engine.reset_simulation()
+        engine.clear_realm_sessions()
+
+        # Initial lobby
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+        self.assertIn("seats", html)
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHostedAuthHardening(unittest.TestCase):
+    """Enforced auth (TESTING off): admin APIs, signed cookies, state filtering."""
+
+    def setUp(self):
+        from app import engine
+        engine.reset_simulation()
+        engine.clear_realm_sessions(None)
+        app.config["TESTING"] = False
+        self.client = app.test_client()
+
+    def tearDown(self):
+        app.config["TESTING"] = True
+
+    def test_admin_api_requires_admin_cookie(self):
+        self.assertEqual(self.client.post("/api/admin/reset").status_code, 401)
+        self.assertEqual(self.client.post("/api/admin/timer/set", json={"seconds": 5}).status_code, 401)
+
+    def test_forged_cookie_rejected(self):
+        self.client.set_cookie("auth_admin", "authenticated")
+        self.assertEqual(self.client.post("/api/admin/reset").status_code, 401)
+        self.assertEqual(self.client.get("/admin?auth=1").data.count(b"Master workspace"), 0)
+
+    def test_realm_write_requires_own_cookie(self):
+        r = self.client.post("/api/realm/action", json={"realm_id": "sylvan", "action": "relief"})
+        self.assertEqual(r.status_code, 401)
+        self.client.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+        other = self.client.post("/api/realm/action", json={"realm_id": "val_khor", "action": "relief"})
+        self.assertEqual(other.status_code, 401)
+
+    def test_state_hides_pins_secrets_and_answers(self):
+        data = self.client.get("/api/state").json
+        for r in data["realms"]:
+            self.assertNotIn("pin", r)
+            self.assertNotIn("secret_missions_pool", r)
+            self.assertNotIn("alchemical_grain", r)
+        self.assertNotIn("lore_encyclopedia", data)
+        self.assertEqual(self.client.get("/api/quiz/sylvan").status_code, 401)
+        self.assertNotIn(b'"pin"', self.client.get("/").data)
+
+    def test_owner_sees_own_stocks_only(self):
+        self.client.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+        realms = {r["id"]: r for r in self.client.get("/api/state").json["realms"]}
+        self.assertIn("alchemical_grain", realms["sylvan"])
+        self.assertNotIn("alchemical_grain", realms["val_khor"])
+
+
+class TestSpireopedia(unittest.TestCase):
+    def setUp(self):
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+
+    def test_articles_valid_and_links_resolve(self):
+        import wiki
+        self.assertEqual(wiki.validate(), [])
+
+    def test_every_realm_has_an_article(self):
+        import wiki
+        slugs = set(wiki.load_wiki()["by_slug"])
+        for name in ("sylvan-concordat", "iron-val-khor", "solaris-ascendancy",
+                     "umbral-enclave", "aquila-maritime-league", "aethelgard-dominion"):
+            self.assertIn(name, slugs)
+
+    def test_wiki_routes(self):
+        self.assertEqual(self.client.get("/wiki").status_code, 200)
+        r = self.client.get("/wiki/sylvan-concordat")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"Pact of Roots", r.data)
+        self.assertIn(b"wk-infobox", r.data)
+        self.assertEqual(self.client.get("/wiki/nope").status_code, 302)
+        self.assertIn(b"Salt War", self.client.get("/wiki/search?q=salt").data)
+
+    def test_markup_is_escaped(self):
+        import wiki
+        self.assertNotIn("<script>", str(wiki.render_markup("<script>alert(1)</script> [[nope]]")))

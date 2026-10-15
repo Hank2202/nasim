@@ -6,7 +6,7 @@ A lightweight, real-time web application built for live educational simulations.
 
 ## 🌟 Key Features
 
-- **100% Self-Contained & Offline-First**: Zero reliance on external CDNs or web fonts. Pure flat UI design (no gradients), crisp typography, embedded SVG vector emblems, and synthesized Web Audio bells.
+- **Self-Contained (works offline or hosted)**: Zero reliance on external CDNs or web fonts. Pure flat UI design (no gradients), crisp typography, embedded SVG vector emblems, and synthesized Web Audio bells.
 - **Dedicated Projector Screen (`/projector`)**: Designed for classroom/auditorium projectors. Features:
   - Big Turn indicator and giant countdown timer.
   - Continental Delegations Board showing public standing, vitality, stability, votes, and conditions (never reveals secret agendas!).
@@ -15,9 +15,9 @@ A lightweight, real-time web application built for live educational simulations.
 - **Comprehensive Game Overview & Guide (`/overview`)**:
   - Detailed simulation primer explaining the 6 sovereign nations, starting endowments, and geography.
   - Socioeconomic formulas and mathematical laws cheat sheet (starvation thresholds, technological efficiency, plutocratic drift, complacency paradox).
-  - Parliamentary statutory resolution dockets, domestic governance levers, high-stakes lore quizzes, and room setup guide.
+  - Parliamentary statutory resolution dockets, domestic governance levers, the Spireopedia quiz, and room setup guide.
 - **Mobile Participant Cockpit (`/realm/<id>`)**:
-  - **Persistent Bottom Navigation Bar**: Seamless switching between **Overview & Directive**, **News & Dispatches**, **P2P Trade**, **Motions & Assembly**, and **Continental Registry**.
+  - **Persistent Bottom Navigation Bar**: Six tabs: **Realm** (stats, decrees, secret directives), **World** (news + continental registry), **Trade**, **Motions**, **Wiki** (Spireopedia, reading only) and **Quiz** (questions, answering only).
   - Secret Uncomfortable Domestic Directive (classified expandable drawer).
   - Live resource telemetry (Grain, Cores, Silk) and state metrics bars (Vitality, Standing, Stability).
   - Real-time P2P Trading Hub with atomic transfers and pending trade notification badges.
@@ -55,14 +55,16 @@ Set three centuries after the **Great Convergence**, six sovereign nations conve
 ---
 
 ### 2. The 6 Sovereign Delegations
-| Delegation | Ethos & Geography | Starting Endowments | Strategic Agenda |
-| :--- | :--- | :--- | :--- |
-| **Sylvan Concordat** | Bio-harmony, Greatweald Basin | Grain: 70, Cores: 35, Silk: 40, Mil: 30 (2 Votes) | **Granary Bastion**: Keep Grain $\ge 75$ despite famine pressure. |
-| **Iron Val-Khor** | Heavy metallurgy, Mount Khor Spine | Grain: 30, Cores: 60, Silk: 25, Mil: 65 (2 Votes) | **Tech Hegemony**: Rush Cores to $75+$ to unlock Tech Efficiency. |
-| **Solaris Ascendancy** | Sun marble terraces, High diplomacy | Grain: 50, Cores: 45, Silk: 65, Mil: 50 (**3 Votes**) | **Diplomatic Supremacy**: Maintain Standing $\ge 80$. |
-| **Umbral Enclave** | Energy synthesis, Abyssal Rift | Grain: 40, Cores: 70, Silk: 30, Mil: 45 (2 Votes) | **Balance of Power**: Prevent any rival from holding $\ge 3$ votes. |
-| **Aquila Maritime League** | Luxury silk guilds, Sea of Glass | Grain: 45, Cores: 40, Silk: 80, Mil: 55 (2 Votes) | **Plutocratic Monopoly**: Finish as the reigning richest nation. |
-| **Aethelgard Dominion** | Feudal chivalry, Northern Steppes | Grain: 60, Cores: 50, Silk: 35, Mil: 75 (2 Votes) | **Iron Shield**: Maintain Military $\ge 80$ and Stability $\ge 70$. |
+| Delegation | Seats | Grain | Cores | Silk | Military | Vitality | Standing | Stability | Votes | Public mandate |
+| :--- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :--- |
+| 🌿 **Sylvan Concordat** | 2 | 100 | 25 | 30 | 25 | 85 | 65 | 80 | 2 | No country starving at the end |
+| ⚒️ **Iron Val-Khor** | 3 | 30 | 80 | 25 | 65 | 70 | 50 | 70 | 2 | 4 of 6 countries reach 60 Cores |
+| ☀️ **Solaris Ascendancy** | 4 | 50 | 40 | 75 | 45 | 85 | 90 | 80 | 3 | 3 resolutions pass with 4+ countries in favour |
+| 🌙 **Umbral Enclave** | 1 | 40 | 70 | 30 | 55 | 65 | 40 | 70 | 1 | No country above 90 Military |
+| ⚓ **Aquila Maritime League** | 2 | 50 | 40 | 80 | 35 | 80 | 70 | 70 | 2 | Every country trades with 2+ partners |
+| 🛡️ **Aethelgard Dominion** | 3 | 60 | 50 | 25 | 80 | 80 | 55 | 85 | 2 | No country ends below 50 Stability |
+
+Values follow the facilitator notes (`MGV 2026 školení s Johanem.md`) and live in `scenario_config.json`. Secret missions are in the config's `secret_missions_pool`.
 
 ---
 
@@ -86,7 +88,7 @@ Set three centuries after the **Great Convergence**, six sovereign nations conve
    - Roam the room freely for face-to-face bilateral diplomacy.
    - Execute instant atomic P2P trades (Grain, Cores, Silk, Military Power).
    - Enact internal state decrees (relief, forges, galas, security, mustering).
-   - Read lore dossiers and answer high-stakes quizzes (+15 resource on success, -5 standing on failure).
+   - Read the Spireopedia and answer the shared quiz (+5 resource per correct answer; -5 Standing and a permanent lock per wrong answer).
    - Author statutory resolutions for the Plenary docket.
 2. **Plenary Floor Debate & Flash Assembly (3:00–5:00 Min)**:
    - **Two-Sponsor Mandate**: A resolution reaches the floor only if a second realm endorses it.
@@ -177,3 +179,29 @@ Run the built-in test suite:
 ```bash
 ./venv/bin/python3 -m unittest test_summit.py -v
 ```
+
+
+---
+
+## ☁️ Free Internet Hosting (Render.com)
+
+The repo ships a `render.yaml` blueprint; participants join by scanning the QR code on `/admin` or `/projector` (it encodes the public URL automatically).
+
+1. Push the repo to (private) GitHub.
+2. Render dashboard → **New → Blueprint** → select the repo → apply.
+3. In the service's *Environment* tab set **`ADMIN_PASSCODE`** (facilitator password). `SECRET_KEY` is generated for you.
+4. Open `https://<your-service>.onrender.com/admin`, log in, then project `/projector` and show its QR code.
+
+Notes:
+- Free instances **sleep after ~15 min idle** (first load takes 30–60 s): open the site 5 minutes before class.
+- State lives in `/tmp/summit.db` (ephemeral): a restart/redeploy resets the game. Don't redeploy mid-session.
+- Runs as a single gunicorn worker on purpose (timers + SQLite state are per-process).
+- Local run is unchanged: `./run.sh`. Env vars: `SECRET_KEY`, `ADMIN_PASSCODE`, `SUMMIT_DB_PATH`, `PUBLIC_URL` (override QR/base URL).
+- Realm PINs (`scenario_config.json`) are visible to the facilitator in `/admin`; keep the repo private.
+
+## 📖 Spireopedia & Quiz
+
+- **Spireopedia** (`/wiki`): public, read-only, Wikipedia-style encyclopedia — 22 articles in `lore_articles.json` (`[[slug|label]]` links, infoboxes, search, "what links here"). On phones it is embedded in the **Wiki** tab (`/wiki?embed=1`).
+- **Quiz** (phone **Quiz** tab): one shared bank in `lore_quiz.json` — every nation gets the same questions. Questions unlock by turn (`turn` field); each nation has **one attempt per question**. Correct: `reward_amount` of `reward_resource`. Wrong: `quiz_fail_penalty_amount` (5) of `quiz_fail_penalty_metric` (Standing) from `scenario_config.json`, and the question locks for that nation.
+- Answers never reach the browser before submission: `GET /api/quiz/<realm_id>` (delegation login required) omits `correct_index`/`explanation` for unanswered questions; `POST /api/lore/quiz` checks the answer on the server.
+- Every question names the article that contains its answer; `pytest` checks slugs, option counts and links.

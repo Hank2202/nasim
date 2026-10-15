@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0c0c0e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>{% block title %}The Summit of Realms{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%98%80%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   {% block head_extra %}{% endblock %}
 </head>
@@ -33,6 +34,12 @@
       <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
       <path d="M2 12h20"/>
     </symbol>
+    <symbol id="icon-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+    </symbol>
+    <symbol id="icon-quiz" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>
+    </symbol>
     <symbol id="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
       <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
@@ -50,9 +57,14 @@
     </a>
     <div class="nav-badges">
       {% block nav_items %}
-      <a href="/overview" class="btn btn-secondary btn-sm" style="font-size:0.74rem; padding: 4px 9px;">Game Guide</a>
-      <span id="turn-display" class="turn-pill">TURN {{ meta.current_turn if meta else '01' }}</span>
-      <span id="timer-display" class="timer-pill">--:--</span>
+      <nav class="nav-links hide-sm" aria-label="Main">
+        {% block nav_links %}
+        <a href="/" class="nav-link{% if request.path == '/' %} active{% endif %}">Lobby</a>
+        <a href="/overview" class="nav-link{% if request.path == '/overview' %} active{% endif %}">Guide</a>
+        <a href="/wiki" class="nav-link">Spireopedia</a>
+        {% endblock %}
+      </nav>
+      {% block status_pills %}{% endblock %}
       {% endblock %}
       {% block header_extra %}{% endblock %}
     </div>
