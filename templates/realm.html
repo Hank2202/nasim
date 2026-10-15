@@ -57,7 +57,7 @@
               {{ realm.assembly_votes }} ASSEMBLY VOTE{{ 'S' if realm.assembly_votes > 1 else '' }}
             </span>
             <span class="badge">{{ realm.player_count or 1 }} DELEGATE{{ 'S' if (realm.player_count or 1) > 1 else '' }}</span>
-            <a class="badge" href="/wiki/{{ realm_article(realm.id) }}" target="_blank">History &rarr;</a>
+            <a class="badge" href="#" onclick="realmApp.openArticle('{{ realm_article(realm.id) }}'); return false;">History &rarr;</a>
           </div>
         </div>
       </div>
@@ -397,17 +397,22 @@
   <!-- VIEW 5: ENCYCLOPEDIA (read-only Spireopedia; no questions here) -->
   <!-- ========================================================================= -->
   <div id="view-wiki" class="mobile-view">
-    <div class="card" style="padding: 12px 14px;">
-      <div class="row-between">
-        <div>
-          <div class="card-title">Spireopedia</div>
-          <p class="section-sub">History & lore of the Continent</p>
-        </div>
-        <a href="/wiki" target="_blank" class="btn btn-secondary btn-sm">Open full page</a>
+    <div class="wiki-paper">
+      <div class="wk-bar">
+        <button type="button" class="wk-home" onclick="realmApp.wikiHome()" title="Spireopedia main page">
+          <span class="wk-globe">&#9728;</span><b>Spireopedia</b>
+        </button>
+        <form class="wk-search" onsubmit="realmApp.wikiSearch(event)">
+          <input type="search" id="wiki-search-input" placeholder="Search" aria-label="Search the Spireopedia">
+        </form>
       </div>
-    </div>
-    <div class="wiki-frame-wrap">
-      <iframe id="wiki-frame" title="Spireopedia" data-src="/wiki?embed=1" loading="lazy"></iframe>
+      <div class="wk-nav" id="wiki-nav" style="display: none;">
+        <button type="button" onclick="realmApp.wikiBack()">&larr; Back</button>
+        <button type="button" onclick="realmApp.wikiHome()">Main page</button>
+      </div>
+      <div id="wiki-body" class="wk-body">
+        <p class="wk-muted">Loading the encyclopedia&hellip;</p>
+      </div>
     </div>
   </div>
 

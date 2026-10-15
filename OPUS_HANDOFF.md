@@ -1,6 +1,6 @@
 # Summit of Realms — Status & Review Notes
 
-Last updated 2026-10-15. Run tests with `venv/bin/python -m pytest -q` (50 passing).
+Last updated 2026-10-15. Run tests with `venv/bin/python -m pytest -q` (51 passing).
 
 ## Decisions from the user
 - Host on the easiest free option: **Render** (`render.yaml`). Players join by scanning a QR code.
@@ -25,10 +25,12 @@ Last updated 2026-10-15. Run tests with `venv/bin/python -m pytest -q` (50 passi
 - Environment variables: `SECRET_KEY`, `ADMIN_PASSCODE`, `SUMMIT_DB_PATH`, `PUBLIC_URL`.
 - QR codes encode the public URL when the app is hosted.
 
-### Spireopedia (wiki.py, lore_articles.json, templates/wiki.html, static/wiki.css)
+### Spireopedia (wiki.py, lore_articles.json; rendered in the phone's Wiki tab)
 - 22 Wikipedia-style articles: 6 nations, plus history, geography, resources and institutions.
 - In-world calendar: AC (After Convergence); the present is 304 AC.
-- Routes: `/wiki`, `/wiki/<slug>`, `/wiki/search?q=`. Adding `?embed=1` gives a compact mode for the phone tab.
+- It is **part of the game, not a separate site**. It is read only in the phone console's Wiki tab.
+- The tab fetches JSON from `/api/wiki`, `/api/wiki/<slug>` and `/api/wiki/search`. These need a delegation or facilitator login.
+- Article text is escaped and rendered to HTML on the server. Links between articles, Back and search all stay inside the tab.
 - Map capitals in `static/world3d.js` match the articles: Rootholm, Khorgate, Helion, Lanternfall, Halcyon Quay, Aethelhold.
 
 ### Quiz (lore_quiz.json, engine.get_quiz_for_realm / submit_lore_quiz)

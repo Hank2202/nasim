@@ -426,7 +426,7 @@ class TestFlaskEndpoints(unittest.TestCase):
         self.assertIn(b"trade-note", resp_realm.data)
         self.assertIn(b"nav-motions-badge", resp_realm.data)
         self.assertIn(b"quiz-container", resp_realm.data)
-        self.assertIn(b"wiki-frame", resp_realm.data)
+        self.assertIn(b"wiki-body", resp_realm.data)
         self.assertIn(b"trade-preview-box", resp_realm.data)
 
     def test_projector_3d_canvas_rendering(self):
@@ -1004,14 +1004,28 @@ class TestSpireopedia(unittest.TestCase):
                      "umbral-enclave", "aquila-maritime-league", "aethelgard-dominion"):
             self.assertIn(name, slugs)
 
-    def test_wiki_routes(self):
-        self.assertEqual(self.client.get("/wiki").status_code, 200)
-        r = self.client.get("/wiki/sylvan-concordat")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn(b"Pact of Roots", r.data)
-        self.assertIn(b"wk-infobox", r.data)
-        self.assertEqual(self.client.get("/wiki/nope").status_code, 302)
-        self.assertIn(b"Salt War", self.client.get("/wiki/search?q=salt").data)
+    def test_wiki_is_in_game_api_only(self):
+        # No standalone encyclopedia site: only the JSON API used by the phone Wiki tab.
+        self.assertEqual(self.client.get("/wiki").status_code, 404)
+        index = self.client.get("/api/wiki").json
+        self.assertEqual(len(index["articles"]), 22)
+        art = self.client.get("/api/wiki/sylvan-concordat").json["article"]
+        self.assertIn("Pact of Roots", art["sections"][0]["html"])
+        self.assertTrue(any(k == "Capital" for k, _ in art["infobox"]))
+        self.assertIn('data-wiki="', art["lead"])
+        self.assertEqual(self.client.get("/api/wiki/nope").status_code, 404)
+        hits = self.client.get("/api/wiki/search?q=salt").json["results"]
+        self.assertIn("salt-war", [h["slug"] for h in hits])
+
+    def test_wiki_requires_game_login(self):
+        app.config["TESTING"] = False
+        try:
+            client = app.test_client()
+            self.assertEqual(client.get("/api/wiki").status_code, 401)
+            client.post("/api/auth/realm", json={"realm_id": "aquila", "pin": "1005"})
+            self.assertEqual(client.get("/api/wiki").status_code, 200)
+        finally:
+            app.config["TESTING"] = True
 
     def test_markup_is_escaped(self):
         import wiki

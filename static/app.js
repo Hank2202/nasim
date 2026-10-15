@@ -179,10 +179,7 @@ class RealmApp {
     document.querySelectorAll('.mobile-view').forEach(v => {
       v.classList.toggle('active', v.id === viewId);
     });
-    if (viewId === 'view-wiki') {
-      const frame = document.getElementById('wiki-frame');
-      if (frame && !frame.src) frame.src = frame.dataset.src;
-    }
+    if (viewId === 'view-wiki' && !this.wikiLoaded) this.wikiHome();
     if (viewId === 'view-quiz') this.loadQuiz();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -589,7 +586,7 @@ class RealmApp {
     }
     if (answered && q.explanation) {
       foot = `<div class="callout ${q.status === 'correct' ? 'ok' : 'danger'} quiz-result">${esc(q.explanation)}
-        <a href="/wiki/${esc(q.article)}" onclick="realmApp.openArticle('${esc(q.article)}'); return false;" style="text-decoration: underline; white-space: nowrap;">Read article</a></div>`;
+        <a href="#" onclick="realmApp.openArticle('${esc(q.article)}'); return false;" style="text-decoration: underline; white-space: nowrap;">Read article</a></div>`;
     }
     return `<div class="card quiz-card" id="quiz-${esc(q.id)}">
       <div class="quiz-meta">${num}${pill}</div>
@@ -597,10 +594,116 @@ class RealmApp {
       <div class="quiz-options">${opts}</div>${foot}</div>`;
   }
 
-  openArticle(slug) {
-    const frame = document.getElementById('wiki-frame');
-    if (frame) frame.src = `/wiki/${encodeURIComponent(slug)}?embed=1`;
+  // ---------------------------------------------------------------------------
+  // Spireopedia (Wiki tab): rendered natively inside the console, read-only
+  // ---------------------------------------------------------------------------
+  async _wikiFetch(path) {
+    const resp = await fetch(path);
+    const data = await resp.json();
+    if (!resp.ok || !data.success) throw new Error(data.message || 'Encyclopedia unavailable');
+    return data;
+  }
+
+  _wikiShow(html, { nav = true, push = null } = {}) {
+    const body = document.getElementById('wiki-body');
+    if (!body) return;
+    if (push) {
+      this.wikiHistory = this.wikiHistory || [];
+      if (this.wikiCurrent) this.wikiHistory.push(this.wikiCurrent);
+      this.wikiCurrent = push;
+    }
+    body.innerHTML = html;
+    document.getElementById('wiki-nav').style.display = nav ? 'flex' : 'none';
+    // Internal article links stay inside the tab.
+    body.querySelectorAll('[data-wiki]').forEach(el => el.addEventListener('click', e => {
+      e.preventDefault();
+      this.openArticle(el.dataset.wiki);
+    }));
+    body.querySelectorAll('a[data-anchor]').forEach(el => el.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.getElementById(el.dataset.anchor);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+    window.scrollTo({ top: 0 });
+  }
+
+  _wikiList(items) {
+    const esc = escapeHtml;
+    return `<ul>${items.map(a => `<li><a href="#" data-wiki="${esc(a.slug)}">${esc(a.title)}</a>
+      <span class="wk-muted">— ${esc(a.subtitle || '')}</span></li>`).join('')}</ul>`;
+  }
+
+  async wikiHome() {
+    this.wikiLoaded = true;
+    this.wikiHistory = [];
+    this.wikiCurrent = { type: 'home' };
+    try {
+      const data = this.wikiIndex || await this._wikiFetch('/api/wiki');
+      this.wikiIndex = data;
+      const esc = escapeHtml;
+      const cats = data.meta.categories.map(cat => {
+        const items = data.articles.filter(a => a.category === cat);
+        return items.length ? `<h2>${esc(cat)}</h2>${this._wikiList(items)}` : '';
+      }).join('');
+      this._wikiShow(`<div class="wk-title">Welcome to the Spireopedia</div>
+        <div class="wk-sub">${data.articles.length} articles · current year ${esc(data.meta.current_year)}</div>
+        <p>${esc(data.meta.tagline)}. ${esc(data.meta.calendar_note)}</p>
+        <p class="wk-muted">The answers to every quiz question are somewhere in these articles.</p>${cats}`, { nav: false });
+    } catch (err) {
+      this._wikiShow(`<p class="wk-muted">${escapeHtml(err.message)}</p>`, { nav: false });
+    }
+  }
+
+  async openArticle(slug, { push = true } = {}) {
+    if (!slug) return;
+    this.wikiLoaded = true;
     this.switchView('view-wiki');
+    try {
+      const { article: a } = await this._wikiFetch(`/api/wiki/${encodeURIComponent(slug)}`);
+      const esc = escapeHtml;
+      // Body HTML (lead, sections, infobox values) is escaped and rendered on the server.
+      const infobox = `<div class="wk-infobox"><div class="wk-ib-title">${esc(a.title)}</div><table>
+        ${a.infobox.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('')}</table></div>`;
+      const toc = a.sections.length > 2 ? `<div class="wk-toc"><div class="wk-toc-title">Contents</div><ol>
+        ${a.sections.map((s, i) => `<li><a href="#" data-anchor="wk-s${i}">${esc(s.heading)}</a></li>`).join('')}</ol></div>` : '';
+      const sections = a.sections.map((s, i) => `<h2 id="wk-s${i}">${esc(s.heading)}</h2>${s.html}`).join('');
+      const seeAlso = a.see_also.length ? `<h2>See also</h2>${this._wikiList(a.see_also)}` : '';
+      const refs = a.references.length ? `<h2>References</h2><ol class="wk-refs">${a.references.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : '';
+      const links = a.linked_from.length ? `<p class="wk-muted" style="margin-top:16px;"><b>What links here:</b>
+        ${a.linked_from.map(l => `<a href="#" data-wiki="${esc(l.slug)}">${esc(l.title)}</a>`).join(' · ')}</p>` : '';
+      this._wikiShow(`<div class="wk-title">${esc(a.title)}</div><div class="wk-sub">${esc(a.subtitle || '')}</div>
+        ${infobox}${a.lead}${toc}${sections}${seeAlso}${refs}${links}
+        <div class="wk-foot">Category: ${esc(a.category)}</div>`, { push: push ? { type: 'article', slug } : null });
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  async wikiSearch(e, { push = true } = {}) {
+    if (e) e.preventDefault();
+    const input = document.getElementById('wiki-search-input');
+    const q = (input ? input.value : '').trim();
+    if (!q) return this.wikiHome();
+    try {
+      const data = await this._wikiFetch(`/api/wiki/search?q=${encodeURIComponent(q)}`);
+      const esc = escapeHtml;
+      this._wikiShow(`<div class="wk-title">Search results</div>
+        <div class="wk-sub">${data.results.length} result${data.results.length === 1 ? '' : 's'} for “${esc(q)}”</div>
+        ${data.results.length ? this._wikiList(data.results) : '<p>No article matches your search.</p>'}`,
+        { push: push ? { type: 'search', q } : null });
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  wikiBack() {
+    const prev = (this.wikiHistory || []).pop();
+    if (!prev || prev.type === 'home') return this.wikiHome();
+    this.wikiCurrent = prev;
+    if (prev.type === 'article') return this.openArticle(prev.slug, { push: false });
+    const input = document.getElementById('wiki-search-input');
+    if (input) input.value = prev.q;
+    return this.wikiSearch(null, { push: false });
   }
 
   selectQuizOption(questionId, idx) {

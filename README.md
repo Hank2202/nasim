@@ -201,7 +201,7 @@ Notes:
 
 ## 📖 Spireopedia & Quiz
 
-- **Spireopedia** (`/wiki`): public, read-only, Wikipedia-style encyclopedia — 22 articles in `lore_articles.json` (`[[slug|label]]` links, infoboxes, search, "what links here"). On phones it is embedded in the **Wiki** tab (`/wiki?embed=1`).
+- **Spireopedia**: the game's built-in, Wikipedia-style encyclopedia, read in the phone console's **Wiki** tab (no separate site). 22 articles in `lore_articles.json` (`[[slug|label]]` links, infoboxes, contents, search, "what links here"), served as JSON by `/api/wiki`, `/api/wiki/<slug>` and `/api/wiki/search` to logged-in delegations and the facilitator.
 - **Quiz** (phone **Quiz** tab): one shared bank in `lore_quiz.json` — every nation gets the same questions. Questions unlock by turn (`turn` field); each nation has **one attempt per question**. Correct: `reward_amount` of `reward_resource`. Wrong: `quiz_fail_penalty_amount` (5) of `quiz_fail_penalty_metric` (Standing) from `scenario_config.json`, and the question locks for that nation.
 - Answers never reach the browser before submission: `GET /api/quiz/<realm_id>` (delegation login required) omits `correct_index`/`explanation` for unanswered questions; `POST /api/lore/quiz` checks the answer on the server.
 - Every question names the article that contains its answer; `pytest` checks slugs, option counts and links.

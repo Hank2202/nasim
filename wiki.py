@@ -1,4 +1,6 @@
-"""Spireopedia: Wikipedia-style lore articles (data in lore_articles.json)."""
+"""Spireopedia: the in-game, Wikipedia-style lore encyclopedia (data in lore_articles.json).
+
+Articles are served as JSON to the phone console's Wiki tab; there is no standalone site."""
 
 import json
 import os
@@ -48,8 +50,8 @@ def render_markup(text: str) -> Markup:
         article = by_slug.get(slug)
         label = label or (article["title"] if article else slug)
         if article:
-            return f'<a href="/wiki/{slug}">{label}</a>'
-        return f'<a class="new" href="#" title="This article does not exist yet">{label}</a>'
+            return f'<a href="#" class="wk-link" data-wiki="{slug}">{label}</a>'
+        return f'<span class="wk-new" title="This article does not exist yet">{label}</span>'
 
     def inline(chunk: str) -> str:
         chunk = escape(chunk, quote=False)
@@ -110,3 +112,29 @@ def validate() -> List[str]:
         if a["category"] not in data["_meta"]["categories"]:
             problems.append(f"{a['slug']}: unknown category {a['category']}")
     return problems
+
+
+def _summary(a: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: a[k] for k in ("slug", "title", "subtitle", "category")}
+
+
+def index_payload() -> Dict[str, Any]:
+    data = load_wiki()
+    return {"meta": data["_meta"], "articles": [_summary(a) for a in data["articles"]]}
+
+
+def article_payload(slug: str) -> Dict[str, Any]:
+    """Article with all markup pre-rendered (escaped) to HTML for the Wiki tab."""
+    a = load_wiki()["by_slug"].get(slug)
+    if not a:
+        return {}
+    by_slug = load_wiki()["by_slug"]
+    return {
+        **_summary(a),
+        "infobox": [[k, str(render_inline(v))] for k, v in a.get("infobox", {}).items()],
+        "lead": str(render_markup(a.get("lead", ""))),
+        "sections": [{"heading": s["heading"], "html": str(render_markup(s["body"]))} for s in a.get("sections", [])],
+        "see_also": [_summary(by_slug[s]) for s in a.get("see_also", []) if s in by_slug],
+        "references": a.get("references", []),
+        "linked_from": [_summary(b) for b in backlinks(slug)],
+    }

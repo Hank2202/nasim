@@ -93,7 +93,7 @@ _state_lock = threading.RLock()
 
 @app.before_request
 def acquire_state_lock():
-    if not (request.path.startswith("/static/") or request.path.startswith("/wiki") or request.path == "/healthz"):
+    if not (request.path.startswith("/static/") or request.path.startswith("/api/wiki") or request.path == "/healthz"):
         _state_lock.acquire()
         request.environ["summit.locked"] = True
 
@@ -259,36 +259,38 @@ def admin_view():
     )
 
 # -----------------------------------------------------------------------------
-# Spireopedia (public, read-only lore wiki)
+# Spireopedia (in-game encyclopedia, read in the phone's Wiki tab)
 # -----------------------------------------------------------------------------
 
-app.jinja_env.filters["wiki"] = wiki.render_markup
-app.jinja_env.filters["wiki_inline"] = wiki.render_inline
 app.jinja_env.globals["realm_article"] = wiki.realm_article
 
-def _wiki_page(**ctx):
-    data = wiki.load_wiki()
-    base = dict(article=None, results=None, query=None, linked_from=[], embed=request.args.get("embed") == "1")
-    base.update(ctx)
-    return render_template("wiki.html", meta=data["_meta"], articles=data["articles"], **base)
+def _in_game_viewer() -> bool:
+    """Any logged-in delegation or the facilitator may read the encyclopedia."""
+    if app.config.get("TESTING", False) or is_admin():
+        return True
+    return any(is_realm_authed(k[len("auth_"):]) for k in request.cookies if k.startswith("auth_") and k != "auth_admin")
 
-@app.route("/wiki")
-def wiki_home():
-    return _wiki_page()
+@app.route("/api/wiki")
+def api_wiki_index():
+    if not _in_game_viewer():
+        return jsonify({"success": False, "message": "Join a delegation to read the Spireopedia."}), 401
+    return jsonify({"success": True, **wiki.index_payload()})
 
-@app.route("/wiki/search")
-def wiki_search():
-    q = request.args.get("q", "")
-    if not q.strip():
-        return redirect(url_for("wiki_home", **({"embed": "1"} if request.args.get("embed") == "1" else {})))
-    return _wiki_page(results=wiki.search(q), query=q)
+@app.route("/api/wiki/search")
+def api_wiki_search():
+    if not _in_game_viewer():
+        return jsonify({"success": False, "message": "Join a delegation to read the Spireopedia."}), 401
+    hits = wiki.search(request.args.get("q", ""))
+    return jsonify({"success": True, "results": [{k: h[k] for k in ("slug", "title", "subtitle", "category")} for h in hits]})
 
-@app.route("/wiki/<slug>")
-def wiki_article(slug: str):
-    article = wiki.load_wiki()["by_slug"].get(slug)
+@app.route("/api/wiki/<slug>")
+def api_wiki_article(slug: str):
+    if not _in_game_viewer():
+        return jsonify({"success": False, "message": "Join a delegation to read the Spireopedia."}), 401
+    article = wiki.article_payload(slug)
     if not article:
-        return redirect(url_for("wiki_home"))
-    return _wiki_page(article=article, linked_from=wiki.backlinks(slug))
+        return jsonify({"success": False, "message": "Article not found."}), 404
+    return jsonify({"success": True, "article": article})
 
 @app.route("/healthz")
 def healthz():
