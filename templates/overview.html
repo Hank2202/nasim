@@ -2,10 +2,11 @@
 
 {% block title %}Game Overview & Simulation Guide - The Summit of Realms{% endblock %}
 
-{% block nav_items %}
-  <a href="/" class="btn btn-primary btn-sm">Sovereign Lobby</a>
-  <a href="/projector" target="_blank" class="btn btn-secondary btn-sm">Projector</a>
-  <a href="/admin" class="btn btn-secondary btn-sm">Command Deck</a>
+{% block nav_links %}
+  <a href="/" class="nav-link">Lobby</a>
+  <a href="/overview" class="nav-link active">Guide</a>
+  <a href="/projector" target="_blank" class="nav-link">Projector</a>
+  <a href="/admin" class="nav-link">Command Deck</a>
 {% endblock %}
 
 {% block content %}
@@ -22,7 +23,7 @@
           The Summit of Realms
         </h1>
         <p style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 8px; line-height: 1.55;">
-          A real-time, offline-first geopolitical strategy simulation. Six sovereign nations convene at the Neutral Spire to navigate resource scarcity, conduct bilateral trade, author statutory motions, and fulfill classified domestic directives over three operational turns.
+          A real-time geopolitical strategy simulation that runs on a laptop over local Wi-Fi or hosted online. Six sovereign nations convene at the Neutral Spire to navigate resource scarcity, conduct bilateral trade, author statutory motions, and fulfill classified domestic directives over three operational turns.
         </p>
       </div>
 
@@ -52,7 +53,7 @@
       </div>
       <div class="overview-stat-pill">
         <span class="pill-label">Architecture</span>
-        <span class="pill-val">100% Offline Local LAN</span>
+        <span class="pill-val">Phones via QR code &middot; LAN or hosted</span>
       </div>
     </div>
   </div>
@@ -140,7 +141,7 @@
             <span class="badge">ACTIVE ROOM FLOOR</span>
           </div>
           <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-            Delegates move freely through the room conducting face-to-face negotiations. Via smartphone terminals, delegations execute atomic P2P trades, trigger internal domestic policies (relief, forges, galas), read historical dossiers for quiz rewards, and author statutory motions for the Plenary docket.
+            Delegates move freely through the room conducting face-to-face negotiations. Via smartphone terminals, delegations execute atomic P2P trades, trigger internal domestic policies (relief, forges, galas), read the Spireopedia and answer its quiz for resources, and author statutory motions for the Plenary docket.
           </p>
         </div>
 
@@ -202,8 +203,8 @@
         <div class="overview-realm-card" style="border-top: 3px solid #10b981;">
           <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Sylvan Concordat</h3>
-              <span class="badge">2 VOTES</span>
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">🌾 Sylvan Concordat</h3>
+              <span class="badge">2 VOTES • 2 PLAYERS</span>
             </div>
             <div style="font-size: 0.75rem; color: #10b981; font-family: var(--font-mono); margin-bottom: 8px;">
               Verdant Lowlands & Greatweald Basin
@@ -213,15 +214,20 @@
             </p>
           </div>
           <div class="overview-stats-grid">
-            <div>Grain: <strong>70 (Abundant)</strong></div>
-            <div>Cores: <strong>35 (Operational)</strong></div>
-            <div>Silk: <strong>40 (Modest)</strong></div>
-            <div>Military: <strong>30 (Defenseless)</strong></div>
-            <div>Vitality: <strong>80</strong></div>
-            <div>Standing: <strong>60</strong></div>
+            <div>Grain: <strong>100 (HIGH)</strong></div>
+            <div>Cores: <strong>25 (LOW)</strong></div>
+            <div>Silk: <strong>30 (MEDIUM)</strong></div>
+            <div>Military: <strong>25 (LOW)</strong></div>
+            <div>Vitality: <strong>85</strong></div>
+            <div>Standing: <strong>65</strong></div>
+            <div>Stability: <strong>80</strong></div>
           </div>
           <div class="overview-directive-box">
-            <strong>Strategic Focus:</strong> Agricultural Granary. Must protect national grain reserves (Grain &ge; 75) against continental famine.
+            <strong>Public Mandate:</strong> Feed the continent & prevent famine (no active state finishes with 0 Grain).<br>
+            <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+              Leverages massive agrarian grain surpluses in trade while securing defense guarantees or non-aggression pacts to protect vulnerable heartlands.
+            </div>
           </div>
         </div>
 
@@ -229,8 +235,8 @@
         <div class="overview-realm-card" style="border-top: 3px solid #f59e0b;">
           <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Iron Val-Khor</h3>
-              <span class="badge">2 VOTES</span>
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">⚙️ Iron Val-Khor</h3>
+              <span class="badge">2 VOTES • 3 PLAYERS</span>
             </div>
             <div style="font-size: 0.75rem; color: #f59e0b; font-family: var(--font-mono); margin-bottom: 8px;">
               Mount Khor Volcanic Spine & Mistveil Chasm
@@ -240,15 +246,20 @@
             </p>
           </div>
           <div class="overview-stats-grid">
-            <div>Grain: <strong>30 (Depleted!)</strong></div>
-            <div>Cores: <strong>60 (Surplus)</strong></div>
-            <div>Silk: <strong>25 (Negligible)</strong></div>
-            <div>Military: <strong>65 (Formidable)</strong></div>
+            <div>Grain: <strong>30 (MEDIUM)</strong></div>
+            <div>Cores: <strong>80 (HIGH)</strong></div>
+            <div>Silk: <strong>25 (LOW)</strong></div>
+            <div>Military: <strong>65 (HIGH)</strong></div>
             <div>Vitality: <strong>70</strong></div>
             <div>Standing: <strong>50</strong></div>
+            <div>Stability: <strong>70</strong></div>
           </div>
           <div class="overview-directive-box">
-            <strong>Strategic Focus:</strong> Industrial Titan. Must trade for food immediately or rush Cores to 75+ to unlock Tech Efficiency.
+            <strong>Public Mandate:</strong> Continental modernisation (reach 60 Cores across active sovereign states).<br>
+            <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+              Trades heavy industrial machinery and aether cores to secure essential grain imports while maintaining strategic defense parity with continental neighbors.
+            </div>
           </div>
         </div>
 
@@ -256,8 +267,8 @@
         <div class="overview-realm-card" style="border-top: 3px solid #eab308;">
           <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Solaris Ascendancy</h3>
-              <span class="badge">3 VOTES (SUPERPOWER)</span>
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">☀️ Solaris Ascendancy</h3>
+              <span class="badge">3 VOTES (SUPERPOWER) • 4 PLAYERS</span>
             </div>
             <div style="font-size: 0.75rem; color: #eab308; font-family: var(--font-mono); margin-bottom: 8px;">
               Solar Plateau & Sun Marble Terraces
@@ -267,15 +278,20 @@
             </p>
           </div>
           <div class="overview-stats-grid">
-            <div>Grain: <strong>50 (Sufficient)</strong></div>
-            <div>Cores: <strong>45 (Operational)</strong></div>
-            <div>Silk: <strong>65 (Lavish)</strong></div>
-            <div>Military: <strong>50 (Armed)</strong></div>
+            <div>Grain: <strong>50 (MEDIUM)</strong></div>
+            <div>Cores: <strong>40 (MEDIUM)</strong></div>
+            <div>Silk: <strong>75 (HIGH)</strong></div>
+            <div>Military: <strong>45 (MEDIUM)</strong></div>
             <div>Vitality: <strong>85</strong></div>
-            <div>Standing: <strong>85 (Supreme)</strong></div>
+            <div>Standing: <strong>90 (Supreme)</strong></div>
+            <div>Stability: <strong>80</strong></div>
           </div>
           <div class="overview-directive-box">
-            <strong>Strategic Focus:</strong> Diplomatic Hegemon. Must preserve moral leadership, bribe swing realms, and maintain Standing &ge; 80.
+            <strong>Public Mandate:</strong> Preserve the international order & broad consensus (pass multilateral resolutions in Grand Plenary).<br>
+            <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+              Exercises assembly leadership, cultural prestige, and supermajority coalition building to steer continental statutes and preserve the status quo.
+            </div>
           </div>
         </div>
 
@@ -283,8 +299,8 @@
         <div class="overview-realm-card" style="border-top: 3px solid #8b5cf6;">
           <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Umbral Enclave</h3>
-              <span class="badge">2 VOTES</span>
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">🔮 Umbral Enclave</h3>
+              <span class="badge">1 VOTE (ISOLATED) • 1 PLAYER</span>
             </div>
             <div style="font-size: 0.75rem; color: #8b5cf6; font-family: var(--font-mono); margin-bottom: 8px;">
               Abyssal Rift & Subterranean Catacombs
@@ -294,15 +310,20 @@
             </p>
           </div>
           <div class="overview-stats-grid">
-            <div>Grain: <strong>40 (Sufficient)</strong></div>
-            <div>Cores: <strong>70 (Surplus)</strong></div>
-            <div>Silk: <strong>30 (Modest)</strong></div>
-            <div>Military: <strong>45 (Armed)</strong></div>
+            <div>Grain: <strong>40 (MEDIUM)</strong></div>
+            <div>Cores: <strong>70 (HIGH)</strong></div>
+            <div>Silk: <strong>30 (MEDIUM)</strong></div>
+            <div>Military: <strong>55 (MEDIUM)</strong></div>
             <div>Vitality: <strong>65</strong></div>
-            <div>Standing: <strong>45</strong></div>
+            <div>Standing: <strong>40 (Isolated)</strong></div>
+            <div>Stability: <strong>70</strong></div>
           </div>
           <div class="overview-directive-box">
-            <strong>Strategic Focus:</strong> Arcane Balancer. Keeper of equilibrium; task is to ensure no rival nation ever holds 3 or more Assembly votes.
+            <strong>Public Mandate:</strong> Continental balance of power (prevent unchecked militarisation across any single realm).<br>
+            <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+              Operates from energy-rich subterranean seclusion, using unmatched core reserves and covert leverage to prevent hegemony by regional rivals.
+            </div>
           </div>
         </div>
 
@@ -310,8 +331,8 @@
         <div class="overview-realm-card" style="border-top: 3px solid #06b6d4;">
           <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Aquila Maritime League</h3>
-              <span class="badge">2 VOTES</span>
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">🌊 Aquila Maritime League</h3>
+              <span class="badge">2 VOTES • 2 PLAYERS</span>
             </div>
             <div style="font-size: 0.75rem; color: #06b6d4; font-family: var(--font-mono); margin-bottom: 8px;">
               Sea of Glass Archipelago & Whispering Straits
@@ -321,15 +342,20 @@
             </p>
           </div>
           <div class="overview-stats-grid">
-            <div>Grain: <strong>45 (Sufficient)</strong></div>
-            <div>Cores: <strong>40 (Operational)</strong></div>
-            <div>Silk: <strong>80 (Monopoly)</strong></div>
-            <div>Military: <strong>55 (Armed)</strong></div>
-            <div>Vitality: <strong>75</strong></div>
-            <div>Standing: <strong>65</strong></div>
+            <div>Grain: <strong>50 (MEDIUM)</strong></div>
+            <div>Cores: <strong>40 (MEDIUM)</strong></div>
+            <div>Silk: <strong>80 (HIGH)</strong></div>
+            <div>Military: <strong>35 (LOW)</strong></div>
+            <div>Vitality: <strong>80</strong></div>
+            <div>Standing: <strong>70</strong></div>
+            <div>Stability: <strong>70</strong></div>
           </div>
           <div class="overview-directive-box">
-            <strong>Strategic Focus:</strong> Financial Plutocrat. Must maximize total tangible wealth to reign as the Continental Plutocrat.
+            <strong>Public Mandate:</strong> Connect the continent (ensure multilateral trade networks across all sovereign states).<br>
+            <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+              Commands oceanic trade lanes and gossamer silk monopolies, generating liquid wealth and serving as the financial nexus of continental commerce.
+            </div>
           </div>
         </div>
 
@@ -337,8 +363,8 @@
         <div class="overview-realm-card" style="border-top: 3px solid #ec4899;">
           <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">Aethelgard Dominion</h3>
-              <span class="badge">2 VOTES</span>
+              <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">⚔️ Aethelgard Dominion</h3>
+              <span class="badge">2 VOTES • 3 PLAYERS</span>
             </div>
             <div style="font-size: 0.75rem; color: #ec4899; font-family: var(--font-mono); margin-bottom: 8px;">
               Northern Rocky Steppes & Frontier Citadels
@@ -348,15 +374,20 @@
             </p>
           </div>
           <div class="overview-stats-grid">
-            <div>Grain: <strong>60 (Abundant)</strong></div>
-            <div>Cores: <strong>50 (Operational)</strong></div>
-            <div>Silk: <strong>35 (Modest)</strong></div>
-            <div>Military: <strong>75 (Apex)</strong></div>
+            <div>Grain: <strong>60 (HIGH)</strong></div>
+            <div>Cores: <strong>50 (MEDIUM)</strong></div>
+            <div>Silk: <strong>25 (LOW)</strong></div>
+            <div>Military: <strong>80 (HIGH)</strong></div>
             <div>Vitality: <strong>80</strong></div>
             <div>Standing: <strong>55</strong></div>
+            <div>Stability: <strong>85</strong></div>
           </div>
           <div class="overview-directive-box">
-            <strong>Strategic Focus:</strong> Sovereign Iron Shield. Must maintain supreme continental military force (Military &ge; 80) and stability &ge; 70.
+            <strong>Public Mandate:</strong> Continental security & domestic stability (preserve high civil stability across all sovereign states).<br>
+            <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+              Maintains formidable territorial legions and chivalric defense pacts to deter foreign security crises and guarantee national resilience.
+            </div>
           </div>
         </div>
 
@@ -377,15 +408,15 @@
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
 
         <div class="overview-rule-box">
-          <div class="rule-title">Dynamic Voting Weights</div>
+          <div class="rule-title">Sovereign Assembly & Dynamic Voting Weights</div>
           <div class="rule-math">
-            Standing &ge; 80 &rarr; 3 Votes<br>
-            Standing 45–79 &rarr; 2 Votes<br>
-            Standing &lt; 45 &rarr; 1 Vote<br>
+            Solaris: 3 Votes (Superpower)<br>
+            Sylvan, Val-Khor, Aquila, Aethelgard: 2 Votes<br>
+            Umbra: 1 Vote (Isolated Enclave)<br>
             +1 Bonus Vote for Continental Plutocrat
           </div>
           <p class="rule-desc">
-            Derived directly from national diplomatic standing. High standing confers assembly veto power and multilateral influence.
+            Base parliamentary votes reflect each nation's constitutional standing, with an extra vote awarded each turn to the continent's wealthiest nation.
           </p>
         </div>
 
@@ -440,12 +471,12 @@
         <div class="overview-rule-box">
           <div class="rule-title">Qualitative Fog of War Tiers</div>
           <div class="rule-math">
-            &ge; 60: Abundant / Surplus / Lavish<br>
-            25–59: Sufficient / Operational / Modest<br>
-            &lt; 25: Depleted / Scarce / Negligible
+            &ge; 60: HIGH (Abundant / Formidable)<br>
+            30–59: MEDIUM (Operational / Balanced)<br>
+            &lt; 30: LOW (Scarce / Vulnerable)
           </div>
           <p class="rule-desc">
-            Projector and foreign registries show qualitative tiers rather than exact values to preserve negotiation tension and bluffing.
+            Projector and foreign registries display clean qualitative tiers (LOW, MEDIUM, HIGH) rather than exact values to preserve negotiation tension and bluffing.
           </p>
         </div>
 
@@ -583,13 +614,15 @@
         </div>
       </div>
 
-      <div class="card-title" style="margin-bottom: 10px;">Knowledge Dossiers & Trivia Quizzes</div>
+      <div class="card-title" style="margin-bottom: 10px;">Spireopedia & the Lore Quiz</div>
       <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
-        Delegations can access 8 historical dossiers in the <strong>Lore & Intel</strong> mobile tab. Each contains a high-stakes quiz:
+        The <strong>Spireopedia</strong> is the game's built-in, Wikipedia-style encyclopaedia of the Continent: the history of all six nations, its wars, treaties, geography and resources.
+        Delegates read it in the <strong>Wiki</strong> tab of their phone console and answer questions in the separate <strong>Quiz</strong> tab.
       </p>
       <ul style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.6; margin-left: 20px; margin-top: 6px;">
-        <li><strong style="color: #10b981;">Correct Answer:</strong> Awards an instant bounty of <strong>+15 Resources</strong> (Grain, Cores, or Silk) directly to national reserves.</li>
-        <li><strong style="color: #ef4444;">Incorrect Answer:</strong> Incurs a penalty of <strong>-5 Diplomatic Standing</strong> and permanently locks the dossier.</li>
+        <li>Every nation gets the <strong>same {{ quiz_count }} questions</strong>; about a third unlock each turn.</li>
+        <li><strong style="color: var(--ok);">Correct answer:</strong> +5 Grain, Cores or Silk (shown on each question).</li>
+        <li><strong style="color: var(--danger);">Wrong answer:</strong> <strong>-5 Diplomatic Standing</strong> and the question is locked for that nation. One attempt per question.</li>
       </ul>
     </div>
   </div>
@@ -601,7 +634,7 @@
     <div class="card">
       <div class="card-title" style="margin-bottom: 10px;">Hardware Deployment & Workshop Roles</div>
       <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
-        The simulation operates across three primary devices over the local Wi-Fi router:
+        The simulation runs across three kinds of screen, either on a local Wi-Fi network or a hosted server:
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px;">
@@ -609,14 +642,15 @@
           <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Participant Screen</div>
           <h4 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); margin: 4px 0 8px;">Mobile Cockpit (/realm/&lt;id&gt;)</h4>
           <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
-            Accessed by students on smartphones via 4-digit PIN authentication. 5 persistent navigation tabs:
+            Students scan the QR code and log in with their delegation passcode. Six tabs:
           </p>
           <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); line-height: 1.6; margin-top: 8px;">
-            1. Overview: Resources, metrics, domestic decrees, secret directive.<br>
-            2. News: Live breaking wire and crisis alerts.<br>
-            3. Trade: Bilateral atomic P2P proposal hub.<br>
-            4. Motions: Sponsor and second statutory resolutions.<br>
-            5. Lore: Historical reading dossiers and quiz bounties.
+            1. Realm: Resources, metrics, domestic decrees, secret directives.<br>
+            2. World: Live news wire and the continental registry.<br>
+            3. Trade: Bilateral resource offers.<br>
+            4. Motions: Draft and co-sponsor resolutions.<br>
+            5. Wiki: The Spireopedia (reading only).<br>
+            6. Quiz: Shared lore questions (one attempt each).
           </div>
         </div>
 
@@ -630,7 +664,7 @@
             • Giant turn clock and active session indicator.<br>
             • Continental Diplomatic Standing board with Fog of War tiers.<br>
             • Live streaming news ticker with synthesized audio cues.<br>
-            • LAN QR code for fast mobile onboarding.<br>
+            • QR code with the joining address for fast phone onboarding.<br>
             • Full-screen parliamentary roll-call visualizer during votes.
           </div>
         </div>

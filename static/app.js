@@ -142,6 +142,12 @@ function formatSeconds(secs) {
   return `${mins.toString().padStart(2, '0')}:${rem.toString().padStart(2, '0')}`;
 }
 
+const RESOURCE_SHORT = { grain: 'Grain', cores: 'Cores', silk: 'Silk', military: 'Military', standing: 'Standing', stability: 'Stability' };
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 const RESOURCE_FRIENDLY = {
   grain: 'Alchemical Grain',
   cores: 'Aether Cores',
@@ -173,7 +179,23 @@ class RealmApp {
     document.querySelectorAll('.mobile-view').forEach(v => {
       v.classList.toggle('active', v.id === viewId);
     });
+    if (viewId === 'view-wiki' && !this.wikiLoaded) this.wikiHome();
+    if (viewId === 'view-quiz') this.loadQuiz();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async leaveDelegation(e) {
+    if (e) e.preventDefault();
+    if (confirm('Leave this sovereign delegation and return to lobby?')) {
+      try {
+        await fetch('/api/auth/realm/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ realm_id: this.realmId })
+        });
+      } catch (err) {}
+      window.location.href = '/';
+    }
   }
 
   bindBottomNav() {
@@ -286,7 +308,7 @@ class RealmApp {
     this._setVal('grain-val', realm.alchemical_grain);
     this._setVal('cores-val', realm.aether_cores);
     this._setVal('silk-val', realm.echo_silk);
-    this._setVal('military-val', realm.military_power || 50);
+    this._setVal('military-val', realm.military_power ?? 0);
 
     // Metrics
     this._setMetric('vitality', realm.public_vitality);
@@ -304,6 +326,9 @@ class RealmApp {
     // Flags
     this.renderFlags(realm);
 
+    // Continental registry (World tab): live, fog-of-war tiers for other nations
+    this.renderRegistry(realms);
+
     // Trades
     this.renderTrades(trades, realm);
 
@@ -316,10 +341,11 @@ class RealmApp {
     // Summit Concluded Personal Evaluation Callout
     this.renderConcludedDebrief(state, realm);
 
-    // Lore Encyclopedia & Knowledge Bounties
-    this.rawLoreEncyclopedia = state.lore_encyclopedia || [];
-    this.currentRealm = realm;
-    this.renderLoreArchive(this.rawLoreEncyclopedia, realm);
+    // Quiz: refresh when a new turn unlocks questions (or on first load for the badge)
+    if (this.quizTurn !== meta.current_turn && !this.quizLoading) {
+      this.quizLoading = true;
+      this.loadQuiz().finally(() => { this.quizLoading = false; });
+    }
   }
 
   _setVal(id, val) {
@@ -379,156 +405,364 @@ class RealmApp {
     const myEval = (outcome.realm_evaluations || []).find(e => e.realm_id === this.realmId);
     if (!myEval) return;
 
+    let verdictColor = '#ef4444';
+    let verdictIcon = '🔴';
+    if (outcome.continental_verdict === 'STABLE CONTINENT') {
+      verdictColor = '#10b981';
+      verdictIcon = '🟢';
+    } else if (outcome.continental_verdict === 'FRAGILE PEACE') {
+      verdictColor = '#f59e0b';
+      verdictIcon = '🟡';
+    }
+
+    // Public mission HTML
+    let pubHtml = '';
+    if (myEval.public_mission_eval) {
+      const pm = myEval.public_mission_eval;
+      pubHtml = `
+        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px; border-radius:var(--radius-xs); margin-bottom:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong style="font-size:0.82rem; color:#fff;">PUBLIC: ${pm.title}</strong>
+            ${pm.achieved ? 
+              '<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ACHIEVED</span>' : 
+              '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">✗ FAILED</span>'}
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:2px;">${pm.description}</div>
+          <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); margin-top:4px;">${pm.explanation}</div>
+        </div>
+      `;
+    }
+
+    // Secret missions HTML
+    let secretsHtml = '';
+    if (myEval.secret_missions_eval && myEval.secret_missions_eval.length > 0) {
+      secretsHtml = myEval.secret_missions_eval.map((sm, i) => `
+        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px; border-radius:var(--radius-xs); margin-bottom:6px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong style="font-size:0.82rem; color:#fff;">SECRET #${i+1}: ${sm.title}</strong>
+            ${sm.achieved ? 
+              '<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ACHIEVED</span>' : 
+              '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">✗ FAILED</span>'}
+          </div>
+          <div style="font-size:0.75rem; color:#10b981; margin-top:2px; font-weight:600;">${sm.objective}</div>
+          <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); margin-top:4px;">${sm.explanation}</div>
+        </div>
+      `).join('');
+    } else {
+      secretsHtml = `
+        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px; border-radius:var(--radius-xs); margin-bottom:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong style="font-size:0.82rem;">${myEval.directive_title}</strong>
+            ${myEval.directive_achieved ? 
+              '<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ACHIEVED</span>' : 
+              '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">✗ FAILED</span>'}
+          </div>
+          <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); margin-top:4px;">${myEval.directive_explanation}</div>
+        </div>
+      `;
+    }
+
     container.style.display = 'block';
     container.innerHTML = `
-      <div class="card" style="border: 2px solid var(--border-white); padding: 16px;">
+      <div class="card" style="border: 2px solid ${verdictColor}; padding: 16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
           <span class="badge" style="background:#fff; color:#000; font-weight:800;">SUMMIT CONCLUDED</span>
-          <span class="badge" style="font-size:0.75rem;">SCORE: ${myEval.score} PTS</span>
+          <span class="badge" style="font-size:0.75rem; background:${verdictColor}; color:#fff; font-weight:800;">
+            ${myEval.success_ratio || ''} MANDATES (${myEval.score} PTS)
+          </span>
         </div>
 
-        <h2 style="font-size:1.25rem; font-weight:900; margin-bottom:4px; text-transform:uppercase;">
-          ${outcome.continental_verdict}
+        <h2 style="font-size:1.2rem; font-weight:900; margin-bottom:4px; text-transform:uppercase; color:${verdictColor};">
+          ${verdictIcon} ${outcome.continental_verdict}
         </h2>
         <p style="font-size:0.82rem; color:var(--text-secondary); line-height:1.4; margin-bottom:12px;">
           ${outcome.continental_desc}
         </p>
 
-        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:12px; border-radius:var(--radius-sm); margin-bottom:10px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="font-size:0.88rem;">${myEval.directive_title}</strong>
-            ${myEval.directive_achieved ? 
-              '<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">[DIRECTIVE ACHIEVED (+100 PTS)]</span>' : 
-              '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">[DIRECTIVE FAILED]</span>'}
-          </div>
-          <div style="font-size:0.75rem; font-family:var(--font-mono); color:var(--text-muted); margin-top:4px;">
-            ${myEval.directive_explanation}
-          </div>
+        <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; font-weight:700;">
+          SOVEREIGN MANDATE EVALUATION:
         </div>
+        ${pubHtml}
+        ${secretsHtml}
 
-        <p style="font-size:0.82rem; color:var(--text-primary); line-height:1.4; font-style:italic;">
+        <p style="font-size:0.82rem; color:var(--text-primary); line-height:1.4; font-style:italic; margin-top:8px;">
           "${myEval.epilogue}"
         </p>
       </div>
     `;
   }
 
-  filterLore(category, btn) {
-    document.querySelectorAll('.lore-filter-btn').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-    this.activeLoreCategory = category;
-    this.renderLoreArchive(this.rawLoreEncyclopedia || [], this.currentRealm);
+  // ---------------------------------------------------------------------------
+  // Spireopedia Quiz (shared question bank; server validates every answer)
+  // ---------------------------------------------------------------------------
+  async loadQuiz() {
+    try {
+      const resp = await fetch(`/api/quiz/${encodeURIComponent(this.realmId)}`);
+      if (!resp.ok) throw new Error('quiz fetch failed');
+      const data = await resp.json();
+      this.quizData = data;
+      this.quizTurn = data.current_turn;
+      this.renderQuiz();
+    } catch (err) {
+      const c = document.getElementById('quiz-container');
+      if (c && !this.quizData) c.innerHTML = '<p class="empty-state">Could not load questions. Check your connection.</p>';
+    }
   }
 
-  renderLoreArchive(encyclopedia, realm) {
-    const container = document.getElementById('lore-encyclopedia-container');
-    if (!container || !encyclopedia) return;
+  filterQuiz(filter, btn) {
+    this.quizFilter = filter;
+    this.quizRecent = new Set();
+    document.querySelectorAll('#quiz-filter-row .chip').forEach(b => b.classList.toggle('active', b === btn));
+    this.renderQuiz();
+  }
 
-    const filtered = (this.activeLoreCategory && this.activeLoreCategory !== 'all') ?
-      encyclopedia.filter(e => e.category === this.activeLoreCategory) :
-      encyclopedia;
-
-    if (filtered.length === 0) {
-      container.innerHTML = '<p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono); padding:10px 0;">No dossiers found in this category.</p>';
-      return;
+  renderQuiz() {
+    const container = document.getElementById('quiz-container');
+    const data = this.quizData;
+    if (!container || !data) return;
+    const qs = data.questions;
+    const count = s => qs.filter(q => q.status === s).length;
+    this._setVal('quiz-stat-correct', count('correct'));
+    this._setVal('quiz-stat-wrong', count('failed'));
+    this._setVal('quiz-stat-open', count('open'));
+    this._setVal('quiz-penalty-label', data.fail_penalty);
+    const badge = document.getElementById('nav-quiz-badge');
+    if (badge) {
+      badge.innerText = count('open');
+      badge.style.display = count('open') > 0 ? 'block' : 'none';
     }
 
-    const claimed = (realm && realm.claimed_lore) ? realm.claimed_lore : [];
-    const failed = (realm && realm.failed_lore) ? realm.failed_lore : [];
+    const filter = this.quizFilter || 'open';
+    let shown = qs.map((q, i) => ({ q, n: i + 1 }));
+    // Keep questions answered in this visit on screen so the result/explanation can be read.
+    const recent = this.quizRecent || new Set();
+    if (filter === 'open') shown = shown.filter(x => x.q.status === 'open' || recent.has(x.q.id));
+    if (filter === 'answered') shown = shown.filter(x => x.q.status === 'correct' || x.q.status === 'failed');
 
-    container.innerHTML = filtered.map(t => {
-      const isClaimed = claimed.includes(t.id);
-      const isFailed = failed.includes(t.id);
+    const sealed = qs.filter(q => q.status === 'sealed');
+    let html = '';
+    if (shown.length === 0) {
+      const msg = filter === 'open'
+        ? (sealed.length ? 'All open questions answered. More unlock next turn.' : 'You have answered every question.')
+        : 'Nothing here yet.';
+      html += `<div class="card"><p class="empty-state">${msg}</p></div>`;
+    }
+    html += shown.map(({ q, n }) => this._quizCardHtml(q, n)).join('');
+    if (filter !== 'answered' && sealed.length && filter !== 'all') {
+      const nextTurn = Math.min(...sealed.map(q => q.turn));
+      html += `<div class="card quiz-sealed"><p class="empty-state">${sealed.length} more question${sealed.length === 1 ? '' : 's'} unlock from Turn ${nextTurn}.</p></div>`;
+    }
+    container.innerHTML = html;
+  }
 
-      let quizHtml = '';
-      if (isClaimed) {
-        quizHtml = `
-          <div style="background:var(--bg-surface); border:1px solid #10b981; padding:10px 12px; border-radius:var(--radius-xs); margin-top:10px;">
-            <span class="badge" style="background:#10b981; color:#fff; font-weight:800; font-size:0.75rem;">[✓ INTEL VERIFIED: ${t.quiz.reward_label}]</span>
-            <p style="font-size:0.76rem; color:var(--text-secondary); margin-top:6px; line-height:1.35;">
-              <strong style="color:var(--text-primary);">Historical Fact:</strong> ${t.quiz.explanation}
-            </p>
-          </div>
-        `;
-      } else if (isFailed) {
-        quizHtml = `
-          <div style="background:var(--bg-surface); border:1px solid #ef4444; padding:10px 12px; border-radius:var(--radius-xs); margin-top:10px;">
-            <span class="badge" style="background:#ef4444; color:#fff; font-weight:800; font-size:0.75rem;">[❌ ASSESSMENT FAILED: ACCESS LOCKED (-5 STANDING)]</span>
-            <p style="font-size:0.76rem; color:var(--text-secondary); margin-top:6px; line-height:1.35;">
-              A flawed intelligence report was submitted on this subject. Access to this knowledge bounty is permanently suspended.
-            </p>
-          </div>
-        `;
-      } else {
-        quizHtml = `
-          <div style="background:var(--bg-surface); border:1px solid var(--border-white); padding:12px; border-radius:var(--radius-xs); margin-top:10px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-              <span class="badge" style="background:#fff; color:#000; font-weight:800; font-size:0.72rem;">SOVEREIGN INTELLIGENCE INQUIRY</span>
-              <span class="badge" style="font-size:0.72rem;">BOUNTY: ${t.quiz.reward_label}</span>
-            </div>
-            <p style="font-size:0.82rem; font-weight:700; color:var(--text-primary); margin-bottom:10px; line-height:1.35;">
-              ${t.quiz.question}
-            </p>
-            <div style="display:flex; flex-direction:column; gap:6px;">
-              ${t.quiz.options.map((opt, idx) => `
-                <button type="button" class="btn btn-secondary btn-sm btn-block" style="text-align:left; font-size:0.78rem; padding:8px 10px; font-weight:600;" onclick="realmApp.submitLoreQuiz('${t.id}', ${idx}, this)">
-                  ${String.fromCharCode(65 + idx)}. ${opt}
-                </button>
-              `).join('')}
-            </div>
-            <div style="font-size:0.7rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:8px;">
-              ⚠️ Flawed report incurs a -5 Diplomatic Standing penalty and locks this dossier.
-            </div>
-          </div>
-        `;
-      }
-
-      return `
-        <div class="card" style="padding:14px 16px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-            <span class="badge" style="font-size:0.7rem; color:var(--text-muted);">${(t.category_label || t.category).toUpperCase()}</span>
-            ${isClaimed ? '<span class="badge" style="color:#10b981; border-color:#10b981;">CLAIMED</span>' : isFailed ? '<span class="badge" style="color:#ef4444; border-color:#ef4444;">LOCKED</span>' : '<span class="badge">[READY]</span>'}
-          </div>
-          <h3 style="font-size:0.95rem; font-weight:900; margin-bottom:6px; color:var(--text-primary); text-transform:uppercase;">
-            ${t.title}
-          </h3>
-          <p style="font-size:0.82rem; color:var(--text-secondary); line-height:1.45;">
-            ${t.snippet}
-          </p>
-          ${quizHtml}
-        </div>
-      `;
+  _quizCardHtml(q, n) {
+    const esc = escapeHtml;
+    const reward = `+${q.reward_amount} ${esc(RESOURCE_SHORT[q.reward_resource] || q.reward_resource)}`;
+    const num = `<span class="quiz-num">Q${String(n).padStart(2, '0')} &middot; TURN ${q.turn}</span>`;
+    if (q.status === 'sealed') {
+      return `<div class="card quiz-card quiz-sealed"><div class="quiz-meta">${num}<span class="status-pill">Unlocks turn ${q.turn}</span></div>
+        <p class="quiz-q muted">Sealed until Turn ${q.turn}.</p></div>`;
+    }
+    const answered = q.status === 'correct' || q.status === 'failed';
+    const pending = this.quizPending && this.quizPending.id === q.id ? this.quizPending.idx : null;
+    const pill = q.status === 'correct' ? `<span class="status-pill ok">Correct &middot; ${reward}</span>`
+      : q.status === 'failed' ? `<span class="status-pill bad">Wrong &middot; locked</span>`
+      : `<span class="status-pill open">Reward ${reward}</span>`;
+    const opts = q.options.map((opt, idx) => {
+      let cls = 'quiz-option';
+      if (answered && idx === q.correct_index) cls += ' correct';
+      else if (answered && q.status === 'failed' && idx === q.your_index) cls += ' wrong';
+      else if (pending === idx) cls += ' selected';
+      const key = String.fromCharCode(65 + idx);
+      return `<button type="button" class="${cls}" ${answered ? 'disabled' : `onclick="realmApp.selectQuizOption('${esc(q.id)}', ${idx})"`}>
+        <span class="opt-key">${key}</span><span>${esc(opt)}</span></button>`;
     }).join('');
+    let foot = '';
+    if (!answered && pending !== null) {
+      foot = `<div class="quiz-confirm">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="realmApp.selectQuizOption(null)">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="realmApp.submitQuizAnswer('${esc(q.id)}', this)">Lock in ${String.fromCharCode(65 + pending)}</button>
+      </div>`;
+    }
+    if (answered && q.explanation) {
+      foot = `<div class="callout ${q.status === 'correct' ? 'ok' : 'danger'} quiz-result">${esc(q.explanation)}
+        <a href="#" onclick="realmApp.openArticle('${esc(q.article)}'); return false;" style="text-decoration: underline; white-space: nowrap;">Read article</a></div>`;
+    }
+    return `<div class="card quiz-card" id="quiz-${esc(q.id)}">
+      <div class="quiz-meta">${num}${pill}</div>
+      <p class="quiz-q">${esc(q.question)}</p>
+      <div class="quiz-options">${opts}</div>${foot}</div>`;
   }
 
-  async submitLoreQuiz(topicId, answerIndex, btnEl) {
-    if (btnEl) {
-      btnEl.disabled = true;
-      btnEl.innerText += ' (Verifying...)';
-    }
+  // ---------------------------------------------------------------------------
+  // Spireopedia (Wiki tab): rendered natively inside the console, read-only
+  // ---------------------------------------------------------------------------
+  async _wikiFetch(path) {
+    const resp = await fetch(path);
+    const data = await resp.json();
+    if (!resp.ok || !data.success) throw new Error(data.message || 'Encyclopedia unavailable');
+    return data;
+  }
 
+  _wikiShow(html, { nav = true, push = null } = {}) {
+    const body = document.getElementById('wiki-body');
+    if (!body) return;
+    if (push) {
+      this.wikiHistory = this.wikiHistory || [];
+      if (this.wikiCurrent) this.wikiHistory.push(this.wikiCurrent);
+      this.wikiCurrent = push;
+    }
+    body.innerHTML = html;
+    document.getElementById('wiki-nav').style.display = nav ? 'flex' : 'none';
+    // Internal article links stay inside the tab.
+    body.querySelectorAll('[data-wiki]').forEach(el => el.addEventListener('click', e => {
+      e.preventDefault();
+      this.openArticle(el.dataset.wiki);
+    }));
+    body.querySelectorAll('a[data-anchor]').forEach(el => el.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.getElementById(el.dataset.anchor);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+    window.scrollTo({ top: 0 });
+  }
+
+  _wikiList(items) {
+    const esc = escapeHtml;
+    return `<ul>${items.map(a => `<li><a href="#" data-wiki="${esc(a.slug)}">${esc(a.title)}</a>
+      <span class="wk-muted">— ${esc(a.subtitle || '')}</span></li>`).join('')}</ul>`;
+  }
+
+  async wikiHome() {
+    this.wikiLoaded = true;
+    this.wikiHistory = [];
+    this.wikiCurrent = { type: 'home' };
+    try {
+      const data = this.wikiIndex || await this._wikiFetch('/api/wiki');
+      this.wikiIndex = data;
+      const esc = escapeHtml;
+      const cats = data.meta.categories.map(cat => {
+        const items = data.articles.filter(a => a.category === cat);
+        return items.length ? `<h2>${esc(cat)}</h2>${this._wikiList(items)}` : '';
+      }).join('');
+      this._wikiShow(`<div class="wk-title">Welcome to the Spireopedia</div>
+        <div class="wk-sub">${data.articles.length} articles · current year ${esc(data.meta.current_year)}</div>
+        <p>${esc(data.meta.tagline)}. ${esc(data.meta.calendar_note)}</p>
+        <p class="wk-muted">The answers to every quiz question are somewhere in these articles.</p>${cats}`, { nav: false });
+    } catch (err) {
+      this._wikiShow(`<p class="wk-muted">${escapeHtml(err.message)}</p>`, { nav: false });
+    }
+  }
+
+  async openArticle(slug, { push = true } = {}) {
+    if (!slug) return;
+    this.wikiLoaded = true;
+    this.switchView('view-wiki');
+    try {
+      const { article: a } = await this._wikiFetch(`/api/wiki/${encodeURIComponent(slug)}`);
+      const esc = escapeHtml;
+      // Body HTML (lead, sections, infobox values) is escaped and rendered on the server.
+      const infobox = `<div class="wk-infobox"><div class="wk-ib-title">${esc(a.title)}</div><table>
+        ${a.infobox.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('')}</table></div>`;
+      const toc = a.sections.length > 2 ? `<div class="wk-toc"><div class="wk-toc-title">Contents</div><ol>
+        ${a.sections.map((s, i) => `<li><a href="#" data-anchor="wk-s${i}">${esc(s.heading)}</a></li>`).join('')}</ol></div>` : '';
+      const sections = a.sections.map((s, i) => `<h2 id="wk-s${i}">${esc(s.heading)}</h2>${s.html}`).join('');
+      const seeAlso = a.see_also.length ? `<h2>See also</h2>${this._wikiList(a.see_also)}` : '';
+      const refs = a.references.length ? `<h2>References</h2><ol class="wk-refs">${a.references.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : '';
+      const links = a.linked_from.length ? `<p class="wk-muted" style="margin-top:16px;"><b>What links here:</b>
+        ${a.linked_from.map(l => `<a href="#" data-wiki="${esc(l.slug)}">${esc(l.title)}</a>`).join(' · ')}</p>` : '';
+      this._wikiShow(`<div class="wk-title">${esc(a.title)}</div><div class="wk-sub">${esc(a.subtitle || '')}</div>
+        ${infobox}${a.lead}${toc}${sections}${seeAlso}${refs}${links}
+        <div class="wk-foot">Category: ${esc(a.category)}</div>`, { push: push ? { type: 'article', slug } : null });
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  async wikiSearch(e, { push = true } = {}) {
+    if (e) e.preventDefault();
+    const input = document.getElementById('wiki-search-input');
+    const q = (input ? input.value : '').trim();
+    if (!q) return this.wikiHome();
+    try {
+      const data = await this._wikiFetch(`/api/wiki/search?q=${encodeURIComponent(q)}`);
+      const esc = escapeHtml;
+      this._wikiShow(`<div class="wk-title">Search results</div>
+        <div class="wk-sub">${data.results.length} result${data.results.length === 1 ? '' : 's'} for “${esc(q)}”</div>
+        ${data.results.length ? this._wikiList(data.results) : '<p>No article matches your search.</p>'}`,
+        { push: push ? { type: 'search', q } : null });
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  wikiBack() {
+    const prev = (this.wikiHistory || []).pop();
+    if (!prev || prev.type === 'home') return this.wikiHome();
+    this.wikiCurrent = prev;
+    if (prev.type === 'article') return this.openArticle(prev.slug, { push: false });
+    const input = document.getElementById('wiki-search-input');
+    if (input) input.value = prev.q;
+    return this.wikiSearch(null, { push: false });
+  }
+
+  selectQuizOption(questionId, idx) {
+    this.quizPending = questionId ? { id: questionId, idx } : null;
+    this.renderQuiz();
+  }
+
+  async submitQuizAnswer(questionId, btnEl) {
+    if (!this.quizPending || this.quizPending.id !== questionId) return;
+    const answerIndex = this.quizPending.idx;
+    if (btnEl) { btnEl.disabled = true; btnEl.innerText = 'Checking…'; }
     try {
       const resp = await fetch('/api/lore/quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          realm_id: this.realmId,
-          topic_id: topicId,
-          answer_index: answerIndex
-        })
+        body: JSON.stringify({ realm_id: this.realmId, question_id: questionId, answer_index: answerIndex })
       });
       const res = await resp.json();
-      if (res.success) {
-        showToast(res.message, 'info');
-        synth.playChime();
+      this.quizPending = null;
+      if (res.data && res.data.status) {
+        // Reflect the result locally (incl. which option this delegation picked), then resync.
+        const q = this.quizData.questions.find(x => x.id === questionId);
+        if (q) Object.assign(q, { status: res.data.status, correct_index: res.data.correct_index,
+                                  explanation: res.data.explanation, your_index: answerIndex });
+        (this.quizRecent = this.quizRecent || new Set()).add(questionId);
+        this.renderQuiz();
+        showToast(res.message, res.success ? 'success' : 'danger');
+        res.success ? synth.playChime() : synth.playAlert();
       } else {
-        showToast(res.message, 'danger');
-        synth.playAlert();
+        showToast(res.message || 'Answer rejected', 'danger');
+        this.loadQuiz();
       }
       this.pollState();
-    } catch(err) {
-      showToast('Connection failed during intelligence dispatch', 'danger');
+    } catch (err) {
+      showToast('Connection failed — your answer was not sent.', 'danger');
+      if (btnEl) { btnEl.disabled = false; btnEl.innerText = 'Retry'; }
     }
+  }
+
+  renderRegistry(realms) {
+    const list = document.getElementById('registry-list');
+    if (!list) return;
+    const esc = escapeHtml;
+    list.innerHTML = realms.filter(r => r.active !== false).map(r => {
+      const mine = r.id === this.realmId;
+      const cell = (label, tierKey, exactKey) =>
+        `<span>${label} <strong>${esc(mine ? r[exactKey] : (r[tierKey] || '?'))}</strong></span>`;
+      return `<div class="inset registry-item">
+        <div class="row-between">
+          <strong>${esc(r.emoji || '')} ${esc(r.name)}${mine ? ' <span class="status-pill open">You</span>' : ''}</strong>
+          <span class="badge">${r.assembly_votes} VOTE${r.assembly_votes === 1 ? '' : 'S'}</span>
+        </div>
+        <div class="section-sub" style="text-transform:none;">${esc(r.ethos || '')}</div>
+        <div class="registry-grid">
+          ${cell('GRAIN', 'grain_tier', 'alchemical_grain')}${cell('CORES', 'cores_tier', 'aether_cores')}${cell('SILK', 'silk_tier', 'echo_silk')}
+          ${cell('MILITARY', 'military_tier', 'military_power')}${cell('STANDING', 'standing_tier', 'diplomatic_standing')}${cell('STABILITY', 'stability_tier', 'civil_stability')}
+        </div>
+      </div>`;
+    }).join('');
   }
 
   renderFlags(realm) {
@@ -1067,42 +1301,90 @@ class ProjectorApp {
     const badgesEl = document.getElementById('proj-verdict-badges');
 
     if (verdictTitle) verdictTitle.innerText = outcome.continental_verdict;
+    let verdictColor = '#ef4444';
+    let verdictIcon = '🔴';
+    if (outcome.continental_verdict === 'STABLE CONTINENT') {
+      verdictColor = '#10b981';
+      verdictIcon = '🟢';
+    } else if (outcome.continental_verdict === 'FRAGILE PEACE') {
+      verdictColor = '#f59e0b';
+      verdictIcon = '🟡';
+    }
+
+    if (verdictEl) {
+      verdictEl.innerText = `${verdictIcon} ${outcome.continental_verdict}`;
+      verdictEl.style.color = verdictColor;
+    }
     if (verdictDesc) verdictDesc.innerText = outcome.continental_desc;
     if (timestampEl) timestampEl.innerText = `CONCLUDED: ${outcome.concluded_time_str}`;
 
     if (badgesEl) {
       badgesEl.innerHTML = `
-        <span class="badge" style="background:#fff; color:#000; padding:4px 10px;">AVERAGE VITALITY: ${outcome.avg_vitality}%</span>
+        <span class="badge" style="background:${verdictColor}; color:#fff; padding:4px 10px; font-weight:800;">
+          CONTINENTAL OUTCOME: ${outcome.continental_verdict}
+        </span>
+        <span class="badge" style="background:#fff; color:#000; padding:4px 10px;">AVERAGE STANDING: ${outcome.avg_standing || 50}%</span>
         <span class="badge" style="background:#fff; color:#000; padding:4px 10px;">AVERAGE STABILITY: ${outcome.avg_stability}%</span>
         <span class="badge" style="${outcome.starving_count > 0 ? 'background:#ef4444; color:#fff;' : 'background:#fff; color:#000;'} padding:4px 10px;">
           STARVING REALMS: ${outcome.starving_count}
         </span>
-        <span class="badge" style="background:#fff; color:#000; padding:4px 10px;">TREATIES RATIFIED: ${outcome.passed_proposals_count}</span>
       `;
     }
 
     const realmsList = document.getElementById('proj-debrief-realms-list');
     if (realmsList && outcome.realm_evaluations) {
-      realmsList.innerHTML = outcome.realm_evaluations.map((r, idx) => `
-        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px 12px; border-radius:var(--radius-sm);">
+      realmsList.innerHTML = outcome.realm_evaluations.map((r, idx) => {
+        let pubHtml = '';
+        if (r.public_mission_eval) {
+          const pm = r.public_mission_eval;
+          pubHtml = `
+            <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); padding:6px 8px; border-radius:3px; margin-top:4px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:#fff;"><strong>Public:</strong> ${pm.title}</span>
+                ${pm.achieved ? 
+                  '<span class="badge" style="background:#10b981; color:#fff; font-size:0.62rem; padding:1px 6px;">✓ ACHIEVED</span>' : 
+                  '<span class="badge" style="background:#ef4444; color:#fff; font-size:0.62rem; padding:1px 6px;">✗ FAILED</span>'}
+              </div>
+              <div style="font-size:0.68rem; color:var(--text-muted); font-family:var(--font-mono);">${pm.explanation}</div>
+            </div>
+          `;
+        }
+
+        let secretsHtml = '';
+        if (r.secret_missions_eval && r.secret_missions_eval.length > 0) {
+          secretsHtml = r.secret_missions_eval.map((sm, i) => `
+            <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); padding:6px 8px; border-radius:3px; margin-top:3px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:#fff;"><strong>Secret #${i+1}:</strong> ${sm.title}</span>
+                ${sm.achieved ? 
+                  '<span class="badge" style="background:#10b981; color:#fff; font-size:0.62rem; padding:1px 6px;">✓ ACHIEVED</span>' : 
+                  '<span class="badge" style="background:#ef4444; color:#fff; font-size:0.62rem; padding:1px 6px;">✗ FAILED</span>'}
+              </div>
+              <div style="font-size:0.68rem; color:var(--text-muted); font-family:var(--font-mono);">${sm.explanation}</div>
+            </div>
+          `).join('');
+        }
+
+        return `
+        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px 12px; border-radius:var(--radius-sm); margin-bottom:8px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-family:var(--font-mono); font-weight:900; font-size:1rem; color:var(--text-muted);">#${idx + 1}</span>
               <strong style="font-size:0.95rem; text-transform:uppercase;">${r.name}</strong>
-              <span class="badge" style="font-size:0.75rem;">${r.score} PTS</span>
+              <span class="badge" style="font-size:0.72rem; background:rgba(255,255,255,0.1);">${r.success_ratio || ''} MANDATES (${r.score} PTS)</span>
             </div>
             ${r.directive_achieved ? 
-              '<span class="badge" style="background:#10b981; color:#fff; font-weight:800; padding:2px 8px;">[DIRECTIVE ACHIEVED (+100)]</span>' : 
-              '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800; padding:2px 8px;">[DIRECTIVE FAILED]</span>'}
+              '<span class="badge" style="background:#10b981; color:#fff; font-weight:800; padding:2px 8px;">ALL MANDATES MET</span>' : 
+              `<span class="badge" style="background:rgba(255,255,255,0.1); color:#fff; padding:2px 8px;">${r.achieved_missions}/${r.total_missions} MET</span>`}
           </div>
-          <div style="font-size:0.75rem; font-family:var(--font-mono); color:var(--text-muted); margin-top:4px;">
-            ${r.directive_title}: <span style="color:var(--text-primary); font-weight:600;">${r.directive_explanation}</span>
-          </div>
-          <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px; line-height:1.35;">
-            ${r.epilogue}
+          ${pubHtml}
+          ${secretsHtml}
+          <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:6px; line-height:1.35; font-style:italic;">
+            "${r.epilogue}"
           </p>
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
 
     const honorsEl = document.getElementById('proj-debrief-honors');
@@ -1143,6 +1425,8 @@ class ProjectorApp {
   }
 
   renderWorkingSession(meta, proposals, realms, news_feed) {
+    const activeRealms = (realms || []).filter(r => r.active !== false);
+
     // 1. Dominant Hero Breaking Bulletin
     if (news_feed && news_feed.length > 0) {
       const topNews = news_feed[0];
@@ -1171,17 +1455,20 @@ class ProjectorApp {
     // 3. Qualitative Continental Intel (Fog of War: Zero exact numbers leaked!)
     const realmsList = document.getElementById('projector-realms-list');
     if (realmsList) {
-      realmsList.innerHTML = realms.map(r => `
+      realmsList.innerHTML = activeRealms.map(r => `
         <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:6px 10px; border-radius:var(--radius-xs);">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="font-size:0.85rem; text-transform:uppercase;">${r.name}</strong>
+            <strong style="font-size:0.85rem; text-transform:uppercase;">${r.emoji || '🏛️'} ${r.name}</strong>
             <span class="badge" style="font-size:0.68rem; padding:2px 6px;">${r.assembly_votes} VOTE${r.assembly_votes > 1 ? 'S' : ''}</span>
           </div>
-          <div style="font-size:0.7rem; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px;">${r.ethos}</div>
+          <div style="font-size:0.7rem; color:var(--text-secondary); margin-top:1px;">
+            MANDATE: <strong>${r.public_mission ? r.public_mission.title : r.ethos}</strong>
+          </div>
           <div style="display:flex; gap:8px; font-size:0.68rem; font-family:var(--font-mono); margin-top:3px; color:var(--text-muted);">
             <span>GRAIN: <strong style="color:var(--text-primary);">${r.grain_tier}</strong></span>
             <span>CORES: <strong style="color:var(--text-primary);">${r.cores_tier}</strong></span>
             <span>SILK: <strong style="color:var(--text-primary);">${r.silk_tier}</strong></span>
+            <span>MIL: <strong style="color:var(--text-primary);">${r.military_tier || 'MED'}</strong></span>
           </div>
           <div style="display:flex; gap:8px; font-size:0.68rem; font-family:var(--font-mono); margin-top:2px; color:var(--text-muted);">
             <span>STAND: <strong style="color:var(--text-primary);">${r.standing_tier}</strong></span>
@@ -1394,7 +1681,7 @@ class AdminApp {
         phaseDisplay.innerText = `BETWEEN-ROUNDS PLENARY: QUICK VOTE`;
         controlsContainer.innerHTML = `
           <button class="btn btn-primary btn-sm" onclick="adminApp.concludeQuickPlenary()">
-            ⏩ Settle Plenary & End Turn
+            Settle Plenary &amp; End Turn
           </button>
         `;
       } else if (meta.phase === 'grand_plenary_discussion') {
@@ -1408,7 +1695,7 @@ class AdminApp {
         phaseDisplay.innerText = `GRAND PLENARY: SOVEREIGN VOTE ACTIVE`;
         controlsContainer.innerHTML = `
           <button class="btn btn-primary btn-sm" onclick="adminApp.nextGrandMotion()">
-            Next Motion in Docket ⏩
+            Next Motion in Docket
           </button>
         `;
       } else if (meta.phase === 'turn_summary') {
@@ -1423,14 +1710,14 @@ class AdminApp {
           phaseDisplay.innerText = `PLENARY CONCLUDED (READY FOR END OF TURN)`;
           controlsContainer.innerHTML = `
             <button class="btn btn-primary btn-sm" onclick="adminApp.advanceTurn()">
-              ⏩ Advance to Next Turn
+              Advance to Next Turn
             </button>
           `;
         }
       } else if (meta.phase === 'summit_concluded') {
         phaseDisplay.innerText = `SUMMIT CONCLUDED: CONTINENTAL DEBRIEF ACTIVE`;
         controlsContainer.innerHTML = `
-          <a href="/projector" target="_blank" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center;">📽️ Open Projector Debrief</a>
+          <a href="/projector" target="_blank" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center;">Open Projector Debrief</a>
           <button class="btn btn-danger btn-sm" onclick="adminApp.openResetModal()">↺ Reset Simulation</button>
         `;
       }
@@ -1447,6 +1734,7 @@ class AdminApp {
               ${r.is_plutocrat ? '<span class="badge">[PLUTOCRAT]</span>' : ''}
               ${r.is_starving ? '<span class="badge badge-danger">[STARVING]</span>' : ''}
             </div>
+            <div class="section-sub" style="margin-top:2px;" title="Spireopedia quiz: correct / wrong">QUIZ ${(r.claimed_lore || []).length} ✓ · ${(r.failed_lore || []).length} ✗</div>
           </td>
           <td>
             <div class="inline-num-ctrl">
@@ -1472,7 +1760,7 @@ class AdminApp {
           <td>
             <div class="inline-num-ctrl">
               <button class="inline-num-btn" onclick="adminApp.adjustStat('${r.id}', 'military_power', -5)">-</button>
-              <span class="inline-num-val">${r.military_power || 50}</span>
+              <span class="inline-num-val">${r.military_power ?? 0}</span>
               <button class="inline-num-btn" onclick="adminApp.adjustStat('${r.id}', 'military_power', 5)">+</button>
             </div>
           </td>
@@ -1541,16 +1829,59 @@ class AdminApp {
     // Tab 5: Delegations & PINs Table
     const pinsTbody = document.getElementById('admin-pins-tbody');
     if (pinsTbody) {
-      pinsTbody.innerHTML = realms.map(r => `
-        <tr>
-          <td><strong>${r.name}</strong></td>
-          <td style="font-size:0.78rem; color:var(--text-secondary);">${r.ethos}</td>
-          <td><span class="badge" style="font-size:0.9rem; font-family:var(--font-mono);">${r.pin || '1001'}</span></td>
+      pinsTbody.innerHTML = realms.map(r => {
+        const isActive = r.active !== false;
+        const pCount = r.player_count || 1;
+        const activeMissionsCount = (r.active_secret_missions || []).length;
+        const connCount = r.connected_players || 0;
+        const isFull = !!r.is_capacity_full;
+        return `
+        <tr style="${isActive ? '' : 'opacity: 0.55; background: rgba(255,255,255,0.02);'}">
           <td>
-            <button class="btn btn-secondary btn-sm" onclick="adminApp.promptChangePin('${r.id}', '${r.name}')">Change PIN</button>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-size:1.1rem;">${r.emoji || '🏛️'}</span>
+              <strong>${r.name}</strong>
+            </div>
+            <div style="font-size:0.7rem; color:var(--text-muted);">${r.ethos}</div>
+          </td>
+          <td>
+            <button class="btn ${isActive ? 'btn-primary' : 'btn-secondary'} btn-sm" style="font-size:0.7rem; padding:3px 8px;" onclick="adminApp.toggleRealm('${r.id}', ${isActive})">
+              ${isActive ? '🟢 Active' : '⚪ Inactive'}
+            </button>
+          </td>
+          <td>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="badge" style="font-size:0.75rem; font-family:var(--font-mono); ${isFull ? 'background:rgba(239,68,68,0.2); color:#f87171;' : 'background:rgba(59,130,246,0.15); color:#93c5fd;'}">
+                👥 ${connCount} / ${pCount} ${isFull ? '[FULL]' : ''}
+              </span>
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size:0.7rem;" onclick="adminApp.clearRealmSessions('${r.id}', '${r.name}')" title="Reset/Clear active sessions for this realm">↺</button>
+            </div>
+          </td>
+          <td>
+            <select class="form-select" style="font-size:0.75rem; padding:3px 6px; width:105px;" onchange="adminApp.setPlayerCount('${r.id}', this.value)">
+              <option value="1" ${pCount === 1 ? 'selected' : ''}>1 Delegate</option>
+              <option value="2" ${pCount === 2 ? 'selected' : ''}>2 Delegates</option>
+              <option value="3" ${pCount === 3 ? 'selected' : ''}>3 Delegates</option>
+              <option value="4" ${pCount === 4 ? 'selected' : ''}>4 Delegates</option>
+            </select>
+          </td>
+          <td>
+            <span class="badge" style="font-family:var(--font-mono); font-size:0.75rem;">
+              ${activeMissionsCount} Secret (${activeMissionsCount} pts)
+            </span>
+          </td>
+          <td>
+            <span class="badge" style="font-size:0.85rem; font-family:var(--font-mono);">${r.pin || '1001'}</span>
+          </td>
+          <td>
+            <div style="display:flex; gap:4px;">
+              <button class="btn btn-secondary btn-sm" onclick="adminApp.promptChangePin('${r.id}', '${r.name}')">PIN</button>
+              <button class="btn btn-danger btn-sm" onclick="adminApp.removeRealm('${r.id}', '${r.name}')" title="Remove Delegation">✕</button>
+            </div>
           </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
 
     // News Audit Log
@@ -1886,6 +2217,139 @@ class AdminApp {
       }
     } catch (err) {
       showToast('Failed to conclude summit', 'danger');
+    }
+  }
+
+  async toggleRealm(realmId, currentActive) {
+    try {
+      const resp = await fetch('/api/admin/realm/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: realmId, active: !currentActive })
+      });
+      const res = await resp.json();
+      if (res.success) {
+        showToast(res.message, 'info');
+        this.pollState();
+      } else {
+        showToast(res.message, 'danger');
+      }
+    } catch (err) {
+      showToast('Failed to toggle realm status', 'danger');
+    }
+  }
+
+  async setPlayerCount(realmId, count) {
+    try {
+      const resp = await fetch('/api/admin/realm/player_count', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: realmId, player_count: parseInt(count, 10) })
+      });
+      const res = await resp.json();
+      if (res.success) {
+        showToast(res.message, 'info');
+        this.pollState();
+      } else {
+        showToast(res.message, 'danger');
+      }
+    } catch (err) {
+      showToast('Failed to update player count', 'danger');
+    }
+  }
+
+  async triggerRoundCrisis(roundNum) {
+    try {
+      const resp = await fetch('/api/admin/crisis/round', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ round: roundNum })
+      });
+      const res = await resp.json();
+      if (res.success) {
+        showToast(res.message, 'info');
+        synth.playSiren();
+        this.pollState();
+      } else {
+        showToast(res.message, 'danger');
+      }
+    } catch (err) {
+      showToast('Failed to trigger round crisis', 'danger');
+    }
+  }
+
+  async removeRealm(realmId, realmName) {
+    if (!confirm(`Are you sure you want to permanently remove ${realmName} from the summit?\n\nThis will recalculate active delegations, continental quotas, and mission parameters.`)) return;
+
+    try {
+      const resp = await fetch('/api/admin/realm/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: realmId })
+      });
+      const res = await resp.json();
+      if (res.success) {
+        showToast(res.message, 'info');
+        synth.playAlert();
+        this.pollState();
+      } else {
+        showToast(res.message || 'Failed to remove realm', 'danger');
+      }
+    } catch (err) {
+      showToast('Network error while removing delegation', 'danger');
+    }
+  }
+
+  async setActiveRealmCount(count) {
+    if (!confirm(`Configure the summit to ${count} active sovereign nations?\n\nThis will activate the first ${count} standard nations and scale all missions and voting quotas accordingly.`)) return;
+
+    try {
+      const resp = await fetch('/api/admin/realms/set_count', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count: parseInt(count, 10) })
+      });
+      const res = await resp.json();
+      if (res.success) {
+        showToast(res.message, 'info');
+        synth.playChime();
+        this.pollState();
+      } else {
+        showToast(res.message || 'Failed to set nation count', 'danger');
+      }
+    } catch (err) {
+      showToast('Network error while configuring nation count', 'danger');
+    }
+  }
+
+  async clearRealmSessions(realmId, realmName) {
+    const targetLabel = realmName || (realmId ? `delegation ${realmId}` : 'all delegations');
+    if (!confirm(`Clear connected sessions for ${targetLabel}?\n\nThis frees active seats so participants can reconnect.`)) return;
+
+    try {
+      const resp = await fetch('/api/admin/realm/clear_sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: realmId })
+      });
+      const res = await resp.json();
+      if (res.success) {
+        showToast(res.message, 'info');
+        this.pollState();
+      } else {
+        showToast(res.message || 'Failed to clear sessions', 'danger');
+      }
+    } catch (err) {
+      showToast('Network error while clearing sessions', 'danger');
+    }
+  }
+
+  async logout() {
+    try {
+      await fetch('/api/auth/admin/logout', { method: 'POST' });
+      window.location.href = '/admin';
+    } catch (err) {
+      window.location.href = '/admin';
     }
   }
 }

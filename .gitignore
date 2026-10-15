@@ -23,3 +23,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# SQLite WAL side files
+*.db-shm
+*.db-wal

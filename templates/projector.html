@@ -48,7 +48,7 @@
       <span style="color: #38bdf8; font-size: 1.15rem;">⬢</span>
       <div>
         <span style="font-weight: 900; letter-spacing: 0.12em; color: #f8fafc;">THE SUMMIT OF REALMS</span>
-        <span style="font-size: 0.72rem; color: #64748b; font-family: var(--font-mono); margin-left: 8px;">CONTINENTAL PLENARY</span>
+        <span class="proj-brand-sub" style="font-size: 0.72rem; color: #64748b; font-family: var(--font-mono); margin-left: 8px;">CONTINENTAL PLENARY</span>
       </div>
     </div>
 
@@ -86,9 +86,8 @@
         TURN {{ state.meta.current_turn }} • WORKING SESSION
       </div>
       <div class="projector-timer" id="proj-timer" style="font-size: 1.45rem; font-weight: 900; color: #f8fafc; font-family: var(--font-mono); line-height: 1;">05:00</div>
-      <button id="btn-open-settings" class="btn btn-secondary btn-sm" onclick="toggleSettingsModal()" title="Auditorium Settings" style="font-size: 1.15rem; padding: 4px 10px; line-height: 1;">
-        ⚙️
-      </button>
+      <button class="btn btn-primary btn-sm" onclick="toggleQrModal()" title="Show the QR code delegates scan to join">Join QR</button>
+      <button id="btn-open-settings" class="btn btn-secondary btn-sm" onclick="toggleSettingsModal()" title="Auditorium Settings">Settings</button>
     </div>
   </div>
 
@@ -224,7 +223,7 @@
         <span id="spotlight-name" class="spotlight-realm-name">AETHELGARD DOMINION</span>
         <span id="spotlight-votes" class="badge" style="font-size: 0.65rem; padding: 2px 6px; border-color: rgba(255,255,255,0.2);">1 VOTE</span>
       </div>
-      <div id="spotlight-capital" class="spotlight-capital">Valenhold Citadel • Northern Rocky Steppes</div>
+      <div id="spotlight-capital" class="spotlight-capital">Aethelhold • Northern Rocky Steppes</div>
 
       <!-- 4 Core Resources with 3-Bar Graphical Gauges (Low / Med / High) -->
       <div class="spotlight-resource-grid">
@@ -284,7 +283,7 @@
     <div class="modal-card" style="max-width: 440px; padding: 22px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px;">
         <h3 style="font-size: 1.15rem; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; margin: 0;">
-          ⚙️ Auditorium Settings
+          Auditorium Settings
         </h3>
         <button class="btn btn-secondary btn-sm" onclick="toggleSettingsModal()" style="padding: 2px 8px;">✕</button>
       </div>
@@ -296,7 +295,7 @@
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
           <button id="btn-camera-drift" class="btn btn-secondary btn-sm" onclick="toggleWorldDrift()">
-            🎥 CAM: DRIFT
+            CAM: DRIFT
           </button>
           <button id="btn-camera-speed" class="btn btn-secondary btn-sm" onclick="toggleWorldSpeed()">
             SPEED: SERENE
@@ -314,10 +313,10 @@
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
           <button id="btn-theme-toggle" class="btn btn-secondary btn-sm" onclick="toggleProjectorTheme()">
-            🌓 Theme Toggle
+            Theme Toggle
           </button>
           <button class="btn btn-secondary btn-sm" onclick="toggleFullscreen()">
-            ⛶ Fullscreen
+            Fullscreen
           </button>
         </div>
       </div>
@@ -328,7 +327,7 @@
           Delegate Mobile Gateway
         </div>
         <button class="btn btn-primary btn-sm btn-block" onclick="toggleQrModal(); toggleSettingsModal();">
-          📱 GATEWAY QR CODE
+          Show Join QR Code
         </button>
         <div style="margin-top: 8px; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); word-break: break-all; text-align: center;">
           {{ server_url }}
@@ -397,7 +396,7 @@
       if (window.projApp && window.projApp.world3d) {
         const isDrifting = window.projApp.world3d.toggleDrift();
         const btn = document.getElementById('btn-camera-drift');
-        if (btn) btn.innerText = isDrifting ? '🎥 CAM: DRIFT' : '⏸️ CAM: PAUSED';
+        if (btn) btn.innerText = isDrifting ? 'CAM: DRIFT' : 'CAM: PAUSED';
       }
     }
 

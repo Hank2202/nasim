@@ -1,0 +1,672 @@
+{
+  "_meta": {
+    "encyclopedia_name": "Spireopedia",
+    "tagline": "The free encyclopaedia of the Continent, compiled by the Archivists of the Neutral Spire",
+    "current_year": "304 AC",
+    "calendar_note": "Years are counted AC (After Convergence). The Summit of Realms takes place in 304 AC.",
+    "categories": ["Nations", "Geography", "Resources", "History", "Institutions"],
+    "link_syntax": "[[slug]] or [[slug|label]]; unknown slugs render as red links"
+  },
+  "articles": [
+    {
+      "slug": "sylvan-concordat",
+      "title": "Sylvan Concordat",
+      "category": "Nations",
+      "subtitle": "The Breadbasket of the Continent",
+      "infobox": {
+        "Capital": "Rootholm",
+        "Government": "Confederal council of Vault-Wardens",
+        "Founded": "12 AC (Pact of Roots)",
+        "Region": "[[verdant-lowlands|Verdant Lowlands]] and the Greatweald Basin",
+        "Motto": "“What we bury, we keep.”",
+        "Primary resource": "[[alchemical-grain|Alchemical Grain]]",
+        "Public mandate": "Ensure that no country is starving at the end of the Summit",
+        "Ethos": "Bio-harmony, herbal mastery, ancient pacts"
+      },
+      "lead": "The **Sylvan Concordat** is a confederation of farming and forest communities in the Greatweald Basin, and the largest producer of [[alchemical-grain|Alchemical Grain]] on the Continent. It is famed for its **root-vaults**, underground granaries in which grain is bound with fungal threads so that it keeps for decades. Sylvan is peaceful, cooperative and fiercely independent, and has never maintained more than a small militia.",
+      "sections": [
+        {
+          "heading": "History",
+          "body": "Before the [[great-convergence|Great Convergence]] the Greatweald was a patchwork of rival woodland clans. The Convergence buried half their fields under ash and drove the survivors into the caves beneath the forest. In 12 AC the elders of nine clans met at a hollow oak called the Hearthroot and swore the **Pact of Roots**: no clan would ever let another starve while any vault stood full. The Pact is the founding document of the Concordat and is still recited at each harvest festival.\n\nThe Concordat’s defining hour came in the **Winter of Open Silos** (188 AC). When the Alchemical Rust blight destroyed the grain of the northern lands, Sylvan opened its vaults to every nation, including those that had once threatened it. The gesture saved perhaps two million lives and earned Sylvan a moral authority that no army could buy. It also taught Sylvan a lesson its neighbours prefer to forget: a nation that feeds everyone is a nation worth taking. Convoys crossing the border during the Winter were escorted by the soldiers of the [[aethelgard-dominion|Aethelgard Dominion]], a favour that Aethelgard has recalled ever since."
+        },
+        {
+          "heading": "Root-vaults and Vault-Wardens",
+          "body": "A root-vault is a chamber carved beneath the forest floor, lined with living roots and seeded with **mycorrhizal fungal threads**. The threads bind each sack of grain and draw off the moisture that breeds rot. The craft is guarded by the **Vault-Wardens**, an order of herbalists who inspect every vault each season and who also hold seats on the Concordat’s council. A Warden may not own farmland; the saying is that “the keeper must not be the eater.”"
+        },
+        {
+          "heading": "Government and society",
+          "body": "Sylvan has no king and no standing capital authority beyond the Council of Vault-Wardens, which meets at Rootholm. Decisions are taken by consensus where possible and by a count of vault-stones where not. Sylvan citizens value sustainability, craft and mutual aid; markets are local, and debts are customarily forgiven after a poor harvest.\n\nBecause it has rarely invested in arms, Sylvan relies on diplomacy and on its reputation. It has a long-standing, uneasy security understanding with [[aethelgard-dominion|Aethelgard]] and a trading partnership with [[iron-val-khor|Val-Khor]], which depends on Sylvan grain to feed its foundry towns."
+        },
+        {
+          "heading": "Foreign relations",
+          "body": "Sylvan is courted by every power and trusted by few to stay neutral. [[aquila-maritime-league|Aquila]] buys its surplus for resale; [[solaris-ascendancy|Solaris]] regards the Concordat as a moral ally; the [[umbral-enclave|Umbral Enclave]] sees Sylvan as the only large nation that has never tried to dominate it. In the [[spire-accords|Spire Accords]] Sylvan traditionally holds two Assembly votes."
+        },
+        {
+          "heading": "The present crisis",
+          "body": "After the failed harvest of 303 AC, Sylvan’s vaults are the Continent’s last real reserve, and the Council has been warned by its own scientists that the blight may not be an isolated event. The Concordat therefore faces a painful choice between its founding promise and its own survival."
+        }
+      ],
+      "see_also": ["verdant-lowlands", "alchemical-grain", "winter-of-open-silos", "aethelgard-dominion"],
+      "references": ["The Pact of Roots, Hearthroot Manuscript, 12 AC", "Annals of the Open Silos, Spire Archive, vol. IV", "Handbook of the Vault-Wardens, 6th ed."]
+    },
+    {
+      "slug": "iron-val-khor",
+      "title": "Iron Val-Khor",
+      "category": "Nations",
+      "subtitle": "The Industrial Heartland",
+      "infobox": {
+        "Capital": "Khorgate",
+        "Government": "Republic of Forge Collectives",
+        "Founded": "58 AC (Charter of the Nine Forges)",
+        "Region": "[[mount-khor-spine|Mount Khor Spine]] and the Mistveil Chasm",
+        "Motto": "“Strike once, strike true.”",
+        "Primary resource": "[[aether-cores|Aether Cores]]",
+        "Public mandate": "At least four countries must finish the Summit with 60 or more Cores",
+        "Ethos": "Heavy metallurgy, forge collectives, industrial output"
+      },
+      "lead": "**Iron Val-Khor** is the industrial heartland of the Continent, a mountain republic built around the blast-furnace caverns of Mount Khor. Its smiths stabilise volatile liquid aether into solid [[aether-cores|Aether Cores]], the energy matrices that power cities from coast to coast. Val-Khor believes that technological progress is the key to the Continent’s future, and that it should be the one to lead it.",
+      "sections": [
+        {
+          "heading": "History",
+          "body": "When the [[great-convergence|Convergence]] cracked the northern mountains it opened the **Mistveil Chasm**, a gash venting sulphur gas and raw aether steam. For three decades it killed everyone who approached it. In 31 AC a smith named **Hadrek Vorn** lowered a basalt crucible on a chain into the vapour and drew up the first solid crystal of aether. Within a generation the miners and metalworkers of the Spine had organised themselves into nine **Forge Collectives**, which in 58 AC signed the Charter of the Nine Forges and declared the Republic of Val-Khor.\n\nThe young republic grew rich by selling power, and then nearly destroyed itself. In 203 AC the **Ember Riots** broke out when the Collectives cut bread rations to meet an order for cores; the army was called out against the workers, and the Charter was rewritten to guarantee every foundry-town a grain allocation. That guarantee is the root of Val-Khor’s modern dependence on [[sylvan-concordat|Sylvan]] grain."
+        },
+        {
+          "heading": "Industry and the Mistveil turbines",
+          "body": "Only Val-Khor possesses the pressurised, reinforced turbines needed to harvest the Mistveil vents without catastrophic pipe collapse. The process is still dangerous: the **Cinder Night** of 241 AC, when an overloaded grid at Khor-Deep breached and poisoned a valley, remains a national trauma and the reason every foundry now carries a safety warden answerable to the Collectives rather than to management.\n\nA nation holding 75 or more active cores unlocks what economists call **technological efficiency**, a power grid so refined that its people consume a quarter less grain. Val-Khor was the first to achieve it."
+        },
+        {
+          "heading": "Government and society",
+          "body": "Power rests with the Council of Nine, one delegate per Forge Collective, chosen by journeymen vote. Val-Khor prizes craftsmanship, punctuality and plain speech; its citizens are known across the Continent for their bluntness. Social standing is earned in the forge, and the highest honour is the Iron Ring, awarded to smiths who complete a masterwork.\n\nVal-Khor is dependent on others for basic supplies and cautious about sharing its industrial secrets. It maintains a sizeable military to protect the Mistveil, which worries [[aethelgard-dominion|Aethelgard]] and [[solaris-ascendancy|Solaris]] alike."
+        },
+        {
+          "heading": "Foreign relations",
+          "body": "Val-Khor sells cores to everyone and trusts almost no-one with the formula. It trades heavily with [[aquila-maritime-league|Aquila]], whose fleets carry its goods, and quarrels periodically with [[aethelgard-dominion|Aethelgard]] over the northern passes. Its relationship with [[solaris-ascendancy|Solaris]] is one of mutual respect and quiet rivalry."
+        }
+      ],
+      "see_also": ["mount-khor-spine", "aether-cores", "cinder-night", "sylvan-concordat"],
+      "references": ["Charter of the Nine Forges, 58 AC", "Vorn, H., Notes on the First Crucible", "Report on the Cinder Night, Spire Archive"]
+    },
+    {
+      "slug": "solaris-ascendancy",
+      "title": "Solaris Ascendancy",
+      "category": "Nations",
+      "subtitle": "The Leader of the Continental Order",
+      "infobox": {
+        "Capital": "Helion",
+        "Government": "Hereditary Sun-Chancellery with an elected Senate of Terraces",
+        "Founded": "94 AC (Mandate of the Sun)",
+        "Region": "[[solar-plateau|Solar Plateau]] and the Sun Marble Terraces",
+        "Motto": "“Let the light be seen.”",
+        "Primary resource": "Diplomatic prestige, [[echo-silk|Echo Silk]] imports",
+        "Public mandate": "At least three resolutions supported by four or more countries must pass",
+        "Ethos": "Divine mandate, grand architecture, solar radiance"
+      },
+      "lead": "The **Solaris Ascendancy** is the wealthiest and most prestigious power on the Continent, governing the sun-bleached terraces of the Solar Plateau from the white-marble city of Helion. For decades Solaris has stood at the centre of continental diplomacy, and it helped to build many of the institutions, including the [[neutral-spire|Neutral Spire]] itself, that keep the six nations cooperating. It sees itself as a natural leader, although not every country is equally comfortable with its influence.",
+      "sections": [
+        {
+          "heading": "History",
+          "body": "Solaris began as a religious order. In 94 AC the astronomer-priest **Ilvara Sunmaker** announced that the sun’s steady return after the [[great-convergence|Convergence]] was proof of a divine mandate to bring order to the shattered world. Her followers terraced the Solar Plateau with gleaming sun marble, and the Mandate of the Sun became a state.\n\nIts early centuries were austere and intolerant. In 119 AC the **Lantern Edict** forbade the private study of aether-lore without a licence from the Chancellery, and expelled those who refused. The exiles walked into the Abyssal Rift and founded what became the [[umbral-enclave|Umbral Enclave]]; the memory of the Edict is why Umbra still distrusts Solaris, and why Solaris still insists on a seat for Umbra at every table.\n\nAfter the [[salt-war|Salt War]] it was Solaris diplomats who proposed neutral ground for talks. The Spire Accords of 150 AC were largely a Solaris design, and the Ascendancy has chaired the Plenary ever since."
+        },
+        {
+          "heading": "Government",
+          "body": "The Sun-Chancellor is drawn from the Sunmaker line, but laws must pass the Senate of Terraces, a body of 120 delegates elected by the city guilds. In practice, Solaris government is government by precedent: the Chancellery’s archivists keep a vast library of every ruling since 94 AC and cite it endlessly. Solaris is proud of its fairness and slow to change its mind."
+        },
+        {
+          "heading": "Culture and architecture",
+          "body": "Solaris is known for its grand architecture. The sun marble of the terraces absorbs light by day and glows faintly at night, so that Helion appears lit from within. Citizens have grown accustomed to prosperity, and luxury goods, above all [[echo-silk|Echo Silk]] from [[aquila-maritime-league|Aquila]], are woven into public ceremony. The annual Festival of the Long Noon is the largest gathering on the Continent."
+        },
+        {
+          "heading": "Foreign relations",
+          "body": "Solaris commands three votes in the Assembly when its standing is high, more than any other nation. Its leadership is accepted by [[sylvan-concordat|Sylvan]] and [[aquila-maritime-league|Aquila]], tolerated by [[aethelgard-dominion|Aethelgard]], and resented by the [[umbral-enclave|Umbral Enclave]]. Solaris diplomats watch [[iron-val-khor|Val-Khor]] closely, aware that its industrial and military strength could one day challenge the continental order."
+        }
+      ],
+      "see_also": ["solar-plateau", "spire-accords", "umbral-enclave", "echo-silk"],
+      "references": ["The Mandate of the Sun, Helion Chancellery, 94 AC", "The Lantern Edict and Its Consequences, Spire Archive", "Sunmaker, I., Meditations on the Return of Light"]
+    },
+    {
+      "slug": "umbral-enclave",
+      "title": "Umbral Enclave",
+      "category": "Nations",
+      "subtitle": "The Voice of the Periphery",
+      "infobox": {
+        "Capital": "Lanternfall",
+        "Government": "Conclave of Seven Veils",
+        "Founded": "120 AC (after the Lantern Edict)",
+        "Region": "[[abyssal-rift|Abyssal Rift]] and the subterranean catacombs",
+        "Motto": "“No single light.”",
+        "Primary resource": "[[aether-cores|Aether]] synthesis",
+        "Public mandate": "No country may finish the Summit with more than 90 Military",
+        "Ethos": "Aetherial synthesis, espionage, arcane secrecy"
+      },
+      "lead": "The **Umbral Enclave** is a small, resource-rich state built in and beneath the Abyssal Rift. It has long existed in the shadow of larger powers, and its people are deeply suspicious of any country becoming powerful enough to dominate the Continent. Umbra advocates a balance of power in which even smaller states retain their independence and political voice, and it is feared and respected for the skill of its cryptographers.",
+      "sections": [
+        {
+          "heading": "History",
+          "body": "Umbra was founded by exiles. After the Solaris **Lantern Edict** of 119 AC outlawed unlicensed aether-study, around four thousand scholars, smiths and dissidents walked into the Abyssal Rift, a chasm so deep that sunlight never reaches its floor. They were expected to die. Instead they discovered that the rift’s walls weep a mineral that, under the right conditions, can be synthesised into usable aether without the deadly vents of the north.\n\nThe settlers built cities in the catacombs and, remembering what a single authority had done to them, wrote a constitution that divided power among **Seven Veils**, seven councils that each hold part of every decision and none of which knows what the others know. The result is a government as secretive as it is stable.\n\nDuring the [[salt-war|Salt War]] Umbra sold intelligence to both sides, an act it defends as the rational course for a small state and which neither side has entirely forgiven."
+        },
+        {
+          "heading": "Cryptography and intelligence",
+          "body": "Umbral cryptographers are the best on the Continent. Operating from cloistered catacombs, they monitor international negotiations and votes, seeking to detect when one power is quietly accumulating influence. A guiding rule of Umbral foreign policy is that no rival should ever hold three or more Assembly votes, because three votes can carry a motion alone. Umbra’s own base strength in the Assembly is a single vote, and it has learned to exercise it with extreme precision."
+        },
+        {
+          "heading": "Society",
+          "body": "Life in the catacombs is quiet, ordered and private. Citizens wear a grey veil in public during formal occasions, and it is considered rude to ask what someone does for the Enclave. The nation’s greatest festival, Lanternfall, marks the day the first exiles reached the floor of the Rift and lit a single lamp."
+        },
+        {
+          "heading": "Foreign relations",
+          "body": "Umbra’s great suspicion is [[solaris-ascendancy|Solaris]], whose Edict created it. It is friendly with [[sylvan-concordat|Sylvan]], the one large nation it believes has never tried to dominate it, and cautiously commercial with [[iron-val-khor|Val-Khor]], whose cores compete with Umbra’s synthesised aether. It must nonetheless avoid isolation: a small state with no friends is an easy prey."
+        }
+      ],
+      "see_also": ["abyssal-rift", "spire-accords", "solaris-ascendancy", "salt-war"],
+      "references": ["The Seven Veils Constitution, 121 AC", "Account of the Descent, Lanternfall Archive", "Umbral Dispatches to the Spire, 141–149 AC"]
+    },
+    {
+      "slug": "aquila-maritime-league",
+      "title": "Aquila Maritime League",
+      "category": "Nations",
+      "subtitle": "The Crossroads of Commerce",
+      "infobox": {
+        "Capital": "Halcyon Quay",
+        "Government": "Merchant oligarchy (the Ledger Council)",
+        "Founded": "57 AC (Compact of Harbours)",
+        "Region": "[[sea-of-glass|Sea of Glass]] archipelago and the Whispering Straits",
+        "Motto": "“Every road is a ledger.”",
+        "Primary resource": "[[echo-silk|Echo Silk]]",
+        "Public mandate": "Every country must successfully trade with at least two different countries",
+        "Ethos": "Free oceans, commercial fleets, luxury silk guilds"
+      },
+      "lead": "The **Aquila Maritime League** is a trading confederation of island ports in the Sea of Glass. Its harbours connect almost every corner of the Continent, and it has built its prosperity not through conquest or natural resources but through trade, transport and credit. Aquila believes that countries which depend on one another economically are less likely to become enemies.",
+      "sections": [
+        {
+          "heading": "History",
+          "body": "After the [[great-convergence|Convergence]] the southern ocean was left flat as polished obsidian, and the islands of the archipelago were nothing but rubble. In 57 AC the harbour-masters of eleven islands signed the **Compact of Harbours**, agreeing to share lighthouses, pilots and tariffs. In 70 AC a pilot named **Maren Ostrel** noticed luminescent moths nesting in the sea-caves of the Whispering Straits and traced the shimmering cocoons that became the foundation of [[echo-silk|Echo Silk]]. The silk guilds that grew around it made Aquila rich.\n\nAquila’s power was tested in the [[salt-war|Salt War]] (141–149 AC), when [[aethelgard-dominion|Aethelgard]] tried to seize the Straits tolls by force. Aquila won not by arms but by closing every port to Aethelgard’s merchants; within eight months Aethelgard’s granaries were empty and its generals were negotiating at **Brinegate**."
+        },
+        {
+          "heading": "The Ledger Council",
+          "body": "Aquila is governed by the Ledger Council, a body of the League’s wealthiest merchant houses, whose votes are weighted by taxes paid. Critics call it an oligarchy; supporters call it honesty. The League also keeps the continental credit ledgers, the shared records by which debts between nations are settled, and so exerts influence far beyond its military strength."
+        },
+        {
+          "heading": "Ships and silk",
+          "body": "The Sea of Glass is calm to the point of treachery: there is no wind to sail by and no current to ride, so Aquila’s galleys are specialised shallow-draft vessels rowed by trained crews. The League’s silk guilds guard their art jealously, and the export of unspun cocoons is punishable by exile."
+        },
+        {
+          "heading": "Foreign relations",
+          "body": "Aquila has built its security on being useful to as many nations as possible: a country connected to everyone is difficult to isolate. It sells silk to [[solaris-ascendancy|Solaris]], carries [[iron-val-khor|Val-Khor]]’s cores and buys [[sylvan-concordat|Sylvan]] grain. Its one open enemy is a long memory of the Salt War, which it still raises whenever Aethelgard proposes increasing its fleet."
+        }
+      ],
+      "see_also": ["sea-of-glass", "echo-silk", "salt-war", "spire-accords"],
+      "references": ["Compact of Harbours, 57 AC", "Ostrel, M., Log of the Moth Caves", "Treaty of Brinegate, 149 AC"]
+    },
+    {
+      "slug": "aethelgard-dominion",
+      "title": "Aethelgard Dominion",
+      "category": "Nations",
+      "subtitle": "The Guardian of Stability",
+      "infobox": {
+        "Capital": "Aethelhold",
+        "Government": "Feudal monarchy with a Council of Wardens",
+        "Founded": "33 AC (Oath of the Steppe)",
+        "Region": "[[northern-steppes|Northern Rocky Steppes]] and the frontier citadels",
+        "Motto": "“The wall is the peace.”",
+        "Primary resource": "Military power",
+        "Public mandate": "No country may finish the Summit with Stability below 50",
+        "Ethos": "Martial honour, feudal castles, strategic strongholds"
+      },
+      "lead": "The **Aethelgard Dominion** is a feudal military power whose chain of fortified citadels guards the northern frontier of the Continent. It emerged from a turbulent history with a strong belief that peace requires security. It maintains one of the Continent’s most powerful militaries and sees itself as a protector of regional stability. While some countries appreciate this role, others worry about the amount of power concentrated in Aethelgard’s hands.",
+      "sections": [
+        {
+          "heading": "History",
+          "body": "The northern steppes were the first lands to be settled after the [[great-convergence|Convergence]], and the last to be safe. Raiders from the shattered highlands harried the settlers for a generation until, in 33 AC, a minor knight named **Aethel Garrowmere** gathered forty hill-lords at a ring of standing stones and swore the **Oath of the Steppe**: each lord would defend his neighbour’s walls as his own. The Dominion takes its name from her.\n\nAethelgard’s ambitions overreached in the **Salt War** (141–149 AC), when its High Marshal Corvane Brask tried to seize control of the Whispering Straits tolls from [[aquila-maritime-league|Aquila]]. The campaign failed when Aquila embargoed Aethelgard’s harbours and its granaries ran dry. The defeat at **Brinegate** was humiliating, and it left a lasting conviction: the Dominion must never again be dependent on others for food or fuel.\n\nIt redeemed itself in the **Winter of Open Silos** (188 AC), when its soldiers escorted [[sylvan-concordat|Sylvan]] grain convoys across hostile country, an episode Aethelgard cites whenever its military budget is questioned."
+        },
+        {
+          "heading": "Citadels and the feudal order",
+          "body": "A chain of seventeen citadels runs along the steppe ridgeline, each commanded by a hereditary Warden who owes the Crown service in arms. The system is rigid but dependable: the Dominion can mobilise faster than any other power. A young knight earns a place at court not by birth alone but by completing the **Long Watch**, a winter alone on a frontier tower.\n\nAethelgard’s military doctrine is simple. War is least likely when no rival believes it can win. The government considers overwhelming military superiority the best guarantee of peace, and keeps strategic reserves of grain and cores against any prolonged crisis."
+        },
+        {
+          "heading": "Foreign relations",
+          "body": "Aethelgard has a long security understanding with [[sylvan-concordat|Sylvan]], a bitter memory with [[aquila-maritime-league|Aquila]], and a wary eye on [[iron-val-khor|Val-Khor]], whose growing military-industrial capacity it regards as the first genuine strategic threat in decades. Its relationship with [[solaris-ascendancy|Solaris]] is formal and cool."
+        }
+      ],
+      "see_also": ["northern-steppes", "salt-war", "winter-of-open-silos", "spire-accords"],
+      "references": ["Oath of the Steppe, 33 AC", "Brask, C., Dispatches from the Straits Campaign", "Treaty of Brinegate, 149 AC"]
+    },
+    {
+      "slug": "great-convergence",
+      "title": "Great Convergence",
+      "category": "History",
+      "subtitle": "The cataclysm that began the calendar",
+      "infobox": {
+        "Date": "Year 0 AC",
+        "Type": "Tectonic upheaval",
+        "Duration": "About forty years of aftershocks (the Dark Decades)",
+        "Effect": "Rise of the [[neutral-spire|Spire]] plateaus; reshaping of every coastline",
+        "Legacy": "Calendar reckoned in years After Convergence (AC)"
+      },
+      "lead": "The **Great Convergence** was the tectonic upheaval, three centuries before the Summit, that forced the Continent’s plates inward, lifting the obsidian plateaus of the [[neutral-spire|Neutral Spire]] above sea level and reshaping every coast, mountain and river. All histories on the Continent begin from it, and the calendar counts years AC, After Convergence.",
+      "sections": [
+        {
+          "heading": "The event",
+          "body": "Chroniclers agree that the Convergence lasted nine days and that the sound was heard on every shore. When it ended, a vast raised basin of black glass stood where there had been open sea, and around it ran new ranges of volcanic mountains. The coastline of the south collapsed into the archipelago that became the [[sea-of-glass|Sea of Glass]]; the northern ranges cracked open into the Mistveil Chasm; and deep in the west a fault opened that would become the [[abyssal-rift|Abyssal Rift]]."
+        },
+        {
+          "heading": "The Dark Decades",
+          "body": "For roughly forty years the Continent shook with aftershocks, and ash darkened the sky so thoroughly that the sun was a rumour. Famine and plague killed, by most estimates, two in every three inhabitants. The survivors gathered in defensible pockets, which became the seeds of the six nations."
+        },
+        {
+          "heading": "Consequences",
+          "body": "The Convergence left behind three things that shaped every later age. First, the silt-rich [[verdant-lowlands|Verdant Lowlands]], where [[alchemical-grain|Alchemical Grain]] germinates twice as fast as anywhere else. Second, raw aether, venting from the new chasms and forming the basis of [[aether-cores|Aether Cores]]. Third, the memory of scarcity, which every nation carries and which explains much of its politics."
+        }
+      ],
+      "see_also": ["neutral-spire", "verdant-lowlands", "timeline-of-the-continent"],
+      "references": ["The Nine Days: Eyewitness Accounts, Spire Archive", "Annals of the Dark Decades, vols. I–III"]
+    },
+    {
+      "slug": "neutral-spire",
+      "title": "Neutral Spire",
+      "category": "Institutions",
+      "subtitle": "Seat of the Summit",
+      "infobox": {
+        "Type": "Neutral city and assembly hall",
+        "Location": "Centre of the obsidian Spire plateaus",
+        "Built": "150–163 AC",
+        "Governed by": "The Archivists of the Spire (non-partisan)",
+        "Purpose": "Host of the Plenary Assembly under the [[spire-accords|Spire Accords]]"
+      },
+      "lead": "The **Neutral Spire**, also called the Spire of Accords, is a tower-city of black volcanic glass at the centre of the Continent, built on the plateaus raised by the [[great-convergence|Great Convergence]]. It belongs to no nation. It exists only to host negotiation, and is the permanent seat of the Plenary Assembly.",
+      "sections": [
+        {
+          "heading": "Construction",
+          "body": "Following the [[salt-war|Salt War]], the diplomats of [[solaris-ascendancy|Solaris]] proposed a place no army could claim. The Spire was raised over thirteen years by labourers from all six nations, each of which was responsible for one tier. The result is a spiral of six galleries, each decorated in the style of one nation, ascending to the circular Plenary Hall at the top."
+        },
+        {
+          "heading": "The Archivists",
+          "body": "The Spire is administered by the Archivists, a corps of scribes who swear to abandon every national loyalty on entering. They keep the minutes, count the votes and maintain the Spire Archive, the Continent’s only complete record of its history. An Archivist found to have favoured a nation is stripped of the grey sash and exiled from the Spire."
+        },
+        {
+          "heading": "The Plenary Hall",
+          "body": "The Plenary Hall holds six benches in a ring around a central dais. Proposals are read from the dais and voted by roll-call, with each nation’s weight determined by its standing. The Hall’s acoustics are famously perfect; a whisper on the dais can be heard on every bench, and for this reason no one has ever been allowed to whisper there."
+        }
+      ],
+      "see_also": ["spire-accords", "great-convergence", "solaris-ascendancy"],
+      "references": ["Records of the Building of the Spire, 150–163 AC", "Rules of the Archivists, 3rd ed."]
+    },
+    {
+      "slug": "spire-accords",
+      "title": "Spire Accords",
+      "category": "Institutions",
+      "subtitle": "The Founders’ Charter and the Two-Sponsor Rule",
+      "infobox": {
+        "Signed": "150 AC (Charter ratified 151 AC)",
+        "Location": "[[neutral-spire|Neutral Spire]]",
+        "Signatories": "All six nations",
+        "Key provision": "Two-sponsor rule for motions",
+        "Prompted by": "The [[salt-war|Salt War]] and the Midnight Tariff"
+      },
+      "lead": "The **Spire Accords** are the founding agreements of the modern Continent, signed in 150 AC at the end of the [[salt-war|Salt War]]. Their central instrument, the **Founders’ Charter**, created the Plenary Assembly and the procedural rules by which it governs. Among them is the famous **Two-Sponsor Rule**: no statute or declaration may be presented for formal voting unless it has been co-sponsored by at least two sovereign nations during the working session. Unsponsored motions die on the floor.",
+      "sections": [
+        {
+          "heading": "Origins",
+          "body": "The immediate cause of the Charter was the **Midnight Tariff** of 149 AC. In the last weeks of the war a single delegate, acting alone, imposed a punitive grain tariff on the whole Continent during a late-night session that most nations had left. The tariff caused a famine in two provinces before it could be repealed. The delegates who drafted the Charter agreed that no measure should ever again depend on one voice. The Two-Sponsor Rule was the result."
+        },
+        {
+          "heading": "Provisions",
+          "body": "The Charter sets out the following principles.\n\nFirst, every nation has a base number of Assembly votes, adjusted by its diplomatic standing: nations with the highest standing carry the most weight. Second, motions need two sponsors before they reach the floor. Third, the Spire is permanently neutral: no army may enter it, and no nation may garrison it. Fourth, and less often remembered, the Charter requires that the Assembly meet in an emergency session whenever a nation faces famine."
+        },
+        {
+          "heading": "Assembly votes",
+          "body": "In practice the Assembly’s balance of power turns on a handful of votes. A nation holding three votes can carry a motion alone, which is why the [[umbral-enclave|Umbral Enclave]] watches the count so closely. A further rule grants one extra vote to the realm with the greatest total tangible wealth, a rule drafted by the merchants of [[aquila-maritime-league|Aquila]] and criticised since its inception."
+        }
+      ],
+      "see_also": ["neutral-spire", "salt-war", "umbral-enclave"],
+      "references": ["The Founders’ Charter, 151 AC", "Debates of the First Plenary, Spire Archive"]
+    },
+    {
+      "slug": "salt-war",
+      "title": "Salt War",
+      "category": "History",
+      "subtitle": "The conflict that created the Spire Accords",
+      "infobox": {
+        "Date": "141–149 AC",
+        "Location": "[[sea-of-glass|Sea of Glass]] and the Whispering Straits",
+        "Result": "Treaty of Brinegate; Spire Accords",
+        "Combatants": "[[aethelgard-dominion|Aethelgard]] versus [[aquila-maritime-league|Aquila]] (with Umbral intelligence on both sides)",
+        "Commanders": "High Marshal Corvane Brask; Ledger-Master Ilsa Quenn"
+      },
+      "lead": "The **Salt War** (141–149 AC) was the only large-scale war between nations in the Continent’s recorded history. It was fought between [[aethelgard-dominion|Aethelgard]] and [[aquila-maritime-league|Aquila]] over the right to levy tolls on the salt-ships passing through the Whispering Straits, and ended with the **Treaty of Brinegate**.",
+      "sections": [
+        {
+          "heading": "Causes",
+          "body": "Salt was essential for preserving grain, and nearly all of it came by sea. When Aquila raised its Straits tolls, Aethelgard, which had no coast of its own, claimed that the price amounted to economic strangulation. High Marshal Corvane Brask led an expeditionary force against the Straits in 141 AC."
+        },
+        {
+          "heading": "The war",
+          "body": "Brask took the northern shore in the first summer. Aquila’s Ledger-Master Ilsa Quenn, unable to match her opponent on land, ordered every port in the League closed to Aethelgard’s ships, merchants and bankers. Within eight months the Dominion’s granaries were empty and its army was starving. The [[umbral-enclave|Umbral Enclave]] supplied intelligence to both sides, which prolonged the war by almost two years."
+        },
+        {
+          "heading": "Treaty of Brinegate",
+          "body": "Peace was signed at the Aquilan port of Brinegate in 149 AC. Aethelgard withdrew; Aquila reduced its tolls and accepted an independent customs board. The delegates agreed to meet at a neutral location to discuss a permanent peace. That meeting became the [[spire-accords|Spire Accords]] and the building of the [[neutral-spire|Neutral Spire]]."
+        }
+      ],
+      "see_also": ["spire-accords", "aethelgard-dominion", "aquila-maritime-league"],
+      "references": ["Treaty of Brinegate, 149 AC", "Brask, C., Dispatches from the Straits Campaign", "Quenn, I., The Closed Harbours"]
+    },
+    {
+      "slug": "winter-of-open-silos",
+      "title": "Winter of Open Silos",
+      "category": "History",
+      "subtitle": "The great Rust famine of 188 AC",
+      "infobox": {
+        "Date": "188–189 AC",
+        "Cause": "Alchemical Rust blight",
+        "Affected": "Northern and central Continent",
+        "Relief by": "[[sylvan-concordat|Sylvan Concordat]], escorted by [[aethelgard-dominion|Aethelgard]]"
+      },
+      "lead": "The **Winter of Open Silos** (188–189 AC) was a continent-wide famine caused by the Alchemical Rust blight, ended when the [[sylvan-concordat|Sylvan Concordat]] opened its root-vaults to every nation.",
+      "sections": [
+        {
+          "heading": "The Rust",
+          "body": "In the spring of 188 AC a rust-coloured spore swept south across the northern grainfields, turning ripe [[alchemical-grain|Alchemical Grain]] to powder in a single night. By autumn, harvests in three nations had failed entirely."
+        },
+        {
+          "heading": "The opening of the vaults",
+          "body": "The Vault-Wardens of Sylvan convened in Rootholm and, against the advice of their treasurers, voted to distribute their reserves to every nation that asked, without payment. Convoys of grain wagons crossed the Continent under the protection of [[aethelgard-dominion|Aethelgard]] soldiers. An estimated two million lives were saved."
+        },
+        {
+          "heading": "Legacy",
+          "body": "The Winter gave Sylvan enormous moral authority but also taught the Continent that a single nation’s granaries were its last line of defence. It is the origin of the Emergency Redistribution doctrine in the Assembly, and of Aethelgard’s insistence on strategic reserves."
+        }
+      ],
+      "see_also": ["sylvan-concordat", "alchemical-grain", "aethelgard-dominion"],
+      "references": ["Annals of the Open Silos, Spire Archive, vol. IV"]
+    },
+    {
+      "slug": "cinder-night",
+      "title": "Cinder Night",
+      "category": "History",
+      "subtitle": "The Khor-Deep reactor breach of 241 AC",
+      "infobox": {
+        "Date": "241 AC",
+        "Location": "Khor-Deep, [[mount-khor-spine|Mount Khor Spine]]",
+        "Cause": "Overloaded aether grid",
+        "Consequence": "Safety-warden system; international inspection rules"
+      },
+      "lead": "The **Cinder Night** of 241 AC was the worst industrial disaster in the Continent’s history, when an overloaded aether grid at the Khor-Deep foundry breached and rained glowing ash over a valley of [[iron-val-khor|Val-Khor]].",
+      "sections": [
+        {
+          "heading": "The breach",
+          "body": "A rush order for cores pushed the Khor-Deep foundry beyond its safe limit. At midnight the grid failed, and the contained aether escaped in a rolling cloud that burned fields and poisoned water for forty miles."
+        },
+        {
+          "heading": "Aftermath",
+          "body": "Over nine thousand people died in the following weeks. In response the Collectives established the safety-warden system, a corps of inspectors answerable to the workers rather than the managers. Val-Khor also invited, for the first and only time, foreign observers into its foundries, laying the groundwork for continental safety standards."
+        }
+      ],
+      "see_also": ["iron-val-khor", "aether-cores"],
+      "references": ["Report on the Cinder Night, Spire Archive"]
+    },
+    {
+      "slug": "verdant-lowlands",
+      "title": "Verdant Lowlands",
+      "category": "Geography",
+      "subtitle": "Breadbasket region of the Continent",
+      "infobox": {
+        "Location": "Surrounding the [[neutral-spire|Spire plateaus]]",
+        "Terrain": "Silt plains and forest basin (Greatweald)",
+        "Controlled by": "[[sylvan-concordat|Sylvan Concordat]]",
+        "Notable feature": "Convergence silt that doubles grain germination speed"
+      },
+      "lead": "The **Verdant Lowlands** are the broad silt plains and forest basins surrounding the [[neutral-spire|Spire plateaus]], including the Greatweald Basin. Natural silt deposits left by the [[great-convergence|Convergence]] allow [[alchemical-grain|Alchemical Grain]] to germinate twice as fast as anywhere else on the Continent, making the region the Continent’s breadbasket.",
+      "sections": [
+        {
+          "heading": "Geography",
+          "body": "The Lowlands lie in the shelter of the Spire plateaus, protected from northern winds and watered by rivers that run off the obsidian highlands. The Greatweald, a forest of enormous roots and tangled canopy, covers the southern half and hosts the Sylvan root-vaults."
+        },
+        {
+          "heading": "Climate and risks",
+          "body": "The Lowlands are exposed to blight, locust swarms, drought and wildfire. The Alchemical Rust of 188 AC, which devastated the north, was halted at the Lowlands’ borders by the work of the Vault-Wardens, who burned a firebreak a hundred miles long."
+        }
+      ],
+      "see_also": ["sylvan-concordat", "alchemical-grain"],
+      "references": ["Survey of the Lowlands, Spire Archive"]
+    },
+    {
+      "slug": "mount-khor-spine",
+      "title": "Mount Khor Spine",
+      "category": "Geography",
+      "subtitle": "Volcanic mountains and the Mistveil Chasm",
+      "infobox": {
+        "Location": "Northern mountains",
+        "Controlled by": "[[iron-val-khor|Iron Val-Khor]]",
+        "Notable features": "Blast-furnace caverns, Mistveil Chasm",
+        "Hazards": "Earthquake, sulphur gas, mine collapse"
+      },
+      "lead": "The **Mount Khor Spine** is a range of volcanic mountains in the north of the Continent, home to the foundries of [[iron-val-khor|Val-Khor]]. Splitting the range is the **Mistveil Chasm**, a geothermal gash that vents superheated sulphur gas and pure raw aether steam.",
+      "sections": [
+        {
+          "heading": "The Mistveil Chasm",
+          "body": "The Chasm opened during the [[great-convergence|Great Convergence]] and was lethal for three decades. Only pressurised, reinforced turbines, designed by Val-Khor smiths, can capture the vents without catastrophic pipe collapse. The steam is condensed into liquid aether and carried by pipeline to the foundry caverns."
+        },
+        {
+          "heading": "The foundry caverns",
+          "body": "Inside the mountain, smiths stabilise liquid aether into solid [[aether-cores|Aether Cores]] using volcanic basalt crucibles. The caverns are lit by the glow of molten rock and heated by it; some lower chambers are too hot for human work and are staffed by relays of crews in cooled suits."
+        }
+      ],
+      "see_also": ["iron-val-khor", "aether-cores", "cinder-night"],
+      "references": ["Surveys of the Mistveil Chasm, Khorgate Guild Archives"]
+    },
+    {
+      "slug": "sea-of-glass",
+      "title": "Sea of Glass",
+      "category": "Geography",
+      "subtitle": "The mirror-calm southern ocean",
+      "infobox": {
+        "Location": "South of the Continent",
+        "Controlled by": "[[aquila-maritime-league|Aquila Maritime League]]",
+        "Notable features": "Calm surface, Whispering Straits, luminescent silk moths",
+        "Hazards": "Tsunami, storm surge"
+      },
+      "lead": "The **Sea of Glass** is the southern ocean of the Continent, so called for its mirror-calm surface. It is home to the archipelago of [[aquila-maritime-league|Aquila]] and the narrow **Whispering Straits**, where rare luminescent silk moths nest and produce the cocoons from which [[echo-silk|Echo Silk]] is made.",
+      "sections": [
+        {
+          "heading": "Navigation",
+          "body": "With no wind and almost no current, the Sea of Glass defeats sailing ships. Navigation requires specialised shallow-draft galleys, rowed by trained crews. Pilots memorise the sea-lanes through the reefs, and their knowledge is a guild secret."
+        },
+        {
+          "heading": "The Whispering Straits",
+          "body": "The Straits are so named because the echoes in their sea-caves carry whispers for miles. The caves shelter the silk moths, whose cocoons shimmer faintly in the dark. The Straits are the narrowest and most valuable passage on the Continent, and the cause of the [[salt-war|Salt War]]."
+        },
+        {
+          "heading": "Disasters",
+          "body": "The sea’s calm is deceptive. The archipelago lies on a subduction fault, and the great tsunamis that periodically strike the islands arrive without warning from beneath the mirrored surface."
+        }
+      ],
+      "see_also": ["aquila-maritime-league", "echo-silk", "salt-war"],
+      "references": ["Pilots’ Almanac of the Sea of Glass"]
+    },
+    {
+      "slug": "abyssal-rift",
+      "title": "Abyssal Rift",
+      "category": "Geography",
+      "subtitle": "The deep chasm of the Umbral Enclave",
+      "infobox": {
+        "Location": "Western Continent",
+        "Controlled by": "[[umbral-enclave|Umbral Enclave]]",
+        "Depth": "Several miles; sunlight never reaches the floor",
+        "Notable feature": "Mineral-weeping walls, subterranean catacombs"
+      },
+      "lead": "The **Abyssal Rift** is a vast fault in the western Continent, opened by the [[great-convergence|Great Convergence]]. Its floor lies in perpetual darkness. The [[umbral-enclave|Umbral Enclave]] has built a network of cities and catacombs along its walls.",
+      "sections": [
+        {
+          "heading": "The weeping walls",
+          "body": "The Rift’s walls seep a dark, glittering mineral that can be synthesised into usable aether without the deadly vents of the north. This process, discovered by the first exiles, is the foundation of Umbra’s economy."
+        },
+        {
+          "heading": "The catacombs",
+          "body": "Beneath the rift floor lies a labyrinth of tunnels. Umbra’s cryptographers work in sealed halls and its Seven Veils meet in rooms with no windows. Visitors are guided by lanterns, since any other light is forbidden in the capital."
+        }
+      ],
+      "see_also": ["umbral-enclave", "aether-cores"],
+      "references": ["Account of the Descent, Lanternfall Archive"]
+    },
+    {
+      "slug": "northern-steppes",
+      "title": "Northern Steppes",
+      "category": "Geography",
+      "subtitle": "Rocky frontier of the Aethelgard Dominion",
+      "infobox": {
+        "Location": "Northern Continent",
+        "Controlled by": "[[aethelgard-dominion|Aethelgard Dominion]]",
+        "Notable features": "Seventeen frontier citadels, standing-stone rings",
+        "Climate": "Cold, dry winters; poor soil"
+      },
+      "lead": "The **Northern Steppes** are a high, rocky grassland on the northern edge of the Continent, defended by the seventeen citadels of the [[aethelgard-dominion|Aethelgard Dominion]]. The soil is thin and the winters long, which is why Aethelgard has always struggled to feed itself.",
+      "sections": [
+        {
+          "heading": "Frontier citadels",
+          "body": "The citadels are built along the steppe ridgeline, each within sight of the next, so that a beacon lit at one can be seen at all. In winter, the watch is kept by single sentries in stone towers, an ordeal known as the Long Watch."
+        },
+        {
+          "heading": "Standing stones",
+          "body": "Scattered across the steppes are rings of standing stones, set up before the Convergence. It was at one such ring that Aethel Garrowmere gathered the forty hill-lords to swear the Oath of the Steppe in 33 AC."
+        }
+      ],
+      "see_also": ["aethelgard-dominion", "salt-war"],
+      "references": ["Surveys of the Northern Frontier"]
+    },
+    {
+      "slug": "solar-plateau",
+      "title": "Solar Plateau",
+      "category": "Geography",
+      "subtitle": "Sun marble terraces of Solaris",
+      "infobox": {
+        "Location": "Eastern Continent",
+        "Controlled by": "[[solaris-ascendancy|Solaris Ascendancy]]",
+        "Notable feature": "Sun marble terraces that glow at night",
+        "Climate": "Dry, sunny, nearly cloudless"
+      },
+      "lead": "The **Solar Plateau** is a high, dry tableland in the east of the Continent, terraced by the [[solaris-ascendancy|Solaris Ascendancy]] with gleaming sun marble. The stone absorbs sunlight by day and glows faintly at night, so that the city of Helion appears lit from within.",
+      "sections": [
+        {
+          "heading": "Sun marble",
+          "body": "Sun marble is a pale, translucent stone quarried only on the Plateau. Its terraces, built over two centuries, step down the hillside to the plains below and are the largest work of architecture on the Continent."
+        },
+        {
+          "heading": "Climate",
+          "body": "The Plateau enjoys more days of sun than any other region, but it has little rain. Solaris depends on imported grain and on the underground cisterns that collect the winter snow."
+        }
+      ],
+      "see_also": ["solaris-ascendancy"],
+      "references": ["Survey of the Terraces, Helion Chancellery"]
+    },
+    {
+      "slug": "alchemical-grain",
+      "title": "Alchemical Grain",
+      "category": "Resources",
+      "subtitle": "Food and lifeblood of the Continent",
+      "infobox": {
+        "Type": "Staple crop",
+        "Origin": "Cultivated in the [[verdant-lowlands|Verdant Lowlands]]",
+        "Consumption": "Baseline 20 units per nation per turn; 15 with technological efficiency",
+        "Weakness": "Alchemical Rust blight; rot"
+      },
+      "lead": "**Alchemical Grain** is the staple crop of the Continent, a hardy cereal whose seed absorbs trace minerals from Convergence silt. It feeds every nation, and the lack of it is the root of nearly every political crisis in the Continent’s history.",
+      "sections": [
+        {
+          "heading": "Cultivation",
+          "body": "The grain germinates twice as fast in silt deposits left by the [[great-convergence|Convergence]] than anywhere else. Outside the Lowlands it grows poorly and requires careful tending."
+        },
+        {
+          "heading": "Storage",
+          "body": "Untreated grain rots within two years. [[sylvan-concordat|Sylvan]] herbalists bind grain with mycorrhizal fungal threads in underground root-vaults, which preserves it for decades."
+        },
+        {
+          "heading": "Famine",
+          "body": "A nation whose silos run empty suffers rapidly falling vitality and civil unrest. The Continent has known two great famines: the Dark Decades after the Convergence, and the [[winter-of-open-silos|Winter of Open Silos]] in 188 AC."
+        }
+      ],
+      "see_also": ["sylvan-concordat", "verdant-lowlands", "winter-of-open-silos"],
+      "references": ["Treatise on Alchemical Grain, Vault-Wardens’ Press"]
+    },
+    {
+      "slug": "aether-cores",
+      "title": "Aether Cores",
+      "category": "Resources",
+      "subtitle": "Power and technology",
+      "infobox": {
+        "Type": "Energy matrix",
+        "Produced by": "[[iron-val-khor|Val-Khor]] (from Mistveil vents); [[umbral-enclave|Umbra]] (synthesised)",
+        "Key threshold": "75 Cores unlocks technological efficiency",
+        "Hazard": "Overload and breach"
+      },
+      "lead": "**Aether Cores** are solid crystalline energy matrices, stabilised from liquid aether, that power cities, workshops and fleets across the Continent. A nation with a large reserve can run its industry with remarkable efficiency.",
+      "sections": [
+        {
+          "heading": "Manufacture",
+          "body": "[[iron-val-khor|Val-Khor]] smiths harvest raw aether from the Mistveil vents and stabilise it in volcanic basalt crucibles. [[umbral-enclave|Umbral]] chemists produce a similar material from the mineral of the [[abyssal-rift|Abyssal Rift]]."
+        },
+        {
+          "heading": "Technological efficiency",
+          "body": "A nation holding 75 or more active cores unlocks technological efficiency: its power grid becomes so efficient that its population consumes a quarter less grain."
+        },
+        {
+          "heading": "Dangers",
+          "body": "Overloaded grids can breach, as happened on the [[cinder-night|Cinder Night]] of 241 AC."
+        }
+      ],
+      "see_also": ["iron-val-khor", "umbral-enclave", "cinder-night"],
+      "references": ["Handbook of Core Stabilisation, Khorgate Guild Press"]
+    },
+    {
+      "slug": "echo-silk",
+      "title": "Echo Silk",
+      "category": "Resources",
+      "subtitle": "Luxury and diplomacy",
+      "infobox": {
+        "Type": "Luxury textile",
+        "Source": "Cocoons of luminescent silk moths of the Whispering Straits",
+        "Produced by": "[[aquila-maritime-league|Aquila]] silk guilds",
+        "Uses": "Courtly ceremony, gifts, diplomatic favours"
+      },
+      "lead": "**Echo Silk** is a precious gossamer thread woven from the cocoons of the luminescent silk moths of the Whispering Straits. Prized in the courts of every nation, it is both a luxury good and a currency of diplomacy.",
+      "sections": [
+        {
+          "heading": "Production",
+          "body": "The moths nest only in the sea-caves of the [[sea-of-glass|Whispering Straits]]. The silk guilds of [[aquila-maritime-league|Aquila]] gather cocoons by night, spin them in dark workshops, and weave them into cloth that glows faintly for years."
+        },
+        {
+          "heading": "Use in diplomacy",
+          "body": "The gift of silk robes is a tradition at every Plenary. Public galas funded with silk are used to sway opinion and soothe grievances, and the absence of luxury in a wealthy nation is regarded as a sign of political decline."
+        }
+      ],
+      "see_also": ["aquila-maritime-league", "sea-of-glass", "solaris-ascendancy"],
+      "references": ["Ostrel, M., Log of the Moth Caves"]
+    },
+    {
+      "slug": "timeline-of-the-continent",
+      "title": "Timeline of the Continent",
+      "category": "History",
+      "subtitle": "Key dates, 0–304 AC",
+      "infobox": {
+        "Span": "Year 0 AC to 304 AC",
+        "Calendar": "AC (After Convergence)"
+      },
+      "lead": "This timeline lists the principal events in the history of the Continent from the [[great-convergence|Great Convergence]] to the opening of the Summit of Realms.",
+      "sections": [
+        {
+          "heading": "The early years (0–100 AC)",
+          "body": "**0 AC** The [[great-convergence|Great Convergence]].\n\n**0–40 AC** The Dark Decades.\n\n**12 AC** Pact of Roots: foundation of the [[sylvan-concordat|Sylvan Concordat]].\n\n**31 AC** Hadrek Vorn draws the first aether crystal from the Mistveil Chasm.\n\n**33 AC** Oath of the Steppe: foundation of the [[aethelgard-dominion|Aethelgard Dominion]].\n\n**57 AC** Compact of Harbours: foundation of the [[aquila-maritime-league|Aquila Maritime League]].\n\n**58 AC** Charter of the Nine Forges: foundation of [[iron-val-khor|Val-Khor]].\n\n**70 AC** Maren Ostrel discovers the silk moths.\n\n**94 AC** Mandate of the Sun: foundation of [[solaris-ascendancy|Solaris]]."
+        },
+        {
+          "heading": "The middle years (100–250 AC)",
+          "body": "**119 AC** The Lantern Edict.\n\n**120 AC** Founding of the [[umbral-enclave|Umbral Enclave]].\n\n**141–149 AC** The [[salt-war|Salt War]].\n\n**149 AC** Midnight Tariff; Treaty of Brinegate.\n\n**150 AC** [[spire-accords|Spire Accords]] signed; building of the [[neutral-spire|Neutral Spire]] begins.\n\n**163 AC** Completion of the Spire.\n\n**188–189 AC** [[winter-of-open-silos|Winter of Open Silos]].\n\n**203 AC** Ember Riots in Val-Khor.\n\n**241 AC** [[cinder-night|Cinder Night]]."
+        },
+        {
+          "heading": "The present (250–304 AC)",
+          "body": "**298 AC** The last fully successful harvest.\n\n**303 AC** The Failed Harvest: the worst crop failure in a generation.\n\n**304 AC** The Summit of Realms convenes at the Neutral Spire."
+        }
+      ],
+      "see_also": ["great-convergence", "spire-accords"],
+      "references": ["The Spire Archive Chronology, 6th ed."]
+    }
+  ]
+}
