@@ -769,6 +769,60 @@ def api_admin_toggle_auto_crisis():
     db.set_state("meta", meta)
     return jsonify({"success": True, "auto_inject_crisis": enabled})
 
+@app.route("/admin/report")
+def admin_report():
+    """Results report: printable HTML (default) or JSON (?format=json). Facilitator only."""
+    if not (is_admin() or app.config.get("TESTING", False)):
+        return redirect(url_for("admin_view"))
+    report = engine.build_report()
+    stamp = time.strftime("%Y-%m-%d-%H%M")
+    if request.args.get("format") == "json":
+        resp = make_response(json.dumps(report, ensure_ascii=False, indent=1))
+        resp.headers["Content-Type"] = "application/json; charset=utf-8"
+        resp.headers["Content-Disposition"] = f'attachment; filename="summit-results-{stamp}.json"'
+        return resp
+    resp = make_response(render_template("report.html", r=report))
+    if request.args.get("download") == "1":
+        resp.headers["Content-Disposition"] = f'attachment; filename="summit-results-{stamp}.html"'
+    return resp
+
+@app.route("/api/admin/reflection", methods=["POST"])
+def api_admin_reflection():
+    data = request.get_json(silent=True) or {}
+    ok, msg = engine.admin_set_reflection(data.get("step"))
+    return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
+
+# -----------------------------------------------------------------------------
+# Saves: server autosaves every 5 minutes + downloadable save files
+# -----------------------------------------------------------------------------
+@app.route("/api/admin/saves")
+def api_admin_saves():
+    if not (is_admin() or app.config.get("TESTING", False)):
+        return jsonify({"success": False, "message": "Facilitator authentication required."}), 401
+    return jsonify({"success": True, "interval": engine.AUTOSAVE_INTERVAL, "saves": engine.db.list_autosaves()})
+
+@app.route("/api/admin/save/export")
+def api_admin_save_export():
+    if not (is_admin() or app.config.get("TESTING", False)):
+        return jsonify({"success": False, "message": "Facilitator authentication required."}), 401
+    save_id = request.args.get("id", type=int)
+    snapshot = engine.db.get_autosave(save_id) if save_id else engine.db.dump_all()
+    if snapshot is None:
+        return jsonify({"success": False, "message": "Save not found."}), 404
+    return jsonify({"success": True, "format": "summit-of-realms-save", "saved_at": time.time(), "snapshot": snapshot})
+
+@app.route("/api/admin/save/now", methods=["POST"])
+def api_admin_save_now():
+    save_id = engine.autosave(label="Manual save", force=True)
+    return jsonify({"success": True, "message": "Game saved.", "id": save_id})
+
+@app.route("/api/admin/save/restore", methods=["POST"])
+def api_admin_save_restore():
+    data = request.get_json(silent=True) or {}
+    snapshot = engine.db.get_autosave(int(data["id"])) if data.get("id") else data.get("snapshot")
+    ok, msg = engine.restore_snapshot(snapshot)
+    return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
+
 @app.route("/api/admin/reset", methods=["POST"])
 def api_admin_reset():
     engine.reset_simulation()

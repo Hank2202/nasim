@@ -377,10 +377,13 @@
 </nav>
 {% endblock %}
 
+{% block page_scripts %}<script src="{{ url_for('static', filename='js/realm.js') }}"></script>{% endblock %}
+
 {% block scripts %}
 <script>
   const realmApp = new RealmApp("{{ realm.id }}");
   window.realmApp = realmApp;
   realmApp.start();
+  keepScreenAwake();
 </script>
 {% endblock %}

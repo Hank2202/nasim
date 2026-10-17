@@ -146,3 +146,22 @@ Last updated 2026-10-15. Run tests with `venv/bin/python -m pytest -q` (55 passi
   - **Map controls:** wheel or +/− to zoom, drag to pan, 0 or ⌂ for the whole continent, click a ribbon to select a nation. Interaction pauses the tour and orbit for 45 s, shown by an "Exploring the map · Resume tour" pill.
   - **Projector sidebar:** "Realm in Focus" shows one nation in large type (crest, region, capital, votes, public mandate, 7 tier meters, flags) with a row of crests to switch nations. It follows the map tour.
   - **Facilitator events:** Settings has "Summon on the map" buttons, and keys D/S/T/B/N/W trigger dragon/storm/tornado/battle/serpent/whale.
+
+## Update 2026-10-17: autosave
+- **Server autosaves:** the server snapshots `game_state` into a new `autosaves` table every 5 minutes, keeping the last 12. The check runs on each `/api/state` poll, so no thread is needed. A "Before restore" save is made before any restore.
+- **Browser copies:** the admin page also keeps the last 6 saves in the facilitator's browser (`localStorage`), because Render's `/tmp` database is wiped when the server restarts.
+- **Admin "Saves" tab:** Save now, Download save file, Load save file, and Restore from either list.
+- **API:** `GET /api/admin/saves`, `GET /api/admin/save/export[?id=]`, `POST /api/admin/save/now`, `POST /api/admin/save/restore {id | snapshot}`. All are admin-only.
+
+## Update 2026-10-17: tooling, debrief and results
+- **Code split:** `static/app.js` became `static/js/{common,realm,admin,projector}.js`, and `realm_map.js` moved to `static/js/map.js`. Each page loads only its own script; `base.html` has a `page_scripts` block. The unused `RESOURCE_FRIENDLY` constant was removed.
+- **CSS:** 132 dead selectors removed (old 3D projector, earlier console and council styles); the file went from 2,265 to about 1,780 lines, and its header documents the sections. The cleanup script only removed selectors whose classes or ids appear in no template or script.
+- **Wake lock:** `keepScreenAwake()` in `common.js` is used on the projector, phones and admin page. It needs https or localhost.
+- **Reflection debrief:**
+  - The 12 questions from the Czech notes are in `scenario_config.json` (`reflection_questions`), each with an optional `context` (`verdict`, `missions`, `power`, `sizes`, `winners`).
+  - `meta.reflection_step` is set by `POST /api/admin/reflection {step|null}`, allowed only after the summit concludes.
+  - The projector stage is `#proj-reflection-stage`.
+- **Results report:** `GET /admin/report` (HTML, add `?download=1` to download) and `?format=json`, admin only. The full news history lives in `news_archive` (up to 1,500 entries) and isn't sent to phones.
+- **Phone fix:** the empty "Assembly is in session" box no longer shows after the summit ends.
+- **Browser tests:** `test_e2e.py` (Playwright; dev dependencies in `requirements-dev.txt`, so not installed on Render). The tests in the file share one server and run in order, so later ones expect the motion created in `test_full_round`.
+- **Test count:** 65 tests pass (60 unit/API + 5 end-to-end).

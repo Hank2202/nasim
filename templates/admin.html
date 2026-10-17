@@ -44,6 +44,7 @@
     <button class="admin-tab-btn" data-tab="tab-resources">Resource Overrides</button>
     <button class="admin-tab-btn" data-tab="tab-resolutions">Resolutions & Docket</button>
     <button class="admin-tab-btn" data-tab="tab-access">Delegations & Passcodes</button>
+    <button class="admin-tab-btn" data-tab="tab-saves">Saves</button>
   </div>
 
   <!-- ========================================================================= -->
@@ -286,6 +287,39 @@
   <!-- ========================================================================= -->
   <!-- TAB 5: DELEGATIONS & PASSCODES -->
   <!-- ========================================================================= -->
+  <div id="tab-saves" class="admin-tab-content">
+    <div class="card">
+      <div class="row-between wrap">
+        <div>
+          <div class="card-title">Saved games</div>
+          <p class="section-sub">The game autosaves every 5 minutes, on the server and in this browser.
+            If the server restarts (for example after a redeploy), restore the latest copy from this browser.</p>
+        </div>
+        <div class="row wrap">
+          <button class="btn btn-primary btn-sm" onclick="adminApp.saveNow()">Save now</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.downloadSave()">Download save file</button>
+          <a class="btn btn-secondary btn-sm" href="/admin/report" target="_blank">Results report</a>
+          <label class="btn btn-secondary btn-sm" style="cursor:pointer;">Load save file
+            <input type="file" accept=".json,application/json" style="display:none;" onchange="adminApp.loadSaveFile(this)">
+          </label>
+        </div>
+      </div>
+      <p id="save-status" class="small mt-2 muted"></p>
+    </div>
+    <div class="admin-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div class="card">
+        <div class="card-title">On the server</div>
+        <p class="section-sub">Last 12 saves. Lost if the hosted server restarts.</p>
+        <div id="server-saves" class="stack mt-2"><p class="empty-state">Loading…</p></div>
+      </div>
+      <div class="card">
+        <div class="card-title">In this browser</div>
+        <p class="section-sub">Last 6 saves, kept on this computer even if the server restarts.</p>
+        <div id="browser-saves" class="stack mt-2"><p class="empty-state">None yet.</p></div>
+      </div>
+    </div>
+  </div>
+
   <div id="tab-access" class="admin-tab-content">
     <!-- Summit Scale / Active Countries Facilitator Control -->
     <div class="card" style="margin-bottom: 16px; border: 1px solid var(--border-white);">
@@ -437,11 +471,15 @@
 </div>
 {% endblock %}
 
+{% block page_scripts %}<script src="{{ url_for('static', filename='js/admin.js') }}"></script>{% endblock %}
+
 {% block scripts %}
 <script>
   const adminApp = new AdminApp();
   window.adminApp = adminApp;
   adminApp.start();
+  keepScreenAwake();
+  adminApp.initSaves();
 
   // Tab switching logic
   document.querySelectorAll('.admin-tab-btn').forEach(btn => {

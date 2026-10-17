@@ -361,7 +361,32 @@ class SummitEngine:
     # -------------------------------------------------------------------------
     # State Polling with Exact Wall-Clock Timer Math & Auto-Event Check
     # -------------------------------------------------------------------------
+    AUTOSAVE_INTERVAL = 300  # seconds
+
+    def autosave(self, label: Optional[str] = None, force: bool = False) -> Optional[int]:
+        """Snapshot the whole game every AUTOSAVE_INTERVAL seconds (checked on each state poll)."""
+        now = time.time()
+        if not force and now - getattr(self, "_last_autosave", 0) < self.AUTOSAVE_INTERVAL:
+            return None
+        self._last_autosave = now
+        meta = self.db.get_state("meta", {}) or {}
+        label = label or f"Autosave · Turn {meta.get('current_turn', 1)} · {meta.get('phase', 'working').replace('_', ' ')}"
+        return self.db.add_autosave(self.db.dump_all(), label)
+
+    def restore_snapshot(self, snapshot: Dict[str, Any]) -> Tuple[bool, str]:
+        if not isinstance(snapshot, dict) or "realms" not in snapshot or "meta" not in snapshot:
+            return False, "That is not a Summit of Realms save."
+        self.autosave(label="Before restore", force=True)   # so a mistaken restore can be undone
+        self.db.restore_all(snapshot)
+        meta = snapshot.get("meta", {})
+        if meta.get("is_timer_running"):                       # resume the clock from the saved remaining time
+            meta["turn_timer_end"] = time.time() + meta.get("turn_timer_remaining", 0)
+            self.db.set_state("meta", meta)
+        self.add_news("diplomacy", "SUMMIT RESTORED", "The facilitator restored the summit from a saved game.")
+        return True, f"Game restored (Turn {meta.get('current_turn', 1)})."
+
     def get_full_state(self) -> Dict[str, Any]:
+        self.autosave()
         meta = self.db.get_state("meta", {})
         realms = self.db.get_state("realms", [])
         trades = self.db.get_state("trades", [])
@@ -434,7 +459,8 @@ class SummitEngine:
             "resolution_types": cfg.get("resolution_types", []),
             "simulation_settings": cfg.get("simulation_settings", {}),
             "catastrophes_catalog": cfg.get("catastrophes_catalog", []),
-            "summit_outcome": self.db.get_state("summit_outcome", None)
+            "summit_outcome": self.db.get_state("summit_outcome", None),
+            "reflection_questions": cfg.get("reflection_questions", [])
         }
 
     # -------------------------------------------------------------------------
@@ -1137,6 +1163,10 @@ class SummitEngine:
         }
         news.insert(0, item)
         self.db.set_state("news_feed", news[:100])
+        # Full history for the results report (not sent to phones, so polling stays light).
+        archive = self.db.get_state("news_archive", [])
+        archive.append(dict(item, turn=(self.db.get_state("meta", {}) or {}).get("current_turn", 1)))
+        self.db.set_state("news_archive", archive[-1500:])
 
     def trigger_audio_cue(self, cue_type: str, message: str = ""):
         meta = self.db.get_state("meta", {})
@@ -2358,6 +2388,56 @@ class SummitEngine:
                 item["status"] = "open"
             questions.append(item)
         return {"current_turn": turn, "fail_penalty": penalty, "questions": questions}
+
+    def build_report(self) -> Dict[str, Any]:
+        """Everything that happened in this summit, for the facilitator's results download."""
+        state = self.get_full_state()
+        realms = [r for r in state["realms"] if r.get("active", True)]
+        names = {r["id"]: r["name"] for r in state["realms"]}
+        trades = self.db.get_state("trades", [])
+        proposals = self.db.get_state("proposals", [])
+        types = {t["id"]: t for t in load_scenario_config().get("resolution_types", [])}
+        archive = self.db.get_state("news_archive", []) or list(reversed(state.get("news_feed", [])))
+        nations = [{
+            "id": r["id"], "name": r["name"], "delegates": r.get("player_count"), "votes": r.get("assembly_votes"),
+            "grain": r.get("alchemical_grain"), "cores": r.get("aether_cores"), "silk": r.get("echo_silk"),
+            "military": r.get("military_power"), "vitality": r.get("public_vitality"),
+            "standing": r.get("diplomatic_standing"), "stability": r.get("civil_stability"),
+            "public_mission": (r.get("public_mission") or {}).get("title"),
+            "secret_missions": [m.get("title") for m in r.get("active_secret_missions", [])],
+            "quiz_correct": len(r.get("claimed_lore", [])), "quiz_wrong": len(r.get("failed_lore", [])),
+            "trade_partners": sorted({names.get(t["receiver_id"] if t["sender_id"] == r["id"] else t["sender_id"], "?")
+                                      for t in trades if t.get("status") == "accepted" and r["id"] in (t["sender_id"], t["receiver_id"])}),
+        } for r in realms]
+        motions = [{
+            "title": p.get("title"), "type": types.get(p.get("effect_type"), {}).get("name", p.get("effect_type")),
+            "tabled_by": p.get("proposer_name"), "sponsors": [s.get("name") for s in p.get("supporters", [])],
+            "status": p.get("status"), "turn": p.get("created_turn"), "terms": p.get("description"),
+            "votes": [{"nation": v.get("realm_name"), "choice": v.get("choice"), "weight": v.get("weight")} for v in (p.get("votes") or {}).values()],
+        } for p in reversed(proposals)]
+        trade_log = [{
+            "time": t.get("time_str"), "from": t.get("sender_name"), "to": t.get("receiver_name"),
+            "gives": f"{t.get('offer_amount')} {t.get('offer_resource')}", "asks": f"{t.get('request_amount')} {t.get('request_resource')}",
+            "status": t.get("status"), "note": t.get("note", ""),
+        } for t in reversed(trades)]
+        return {
+            "generated": self._format_now(), "meta": state["meta"], "outcome": state.get("summit_outcome"),
+            "nations": nations, "trades": trade_log, "motions": motions,
+            "timeline": [{"turn": n.get("turn"), "time": n.get("time_str"), "type": n.get("type"),
+                          "headline": n.get("headline"), "detail": n.get("detail")} for n in archive],
+        }
+
+    def admin_set_reflection(self, step: Optional[int]) -> Tuple[bool, str]:
+        """Debrief: show reflection question `step` on the projector (None = back to the results)."""
+        meta = self.db.get_state("meta", {})
+        if meta.get("phase") != "summit_concluded":
+            return False, "Reflection starts after the summit has concluded."
+        total = len(load_scenario_config().get("reflection_questions", []))
+        if step is not None:
+            step = max(0, min(total - 1, int(step)))
+        meta["reflection_step"] = step
+        self.db.set_state("meta", meta)
+        return True, "Showing the results." if step is None else f"Reflection question {step + 1} of {total}."
 
     def submit_lore_quiz(self, realm_id: str, question_id: str, selected_option_index: int) -> Tuple[bool, str, Dict[str, Any]]:
         realms = self.db.get_state("realms", [])
