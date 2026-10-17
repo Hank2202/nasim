@@ -97,6 +97,9 @@ class RealmApp {
     document.getElementById('motion-chosen-effect').innerText = t.effect_plain || t.statutory_effect;
     document.getElementById('proposal-title').value = t.default_title || t.name;
     document.getElementById('proposal-desc').value = t.default_terms || t.summary;
+    // Questions to the game masters skip co-sponsoring and voting.
+    document.getElementById('proposal-cosponsor-group').style.display = t.no_vote ? 'none' : '';
+    document.getElementById('proposal-submit').innerText = t.no_vote ? 'Send to the game masters' : 'Table this motion';
     const targetGroup = document.getElementById('proposal-target-nation-group');
     targetGroup.style.display = t.needs_target ? 'block' : 'none';
     document.getElementById('proposal-target-nation').required = !!t.needs_target;
@@ -116,7 +119,7 @@ class RealmApp {
       title: document.getElementById('proposal-title').value,
       effect_type: effectType,
       description: document.getElementById('proposal-desc').value,
-      target_seconder_id: document.getElementById('proposal-target-realm').value || null,
+      target_seconder_id: t.no_vote ? null : (document.getElementById('proposal-target-realm').value || null),
       target_realm_id: t.needs_target ? document.getElementById('proposal-target-nation').value : null
     };
     try {
@@ -127,7 +130,7 @@ class RealmApp {
       });
       const res = await resp.json();
       if (res.success) {
-        showToast('Motion tabled. Now find a nation to co-sponsor it!', 'success');
+        showToast(t.no_vote ? res.message : 'Motion tabled. Now find a nation to co-sponsor it!', 'success');
         synth.playChime();
         document.getElementById('proposal-form').reset();
         this.chooseMotionTemplate(null);
@@ -176,7 +179,10 @@ class RealmApp {
     const turnElem = document.getElementById('turn-display');
     if (turnElem) turnElem.innerText = `TURN ${meta.current_turn}`;
     const timerElem = document.getElementById('timer-display');
-    if (timerElem) timerElem.innerText = formatSeconds(meta.turn_timer_remaining);
+    if (timerElem) {
+      timerElem.innerText = formatSeconds(meta.display_timer ? meta.display_timer.seconds : meta.turn_timer_remaining);
+      timerElem.title = meta.display_timer ? meta.display_timer.label : '';
+    }
     this.renderPhaseCard(meta);
 
     // Mini Breaking News Banner
@@ -257,7 +263,10 @@ class RealmApp {
       turn_summary: ['Between turns', 'The Assembly has spoken. The facilitator will start the next turn.'],
       summit_concluded: ['The summit has ended', 'See how your nation fared below.'],
     };
-    const [title, hint] = phases[meta.phase] || phases.working;
+    let [title, hint] = phases[meta.phase] || phases.working;
+    if (meta.phase === 'working' && meta.intermission_end) {
+      [title, hint] = [`Turn ${meta.current_turn} starts soon`, 'Listen to the facilitator: the news of the new turn is being read out.'];
+    }
     this._setVal('phase-kicker', `Turn ${meta.current_turn} of ${meta.max_turns || 3}`);
     this._setVal('phase-title', title);
     this._setVal('phase-hint', hint);
@@ -500,7 +509,6 @@ class RealmApp {
     this._setVal('quiz-stat-correct', count('correct'));
     this._setVal('quiz-stat-wrong', count('failed'));
     this._setVal('quiz-stat-open', count('open'));
-    this._setVal('quiz-penalty-label', data.fail_penalty);
     const badge = document.getElementById('nav-quiz-badge');
     if (badge) {
       badge.innerText = count('open');
@@ -541,8 +549,8 @@ class RealmApp {
     const answered = q.status === 'correct' || q.status === 'failed';
     const pending = this.quizPending && this.quizPending.id === q.id ? this.quizPending.idx : null;
     const pill = q.status === 'correct' ? `<span class="status-pill ok">Correct &middot; ${reward}</span>`
-      : q.status === 'failed' ? `<span class="status-pill bad">Wrong &middot; locked</span>`
-      : `<span class="status-pill open">Reward ${reward}</span>`;
+      : q.status === 'failed' ? `<span class="status-pill bad">Wrong &middot; −${q.reward_amount} ${esc(RESOURCE_SHORT[q.reward_resource] || q.reward_resource)}</span>`
+      : `<span class="status-pill open">Stake ±${q.reward_amount} ${esc(RESOURCE_SHORT[q.reward_resource] || q.reward_resource)}</span>`;
     const opts = q.options.map((opt, idx) => {
       let cls = 'quiz-option';
       if (answered && idx === q.correct_index) cls += ' correct';
@@ -840,25 +848,27 @@ class RealmApp {
     if (container) {
       container.innerHTML = open.length ? open.map(p => {
         const support = p.support_list || [];
-        const qualified = support.length >= 2 || p.is_qualified;
+        const count = p.support_count ?? support.length;
+        const qualified = count >= 2 || p.is_qualified;
         const pill = qualified ? '<span class="status-pill ok">On the ballot</span>'
-                               : `<span class="status-pill">${support.length}/2 sponsors</span>`;
+                               : '<span class="status-pill">Needs a co-sponsor</span>';
         let action;
         if (support.includes(this.realmId)) {
           action = `<span class="section-sub">${p.proposer_id === this.realmId ? 'Your motion' : 'You co-sponsored this'}</span>`;
         } else if (canEndorse(p)) {
           action = `<button class="btn btn-primary btn-block btn-sm" onclick="realmApp.supportProposal('${esc(p.id)}')">Co-sponsor this motion</button>`;
         } else {
-          action = `<span class="section-sub">Only ${esc(p.target_seconder_name)} may co-sponsor</span>`;
+          action = `<span class="section-sub">Addressed to another nation</span>`;
         }
         const ask = p.target_seconder_id && !qualified
           ? `<div class="callout ${p.target_seconder_id === this.realmId ? 'warn' : 'neutral'} mt-1">${p.target_seconder_id === this.realmId ? 'Your nation has been asked to co-sponsor this.' : `Waiting for ${esc(p.target_seconder_name)} to co-sponsor.`}</div>` : '';
         return `<div class="motion-card">${head(p, pill)}${effectLine(p)}
           <details class="motion-terms"><summary>Read the terms</summary><p>${esc(p.description)}</p></details>
-          <div class="motion-sponsor">Sponsors: ${(p.supporters || []).map(s => esc(s.name)).join(', ')}</div>
           ${ask}<div class="mt-1">${action}</div></div>`;
       }).join('') : '<p class="empty-state">No motions on the floor yet. Pick a template above to propose one.</p>';
     }
+
+    this.renderQuestions(proposals);
 
     const decidedCard = document.getElementById('decided-motions-card');
     const decidedList = document.getElementById('decided-motions-list');
@@ -878,6 +888,30 @@ class RealmApp {
           </div></div>`;
       }).join('');
     }
+  }
+
+  renderQuestions(proposals) {
+    const esc = escapeHtml;
+    const mine = proposals.filter(p => p.effect_type === 'gm_question' && p.proposer_id === this.realmId);
+    const card = document.getElementById('gm-questions-card');
+    const list = document.getElementById('gm-questions-list');
+    if (!card || !list) return;
+    card.style.display = mine.length ? '' : 'none';
+    this._answered = this._answered || new Set(mine.filter(p => p.answer).map(p => p.id));
+    for (const p of mine) {
+      if (p.answer && !this._answered.has(p.id)) {
+        this._answered.add(p.id);
+        showToast('The game masters answered your question (Motions tab).', 'success');
+        synth.playChime();
+      }
+    }
+    list.innerHTML = mine.map(p => `
+      <div class="motion-card">
+        <div class="row-between" style="align-items:flex-start;"><div class="motion-title">❓ ${esc(p.title)}</div>
+          ${p.answer ? '<span class="status-pill ok">Answered</span>' : '<span class="status-pill">Waiting for an answer</span>'}</div>
+        <p class="small" style="margin-top:6px; white-space:pre-line;">${esc(p.description)}</p>
+        ${p.answer ? `<div class="callout ok mt-1"><b>Game masters${p.answered_publicly ? ' (shared with everyone)' : ''}:</b> ${esc(p.answer)}</div>` : ''}
+      </div>`).join('');
   }
 
   _motionEffectHtml(p) {

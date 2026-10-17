@@ -1,11 +1,14 @@
 # Summit of Realms — Status & Review Notes
 
-Last updated 2026-10-15. Run tests with `venv/bin/python -m pytest -q` (55 passing).
+Last updated 2026-10-17. Run tests with `venv/bin/python -m pytest -q` (84 passing: 76 unit/API + 8 end-to-end).
 
 ## Decisions from the user
 - Host on the easiest free option: **Render** (`render.yaml`). Players join by scanning a QR code.
 - GitHub repo is **private**. **English only.**
-- Quiz: **same questions for every nation**, **one attempt per question**, wrong answer = **−5 Standing + permanent lock** (unchanged penalty).
+- Quiz: **same questions for every nation**, **one attempt per question**, wrong answer = **lose the same resource and amount the question would have paid** + permanent lock (changed 2026-10-17; it used to be −5 Standing).
+- Motions: co-sponsors are anonymous; a motion offered to one nation is seen only by that nation. There is a "Question to the Game Masters" template.
+- Crises: no automatic big catastrophes in the famine scenario; the storyline already carries the big crisis. Small random events are a random amount between 0 and the set maximum (float, default 5), many kinds, good and bad, default 6 per turn. The **Armageddon** scenario adds large disasters at random (3 per turn) and more/larger small events.
+- Clocks: when time runs out an alert sounds and the game moves to the next phase by itself.
 - `MGV 2026 školení s Johanem.md` (Czech facilitator notes) is the reference for starting values and missions. `scenario_config.json` matches it.
 
 ## What exists now
@@ -176,3 +179,39 @@ Last updated 2026-10-15. Run tests with `venv/bin/python -m pytest -q` (55 passi
 - **Faster painting:** `paintTexture` samples each pixel's height once and reuses it for shading and coastline ink. A full rebuild takes about 0.5 s on Balanced and 0.9 s on High, and runs only at load, on a quality change or on a roster change.
 - **Fine relief:** two extra fine-relief terms in `elevation()` add detail that shows on the sharper modes.
 - **Test:** `test_map_quality_modes` in `test_e2e.py`.
+
+## Update 2026-10-17: setup screen, auto-advance, small events, private motions
+- **Settings:** per-game settings are stored in the db key `settings` and merged over `game_settings_defaults` (scenario_config.json) by `engine.settings()`, which also adds `max_turns`, `grain_consumption` and `positive_share` from the chosen difficulty. `update_settings()` clamps values (`SETTING_LIMITS`). `POST /api/admin/settings`, `POST /api/admin/setup/new` (`start_new_summit`: autosave → reset → keep roster/delegates/PINs), `POST /api/admin/pins/shuffle`.
+- **Setup page:** `templates/setup.html` at `/admin/setup` (scenario, difficulty, nations/delegates/passcodes, clocks, small events).
+- **Scenarios:** `famine` keeps the Round 2 military rule and Round 3 famine + Food Acts; `open` has none of them. Difficulty: gentle/standard/harsh = 15/20/25 grain per turn.
+- **Clock (`_tick`, run on every `/api/state` poll):** working timer expiry → "Time is up!" alert → `_advance_after_working()` (plenary if motions qualified, else straight to the next turn). Quick-plenary vote timer (`vote_timer_end`) → settle → `_advance_turn_or_finish()`; Grand Plenary debate → vote → next motion → … → turn summary → results. Between turns `intermission_end` gives a short pause before the next working timer starts. `meta.display_timer` tells every screen which countdown to show. With `auto_advance` off, only the alert fires.
+- **Small events:** `minor_events` in scenario_config.json (6 good, 7 bad). `_check_minor_events` schedules `minor_events_per_turn` random moments per working session; `fire_minor_event` picks one nation and moves resources by at most `minor_event_max`. The old per-minute catastrophe rolls (`_check_minute_catastrophes`, `_check_automated_event_triggers`, auto-crisis toggle) are gone; catalog crises are manual only. Admin has "Good news now" / "Bad news now".
+- **Grain at the end:** the last turn now eats like the others (`_consume_grain`, applied once in `conclude_summit`), so the results reflect the final meal.
+- **Motion privacy (`app._private_view`):** phones get `support_count` instead of the co-sponsor list; targeted drafts are hidden from third parties; `gm_question` entries are visible only to the asking nation (and the admin). `answer_question()` + `POST /api/admin/question/answer {id, answer, public}`.
+- **Bugs fixed:**
+  - `draft_proposal` overwrote the cordon target with the co-sponsor restriction (variable reuse), so a cordon could hit the wrong nation.
+  - A new game kept `trade_partners`, `military_trades` and `news_archive` from the previous game (Aquila's missions counted old trades).
+  - The grain tax, embargo and continental cordon also applied to nations not playing.
+- **Simulator:** `tools/simulate.py` plays full summits through the engine (40 games per row, 6 nations, famine scenario, standard settings unless noted):
+
+  | Delegations | Stable | Fragile | Crisis | Missions met | Best game |
+  | :--- | ---: | ---: | ---: | ---: | ---: |
+  | Cooperative, quiz 80 % right | 100 % | 0 % | 0 % | 76 % | 18/21 |
+  | Cooperative, quiz 40 % right | 100 % | 0 % | 0 % | 66 % | 15/21 |
+  | Cooperative, no quiz | 70 % | 2 % | 28 % | 55 % | 13/21 |
+  | Selfish, random quiz | 0 % | 5 % | 95 % | 28 % | 8/21 |
+  | Cooperative, quiz 80 %, gentle | 100 % | 0 % | 0 % | 78 % | 17/21 |
+  | Cooperative, quiz 80 %, harsh | 100 % | 0 % | 0 % | 71 % | 17/21 |
+
+  Findings (not acted on; balance changes need the user's decision):
+  - The game is winnable: cooperation is what matters; selfish play almost always ends in Continental Crisis.
+  - Grain arithmetic: 330 at the start vs 450 needed (3 × 20 × 6 eaten + 90 famine). Food Act B adds 90; the rest must come from the quiz (up to 50 grain per nation), tech efficiency and the grain tax. So the quiz is the main food source, and difficulty barely matters once a group answers well.
+  - `aethelgard_superiority` and `valkhor_contain_military` cannot both succeed (if Aethelgard leads the second-strongest by 20, it leads Val-Khor by at least 20). Max possible with all six nations and full delegations is 20/21; this looks like intended tension.
+  - Hard but possible (tension missions): `sylvan_winter` (≥70 grain vs feeding everyone), `aquila_wealth` (+25 over everyone while trading away), `valkhor_tech` (+20 cores vs four nations at 60), Umbra's ≤90 military vs Aethelgard's superiority.
+
+## Update 2026-10-17 (later): event variety and Armageddon
+- **Settings:** `minor_events_per_turn` 0–30 (default 6), `minor_event_max` is a float 1–50 (`FLOAT_SETTING_LIMITS`), new `large_events_per_turn` 0–10 (default 0).
+- **Small events:** each effect moves `max(1, round(uniform(0, max × |weight|)))`. `minor_events` grew from 13 to 50 (26 good, 24 bad), several with two effects.
+- **Scenarios:** each scenario in `scenarios` has `famine_storyline` (replaces the hard-coded `scenario == "famine"` checks, including the Round 2 grain transit loss, which used to apply in every scenario) and `suggested` event numbers that the setup page fills in. New `armageddon`: famine storyline + 10 small events (max 8) + 3 large disasters per turn.
+- **Simulation with the new defaults** (40 games per row): famine-scenario rows are unchanged within noise. Armageddon, cooperative: good quiz 98 % stable / 2 % fragile, 69 % of missions; weak quiz 70 % stable / 30 % fragile, 61 % of missions. Harder, still winnable.
+- **Large disasters:** `fire_large_event()` picks a catastrophe whose terrain matches an active nation and calls `trigger_catastrophe` (which now targets only active nations; `_apply_catastrophe` also handles `military`). Four new catastrophes: dragon raid, great storm, tornado swarm, meteor shower. `_check_scheduled_events` (was `_check_minor_events`) plans both kinds per working session; changing the counts mid-session replans the remainder. Admin: **Random disaster now** (`POST /api/admin/event/large`).

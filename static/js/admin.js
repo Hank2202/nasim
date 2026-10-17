@@ -59,14 +59,10 @@ class AdminApp {
 
     const timerEl = document.getElementById('admin-timer-display');
     if (timerEl) {
-      timerEl.innerText = formatSeconds(meta.turn_timer_remaining);
+      timerEl.innerText = formatSeconds(meta.display_timer ? meta.display_timer.seconds : meta.turn_timer_remaining);
+      timerEl.title = meta.display_timer ? meta.display_timer.label : '';
     }
 
-    // Auto-inject crisis
-    const autoCheck = document.getElementById('check-auto-inject-turn');
-    if (autoCheck && document.activeElement !== autoCheck) {
-      autoCheck.checked = Boolean(meta.auto_inject_crisis);
-    }
 
     // Tab 1: Pacing & Plenary Phase
     const phaseDisplay = document.getElementById('admin-phase-display');
@@ -74,7 +70,7 @@ class AdminApp {
 
     if (phaseDisplay && controlsContainer) {
       if (meta.phase === 'working') {
-        phaseDisplay.innerText = `WORKING SESSION (5 MINUTES)`;
+        phaseDisplay.innerText = meta.intermission_end ? `TURN ${meta.current_turn} STARTS SOON` : `WORKING SESSION · TURN ${meta.current_turn}`;
         controlsContainer.innerHTML = `
           <button class="btn btn-primary btn-sm" onclick="adminApp.startPlenary()">
             ⚡ Convene Between-Rounds Plenary
@@ -88,7 +84,7 @@ class AdminApp {
           </button>
         `;
       } else if (meta.phase === 'grand_plenary_discussion') {
-        phaseDisplay.innerText = `GRAND PLENARY: 5M FLOOR DEBATE`;
+        phaseDisplay.innerText = `GRAND PLENARY: FLOOR DEBATE`;
         controlsContainer.innerHTML = `
           <button class="btn btn-secondary btn-sm" onclick="adminApp.controlDiscussionTimer('start')">▶ Start Debate</button>
           <button class="btn btn-secondary btn-sm" onclick="adminApp.controlDiscussionTimer('pause')">⏸ Pause</button>
@@ -207,13 +203,15 @@ class AdminApp {
       `).join('');
     }
 
-    // Tab 4: Floor Resolutions List
+    // Tab 4: questions to the game masters, then floor resolutions
+    this.renderQuestionInbox(proposals);
+    const motions = proposals.filter(p => p.effect_type !== 'gm_question');
     const resList = document.getElementById('admin-resolutions-list');
     if (resList) {
-      if (proposals.length === 0) {
+      if (motions.length === 0) {
         resList.innerHTML = '<p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono);">No floor resolutions registered.</p>';
       } else {
-        resList.innerHTML = proposals.map(p => {
+        resList.innerHTML = motions.map(p => {
           const qual = p.support_list.length >= 2 || p.is_qualified;
           return `
             <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:12px; border-radius:4px;">
@@ -541,18 +539,21 @@ class AdminApp {
     }
   }
 
-  async toggleAutoCrisisOnTurn(enabled) {
-    try {
-      await fetch('/api/admin/config/toggle_auto_crisis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
-      });
-      showToast(enabled ? 'Auto-inject crisis on Turn enabled' : 'Auto-inject crisis on Turn disabled', 'info');
-    } catch (err) {
-      showToast('Failed to update config', 'danger');
-    }
+  async minorEvent(tone) {
+    const res = await (await fetch('/api/admin/event/minor', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tone })
+    })).json();
+    showToast(res.message, res.success ? 'info' : 'danger');
+    this.pollState();
   }
+
+  async largeEvent() {
+    if (!confirm('Strike a random nation with a large disaster now?')) return;
+    const res = await (await fetch('/api/admin/event/large', { method: 'POST' })).json();
+    showToast(res.message, res.success ? 'info' : 'danger');
+    this.pollState();
+  }
+
 
   async adjustStat(realmId, stat, delta) {
     try {
@@ -765,6 +766,47 @@ class AdminApp {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ step })
     })).json();
     if (!res.success) showToast(res.message, 'danger');
+    this.pollState();
+  }
+
+  renderQuestionInbox(proposals) {
+    const questions = proposals.filter(p => p.effect_type === 'gm_question');
+    const open = questions.filter(p => !p.answer);
+    const badge = document.getElementById('gm-tab-badge');
+    if (badge) { badge.innerText = open.length; badge.style.display = open.length ? 'inline-block' : 'none'; }
+    const count = document.getElementById('gm-inbox-count');
+    if (count) count.innerText = open.length ? `· ${open.length} waiting` : '';
+    const box = document.getElementById('gm-inbox');
+    if (!box) return;
+    // Re-render only when questions change, so an answer being typed is not wiped by the 1-second refresh.
+    const key = questions.map(p => `${p.id}:${p.status}`).join(',');
+    if (key === this._inboxKey) return;
+    if (this._inboxKey !== undefined && open.some(p => !this._inboxKey.includes(p.id))) {
+      showToast('New question for the game masters', 'info');
+      synth.playChime();
+    }
+    this._inboxKey = key;
+    const esc = escapeHtml;
+    box.innerHTML = questions.length ? questions.slice().reverse().map(p => `
+      <div class="inset">
+        <div class="row-between"><b>${esc(p.proposer_name)}</b><span class="section-sub" style="margin:0;">${esc(p.time_str || '')}</span></div>
+        <div style="font-weight:600; margin-top:4px;">${esc(p.title)}</div>
+        <p class="small" style="white-space:pre-line; margin-top:2px;">${esc(p.description)}</p>
+        ${p.answer ? `<div class="callout ok mt-1"><b>Answered${p.answered_publicly ? ' publicly' : ' privately'}:</b> ${esc(p.answer)}</div>` : `
+        <textarea class="form-textarea mt-1" rows="2" id="answer-${esc(p.id)}" placeholder="Your answer…"></textarea>
+        <div class="row mt-1">
+          <button class="btn btn-primary btn-sm" onclick="adminApp.answerQuestion('${esc(p.id)}', false)">Answer ${esc(p.proposer_name)} only</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.answerQuestion('${esc(p.id)}', true)">Answer everyone (news)</button>
+        </div>`}
+      </div>`).join('') : '<p class="empty-state">No questions yet.</p>';
+  }
+
+  async answerQuestion(id, isPublic) {
+    const answer = (document.getElementById(`answer-${id}`) || {}).value || '';
+    const res = await (await fetch('/api/admin/question/answer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, answer, public: isPublic })
+    })).json();
+    showToast(res.message, res.success ? 'success' : 'danger');
     this.pollState();
   }
 

@@ -60,12 +60,14 @@ class ProjectorApp {
       else if (meta.phase === 'grand_plenary_voting') phaseLabel = 'GRAND PLENARY: VOTE';
       else if (meta.phase === 'turn_summary') phaseLabel = 'PLENARY CONCLUDED';
       else if (meta.phase === 'summit_concluded') phaseLabel = 'SUMMIT CONCLUDED';
+      if (meta.phase === 'working' && meta.intermission_end) phaseLabel = 'NEXT TURN STARTS SOON';
       turnEl.innerText = `TURN ${meta.current_turn} • ${phaseLabel}`;
     }
 
     const timerEl = document.getElementById('proj-timer');
     if (timerEl) {
-      timerEl.innerText = formatSeconds(meta.turn_timer_remaining);
+      timerEl.innerText = formatSeconds(meta.display_timer ? meta.display_timer.seconds : meta.turn_timer_remaining);
+      timerEl.title = meta.display_timer ? meta.display_timer.label : '';
     }
 
     // Audio cues
@@ -387,7 +389,7 @@ class ProjectorApp {
     if (motionsTicker) {
       const open = (proposals || []).filter(p => p.status === 'draft' || p.status === 'qualified');
       motionsTicker.innerHTML = open.length ? open.slice(0, 4).map(p => {
-        const n = (p.support_list || []).length;
+        const n = p.support_count ?? (p.support_list || []).length;
         return `<span class="ballot-chip ${n >= 2 ? 'ok' : ''}">${esc(p.title)} <em>${n >= 2 ? 'on the ballot' : `${n}/2 sponsors`}</em></span>`;
       }).join('') : '<span class="atlas-motions-empty">No motions yet. Nations table them from their phones.</span>';
     }
@@ -420,7 +422,7 @@ class ProjectorApp {
           <h2>${esc(t.icon || '📜')} ${esc(p.title)}</h2>
           <span class="status-pill">Motion ${idx + 1} of ${docketProps.length}</span>
         </div>
-        <div class="motion-sponsor">Tabled by ${esc(p.proposer_name)} · co-sponsored by ${(p.supporters || []).slice(1).map(s => esc(s.name)).join(', ') || '—'}</div>
+        <div class="motion-sponsor">Tabled by ${esc(p.proposer_name)}</div>
         ${t.effect_plain ? `<div class="motion-effect"><span>If passed:</span> ${esc(t.effect_plain)}${p.target_realm_name ? ` (${esc(p.target_realm_name)})` : ''}</div>` : ''}
         <div class="balance">
           <span class="for">For ${tallies.support_weight}</span>
@@ -443,7 +445,7 @@ class ProjectorApp {
     document.getElementById('proj-grand-phase-label').innerText = meta.phase === 'grand_plenary_discussion' ? '5-MINUTE FLOOR DEBATE' : 'SOVEREIGN ROLL-CALL VOTE';
     document.getElementById('proj-debate-clock').innerText = formatSeconds(meta.discussion_timer_remaining);
     document.getElementById('proj-grand-title').innerText = activeProp.title;
-    document.getElementById('proj-grand-sponsors').innerText = `Sponsor: ${activeProp.proposer_name} | Co-Sponsors: ${(activeProp.supporters || []).map(s => s.name).join(', ')}`;
+    document.getElementById('proj-grand-sponsors').innerText = `Tabled by ${activeProp.proposer_name}`;
     document.getElementById('proj-grand-desc').innerText = activeProp.description;
 
     const votingFloor = document.getElementById('proj-grand-voting-floor');

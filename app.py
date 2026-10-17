@@ -136,7 +136,30 @@ def sanitize_state(state: Dict[str, Any]) -> Dict[str, Any]:
         realms.append(r)
     out = dict(state, realms=realms)
     out.pop("simulation_settings", None)
+    viewers = {r["id"] for r in state["realms"] if is_realm_authed(r["id"])}
+    out["proposals"] = [p for p in (_private_view(p, viewers) for p in state.get("proposals", [])) if p]
     return out
+
+def _private_view(p: Dict[str, Any], viewers: set):
+    """What a nation may know about a motion: who tabled it, never who co-sponsored it.
+    Motions addressed to one nation, and questions to the game masters, stay private."""
+    mine = p.get("proposer_id") in viewers
+    target = p.get("target_seconder_id")
+    if p.get("effect_type") == "gm_question" and not mine:
+        return None
+    if target and p.get("status") == "draft" and not mine and target not in viewers:
+        return None
+    q = dict(p)
+    support = p.get("support_list", [])
+    q["support_count"] = len(support)
+    q["support_list"] = [x for x in support if x == p.get("proposer_id") or x in viewers]
+    q["supporters"] = [s for s in p.get("supporters", []) if s.get("id") == p.get("proposer_id") or s.get("id") in viewers]
+    q.pop("seconder_id", None)
+    q.pop("seconder_name", None)
+    if not mine and target not in viewers:
+        q.pop("target_seconder_id", None)
+        q.pop("target_seconder_name", None)
+    return q
 
 _CACHED_LAN_IP = None
 
@@ -295,6 +318,34 @@ def api_wiki_article(slug: str):
     if not article:
         return jsonify({"success": False, "message": "Article not found."}), 404
     return jsonify({"success": True, "article": article})
+
+@app.route("/admin/setup")
+def admin_setup():
+    """Facilitator setup screen: scenario, difficulty, nations, timers and events."""
+    if not (is_admin() or app.config.get("TESTING", False)):
+        return redirect(url_for("admin_view"))
+    state = engine.get_full_state()
+    cfg = load_scenario_config()
+    meta = state["meta"]
+    in_progress = meta.get("current_turn", 1) > 1 or meta.get("is_timer_running") or \
+        meta.get("turn_timer_remaining") != meta.get("turn_timer_total") or bool(engine.db.get_state("trades", []))
+    return render_template("setup.html", settings=engine.settings(), scenarios=cfg.get("scenarios", {}),
+                           difficulties=cfg.get("difficulties", {}), realms=state["realms"], meta=meta,
+                           in_progress=in_progress)
+
+@app.route("/api/admin/settings", methods=["POST"])
+def api_admin_settings():
+    ok, msg = engine.update_settings(request.get_json(silent=True) or {})
+    return jsonify({"success": ok, "message": msg, "settings": engine.settings()}), (200 if ok else 400)
+
+@app.route("/api/admin/setup/new", methods=["POST"])
+def api_admin_setup_new():
+    ok, msg = engine.start_new_summit()
+    return jsonify({"success": ok, "message": msg})
+
+@app.route("/api/admin/pins/shuffle", methods=["POST"])
+def api_admin_pins_shuffle():
+    return jsonify({"success": True, "message": "New passcodes generated.", "pins": engine.shuffle_pins()})
 
 @app.route("/healthz")
 def healthz():
@@ -760,14 +811,22 @@ def api_admin_event_auto():
     ok, msg, ev = engine.auto_draw_next_event()
     return jsonify({"success": ok, "message": msg, "event": ev}), (200 if ok else 400)
 
-@app.route("/api/admin/config/toggle_auto_crisis", methods=["POST"])
-def api_admin_toggle_auto_crisis():
-    data = request.get_json() or {}
-    enabled = bool(data.get("enabled", False))
-    meta = db.get_state("meta", {})
-    meta["auto_inject_crisis"] = enabled
-    db.set_state("meta", meta)
-    return jsonify({"success": True, "auto_inject_crisis": enabled})
+@app.route("/api/admin/question/answer", methods=["POST"])
+def api_admin_question_answer():
+    data = request.get_json(silent=True) or {}
+    ok, msg = engine.answer_question(data.get("id"), data.get("answer"), bool(data.get("public")))
+    return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
+
+@app.route("/api/admin/event/minor", methods=["POST"])
+def api_admin_minor_event():
+    tone = (request.get_json(silent=True) or {}).get("tone")
+    ok, msg = engine.fire_minor_event(tone=tone if tone in ("good", "bad") else None)
+    return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
+
+@app.route("/api/admin/event/large", methods=["POST"])
+def api_admin_large_event():
+    ok, msg = engine.fire_large_event()
+    return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
 
 @app.route("/admin/report")
 def admin_report():

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Summit setup · The Summit of Realms{% endblock %}
+
+{% block nav_links %}
+  <a href="/admin" class="nav-link">Command Deck</a>
+  <a href="/admin/setup" class="nav-link active">Setup</a>
+  <a href="/projector" target="_blank" class="nav-link">Projector &#8599;</a>
+{% endblock %}
+
+{% block content %}
+<div class="container setup" style="max-width: 980px;">
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Summit setup</h1>
+      <p class="section-sub">Choose the scenario, the nations at the table, the clocks and the random events. Saved settings apply straight away.</p>
+    </div>
+    <a href="/admin" class="btn btn-secondary btn-sm">&larr; Command deck</a>
+  </div>
+
+  {% if in_progress %}
+  <div class="callout warn" style="margin-bottom: 16px;">
+    A game is in progress (Turn {{ meta.current_turn }}). Saving settings changes it from now on;
+    <b>Start a new summit</b> discards it (a save is kept on the Saves tab).
+  </div>
+  {% endif %}
+
+  <!-- 1. Scenario -->
+  <section class="card">
+    <div class="card-title">1 · Scenario</div>
+    <div class="choice-grid three mt-2">
+      {% for key, sc in scenarios.items() %}
+      <label class="choice">
+        <input type="radio" name="scenario" value="{{ key }}" {% if settings.scenario == key %}checked{% endif %}
+               data-suggested='{{ (sc.suggested or {}) | tojson }}' onchange="setup.applySuggested(this)">
+        <span><b>{{ sc.name }}</b><em>{{ sc.description }}</em></span>
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- 2. Difficulty -->
+  <section class="card">
+    <div class="card-title">2 · Difficulty</div>
+    <div class="choice-grid three mt-2">
+      {% for key, d in difficulties.items() %}
+      <label class="choice">
+        <input type="radio" name="difficulty" value="{{ key }}" {% if settings.difficulty == key %}checked{% endif %}>
+        <span><b>{{ d.name }}</b><em>{{ d.description }}</em></span>
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- 3. Nations -->
+  <section class="card">
+    <div class="row-between wrap">
+      <div>
+        <div class="card-title">3 · Nations at the table</div>
+        <p class="section-sub">Untick nations nobody will play. Delegates = seats on phones (and how many secret missions the nation gets).</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="setup.shufflePins()">Shuffle passcodes</button>
+    </div>
+    <table class="table-deck setup-nations mt-2">
+      <tr><th>Plays</th><th>Nation</th><th>Delegates</th><th>Passcode</th></tr>
+      {% for r in realms %}
+      <tr data-realm="{{ r.id }}">
+        <td><input type="checkbox" class="realm-active" {% if r.active != false %}checked{% endif %} onchange="setup.toggleRealm('{{ r.id }}', this)"></td>
+        <td><span class="crest small" style="--nc: {{ r.theme_color }};">{{ r.emoji }}</span> <b>{{ r.name }}</b></td>
+        <td>
+          <div class="stepper small-stepper">
+            <button type="button" onclick="setup.delegates('{{ r.id }}', -1)">−</button>
+            <input type="number" class="realm-delegates" min="1" max="6" value="{{ r.player_count }}" readonly>
+            <button type="button" onclick="setup.delegates('{{ r.id }}', 1)">+</button>
+          </div>
+        </td>
+        <td><input type="text" class="form-input mono realm-pin" inputmode="numeric" maxlength="8" value="{{ r.pin }}" style="width: 110px;"
+                   onchange="setup.setPin('{{ r.id }}', this)"></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </section>
+
+  <!-- 4. Clocks -->
+  <section class="card">
+    <div class="card-title">4 · Clocks</div>
+    <div class="setup-fields mt-2">
+      <label>Working session <span><input type="number" id="working_min" min="1" max="60" value="{{ '%g' % (settings.working_session_seconds / 60) }}"> min</span></label>
+      <label>Assembly vote (Turns 1–2) <span><input type="number" id="vote_min" min="0.5" max="15" step="0.5" value="{{ '%g' % (settings.plenary_vote_seconds / 60) }}"> min</span></label>
+      <label>Grand Plenary debate, per motion <span><input type="number" id="debate_min" min="0.5" max="20" step="0.5" value="{{ '%g' % (settings.debate_session_seconds / 60) }}"> min</span></label>
+      <label>Grand Plenary vote, per motion <span><input type="number" id="grand_vote_sec" min="20" max="600" step="10" value="{{ settings.grand_vote_seconds }}"> s</span></label>
+      <label>Pause before the next turn <span><input type="number" id="intermission_sec" min="0" max="600" step="15" value="{{ settings.intermission_seconds }}"> s</span></label>
+    </div>
+    <label class="check mt-2">
+      <input type="checkbox" id="auto_advance" {% if settings.auto_advance %}checked{% endif %}>
+      <span><b>Move on automatically when time runs out</b><em>When a clock reaches zero an alert sounds and the game moves to the next phase: working session → Assembly vote → next turn (after the pause) → … → results. Untick to only sound the alert and move on by hand.</em></span>
+    </label>
+  </section>
+
+  <!-- 5. Random events -->
+  <section class="card">
+    <div class="card-title">5 · Random events</div>
+    <p class="section-sub">Events strike at random moments of each working session. Choosing a scenario fills in its suggested values; change them freely.</p>
+    <div class="setup-fields mt-2">
+      <label>Small news items per turn <span><input type="number" id="events_per_turn" min="0" max="30" step="1" value="{{ settings.minor_events_per_turn }}"> per turn</span></label>
+      <label>Largest change per small item <span><input type="number" id="event_max" min="1" max="50" step="0.5" value="{{ '%g' % settings.minor_event_max }}"> points</span></label>
+      <label>Large disasters per turn <span><input type="number" id="large_per_turn" min="0" max="10" step="1" value="{{ settings.large_events_per_turn or 0 }}"> per turn</span></label>
+    </div>
+    <p class="section-sub mt-1">Each small item hits one nation (good or bad news) and moves each resource it touches by a random amount between 0 and the largest change. Large disasters (earthquakes, dragon raids, plagues…, usually −10 to −25) strike one nation and are meant for the Armageddon scenario; at 0 you can still trigger them by hand from the command deck.</p>
+  </section>
+
+  <div class="setup-actions">
+    <button type="button" class="btn btn-secondary" onclick="setup.save()">Save settings</button>
+    <button type="button" class="btn btn-primary" onclick="setup.newSummit()">Start a new summit with these settings</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const setup = {
+    async post(url, body) {
+      const res = await (await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })).json();
+      if (!res.success) showToast(res.message || 'Something went wrong', 'danger');
+      return res;
+    },
+    values() {
+      const pick = name => (document.querySelector(`input[name=${name}]:checked`) || {}).value;
+      const num = id => parseFloat(document.getElementById(id).value);
+      return {
+        scenario: pick('scenario'), difficulty: pick('difficulty'),
+        working_session_seconds: Math.round(num('working_min') * 60), plenary_vote_seconds: Math.round(num('vote_min') * 60),
+        debate_session_seconds: Math.round(num('debate_min') * 60), grand_vote_seconds: Math.round(num('grand_vote_sec')),
+        intermission_seconds: Math.round(num('intermission_sec')), auto_advance: document.getElementById('auto_advance').checked,
+        minor_events_per_turn: parseInt(document.getElementById('events_per_turn').value, 10) || 0,
+        minor_event_max: parseFloat(document.getElementById('event_max').value) || 1,
+        large_events_per_turn: parseInt(document.getElementById('large_per_turn').value, 10) || 0,
+      };
+    },
+    applySuggested(radio) {
+      const s = JSON.parse(radio.dataset.suggested || '{}');
+      const set = (id, v) => { if (v !== undefined) document.getElementById(id).value = v; };
+      set('events_per_turn', s.minor_events_per_turn);
+      set('event_max', s.minor_event_max);
+      set('large_per_turn', s.large_events_per_turn);
+    },
+    async save() {
+      const res = await this.post('/api/admin/settings', this.values());
+      if (res.success) showToast('Settings saved', 'success');
+      return res.success;
+    },
+    async newSummit() {
+      if (!confirm('Start a new summit? The current game is replaced (a save of it is kept on the Saves tab).')) return;
+      if (!(await this.save())) return;
+      const res = await this.post('/api/admin/setup/new');
+      if (res.success) { showToast(res.message, 'success'); setTimeout(() => location.href = '/admin', 900); }
+    },
+    async toggleRealm(id, box) {
+      const res = await this.post('/api/admin/realm/toggle', { realm_id: id, active: box.checked });
+      if (!res.success) box.checked = !box.checked;
+    },
+    async delegates(id, delta) {
+      const input = document.querySelector(`tr[data-realm="${id}"] .realm-delegates`);
+      const value = Math.max(1, Math.min(6, parseInt(input.value, 10) + delta));
+      const res = await this.post('/api/admin/realm/player_count', { realm_id: id, player_count: value });
+      if (res.success) input.value = value;
+    },
+    async setPin(id, input) {
+      const res = await this.post('/api/admin/pin/reset', { realm_id: id, pin: input.value.trim() });
+      if (res.success) showToast(res.message, 'success');
+    },
+    async shufflePins() {
+      if (!confirm('Give every nation a new random passcode? Phones that are logged in will need the new code.')) return;
+      const res = await this.post('/api/admin/pins/shuffle');
+      if (!res.success) return;
+      for (const [id, pin] of Object.entries(res.pins)) {
+        const input = document.querySelector(`tr[data-realm="${id}"] .realm-pin`);
+        if (input) input.value = pin;
+      }
+      showToast(res.message, 'success');
+    },
+  };
+</script>
+{% endblock %}

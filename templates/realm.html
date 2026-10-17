@@ -262,7 +262,7 @@
           <textarea id="proposal-desc" class="form-textarea" rows="6" maxlength="1000" required></textarea>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" id="proposal-cosponsor-group">
           <label class="form-label" for="proposal-target-realm">Who may co-sponsor?</label>
           <select id="proposal-target-realm" class="form-select">
             <option value="">Any nation</option>
@@ -272,8 +272,15 @@
           </select>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block">Table this motion</button>
+        <button type="submit" class="btn btn-primary btn-block" id="proposal-submit">Table this motion</button>
       </form>
+    </div>
+
+    <!-- Questions this nation asked the game masters (private) -->
+    <div class="card" id="gm-questions-card" style="display: none;">
+      <div class="card-title">Your questions to the game masters</div>
+      <p class="section-sub">Only your nation and the facilitators see these.</p>
+      <div id="gm-questions-list" class="stack mt-2"></div>
     </div>
 
     <!-- Open motions: awaiting a co-sponsor or qualified for the ballot -->
@@ -326,7 +333,7 @@
       <p class="section-sub">Same questions for every nation &middot; new ones each turn</p>
       <div class="callout neutral mt-2">
         Find the answers in the <a href="#" onclick="realmApp.switchView('view-wiki'); return false;" style="text-decoration: underline;">Encyclopedia</a> tab.
-        A correct answer earns resources. A wrong answer costs <strong id="quiz-penalty-label">5</strong> Diplomatic Standing and locks that question for your nation. <strong>One attempt per question.</strong>
+        Each question shows its stake: a correct answer <strong>earns</strong> it, a wrong answer <strong>costs</strong> the same amount and locks the question for your nation. <strong>One attempt per question.</strong>
       </div>
       <div class="quiz-progress">
         <div class="inset quiz-stat ok"><b id="quiz-stat-correct">0</b><span>Correct</span></div>
