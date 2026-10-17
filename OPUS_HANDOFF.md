@@ -165,3 +165,14 @@ Last updated 2026-10-15. Run tests with `venv/bin/python -m pytest -q` (55 passi
 - **Phone fix:** the empty "Assembly is in session" box no longer shows after the summit ends.
 - **Browser tests:** `test_e2e.py` (Playwright; dev dependencies in `requirements-dev.txt`, so not installed on Render). The tests in the file share one server and run in order, so later ones expect the motion created in `test_full_round`.
 - **Test count:** 65 tests pass (60 unit/API + 5 end-to-end).
+
+## Update 2026-10-17: map resolution and quality modes
+- **Presets:** the `QUALITY` table in `static/js/map.js` has three presets:
+  - **High:** texture 2.25 px per world unit (2700×2025), heightmap every 1.5 units, up to 2× device pixels, all effects.
+  - **Balanced:** 1.5 px per unit (1800×1350), heightmap every 2 units, up to 1.5× device pixels.
+  - **Low:** 1 px per unit, heightmap every 4 units, 1× device pixels, 30 fps cap, and no sparkles, river glints, birds or cloud shadows.
+- **Auto (default):** starts on Balanced, measures the frame rate for 5 s, then switches once: below 32 fps goes to Low, above 55 fps with 8 or more CPU cores goes to High.
+- **Setting:** the choice is stored in `localStorage.map_quality` and set from projector Settings → Map quality.
+- **Faster painting:** `paintTexture` samples each pixel's height once and reuses it for shading and coastline ink. A full rebuild takes about 0.5 s on Balanced and 0.9 s on High, and runs only at load, on a quality change or on a roster change.
+- **Fine relief:** two extra fine-relief terms in `elevation()` add detail that shows on the sharper modes.
+- **Test:** `test_map_quality_modes` in `test_e2e.py`.

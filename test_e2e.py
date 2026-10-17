@@ -224,3 +224,21 @@ def test_saves_report_and_reflection(server, browser):
     expect(report.locator("text=Spire Relief Mission").first).to_be_visible()
     assert errors == []
     admin.close()
+
+
+def test_map_quality_modes(server, browser):
+    page = browser.new_page(viewport={"width": 1280, "height": 720})
+    errors = watch_errors(page)
+    page.goto(server + "/projector")
+    page.wait_for_function("window.projApp && window.projApp.map")
+    sizes = page.evaluate("""() => ['low', 'balanced', 'high'].map(q => {
+        projApp.map.setQuality(q);
+        return [q, projApp.map.texture.width, projApp.map.quality];
+    })""")
+    assert sizes == [["low", 1200, "low"], ["balanced", 1800, "balanced"], ["high", 2700, "high"]]
+    # the choice is remembered for the next visit
+    page.reload()
+    page.wait_for_function("window.projApp && window.projApp.map")
+    assert page.evaluate("projApp.map.qualityMode") == "high"
+    page.evaluate("projApp.map.setQuality('auto')")
+    assert errors == []

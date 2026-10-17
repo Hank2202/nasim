@@ -19,7 +19,13 @@
 
   // World units: x -500..500 (west..east), y -360..360 (north..south).
   const WORLD_W = 1200, WORLD_H = 900;
-  const TEX_W = 1200, TEX_H = 900;            // texture pixels (1 px = 1 world unit)
+  // Quality presets. `tex` = texture pixels per world unit, `grid` = heightmap spacing in world units.
+  const QUALITY = {
+    high:     { tex: 2.25, grid: 1.5, dpr: 2,   fps: 60, sparkles: true,  glints: true,  birds: true,  cloudShadows: true },
+    balanced: { tex: 1.5,  grid: 2,   dpr: 1.5, fps: 60, sparkles: true,  glints: true,  birds: true,  cloudShadows: true },
+    low:      { tex: 1,    grid: 4,   dpr: 1,   fps: 30, sparkles: false, glints: false, birds: false, cloudShadows: false },
+  };
+  const QUALITY_KEY = 'map_quality';
   const SEA_DEEP = [120, 164, 176], SEA_SHALLOW = [178, 211, 205], BG = 'rgb(120,164,176)';
 
   const CAPITALS = {
@@ -87,6 +93,9 @@
     h += 2.6 * Math.sin(x * 0.029 + 0.7) * Math.cos(y * 0.034 + 1.1);
     h += 1.7 * Math.sin(x * 0.071 + 2.3) * Math.cos(y * 0.058 + 0.5);
     h += 0.9 * Math.sin(x * 0.13 + 3.7) * Math.cos(y * 0.11 + 2.1);
+    // fine relief (ridges, gullies) that only becomes visible on the sharper quality modes
+    h += 0.45 * Math.sin(x * 0.23 + y * 0.07 + 1.3) * Math.cos(y * 0.27 - x * 0.05);
+    h += 0.25 * Math.sin(x * 0.41 + 0.4) * Math.sin(y * 0.37 + 2.2);
     // rift chasm
     for (let i = 0; i < RIFT.length - 1; i++) {
       const [ax, ay] = RIFT[i], [bx, by] = RIFT[i + 1];
@@ -119,7 +128,14 @@
     constructor(canvas) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
-      this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      let saved = null;
+      try { saved = localStorage.getItem(QUALITY_KEY); } catch (e) {}
+      this.qualityMode = QUALITY[saved] || saved === 'auto' ? saved : 'auto';   // what the facilitator chose
+      this.quality = this.qualityMode === 'auto' ? 'balanced' : this.qualityMode; // what is in effect
+      this.q = QUALITY[this.quality];
+      this.dpr = Math.min(window.devicePixelRatio || 1, this.q.dpr);
+      this.fpsProbe = this.qualityMode === 'auto' ? { start: null, frames: 0 } : null;
+      this.lastDraw = 0;
       this.reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       this.realms = {};
       this.trades = [];
@@ -188,6 +204,43 @@
       });
     }
 
+    /* --------------------------------------------------------------- quality */
+    // mode: 'auto' | 'high' | 'balanced' | 'low'. Rebuilds terrain, scenery and texture at the new detail.
+    setQuality(mode, { persist = true } = {}) {
+      if (mode !== 'auto' && !QUALITY[mode]) return;
+      if (persist) {
+        this.qualityMode = mode;
+        try { localStorage.setItem(QUALITY_KEY, mode); } catch (e) {}
+      }
+      const effective = mode === 'auto' ? (persist ? 'balanced' : this.quality) : mode;
+      this.fpsProbe = this.qualityMode === 'auto' && persist ? { start: null, frames: 0 } : null;
+      if (effective !== this.quality || !this.texture) {
+        this.quality = effective;
+        this.q = QUALITY[effective];
+        this.buildTerrain();
+        this.buildScenery();
+        this.paintTexture();
+        this.resize();
+      }
+      if (this.onQuality) this.onQuality(this.qualityMode, this.quality);
+    }
+
+    // Auto mode: watch the frame rate for a few seconds, then settle on a mode once.
+    probeFrameRate(now) {
+      const p = this.fpsProbe;
+      if (!p) return;
+      if (p.start === null) { if (now - this.paintedAt > 1500) { p.start = now; p.frames = 0; } return; }
+      p.frames++;
+      if (now - p.start < 5000) return;
+      const fps = p.frames * 1000 / (now - p.start);
+      this.fpsProbe = null;
+      this.measuredFps = Math.round(fps);
+      const cores = navigator.hardwareConcurrency || 4;
+      if (fps < 32) this.setQuality('low', { persist: false });
+      else if (fps > 55 && cores >= 8) this.setQuality('high', { persist: false });
+      else if (this.onQuality) this.onQuality(this.qualityMode, this.quality);
+    }
+
     get manual() { return this.time < this.manualUntil; }
     touch() { this.manualUntil = (this.time || 0) + 45; }   // tour resumes 45 s after the last interaction
 
@@ -228,16 +281,17 @@
 
     /* ------------------------------------------------------------------ terrain */
     buildTerrain() {
-      const W = TEX_W / 4, H = TEX_H / 4;        // coarse grid, sampled bilinearly
-      this.grid = { W, H, h: new Float32Array(W * H) };
+      const step = this.q.grid;                   // heightmap spacing, sampled bilinearly
+      const W = Math.round(WORLD_W / step), H = Math.round(WORLD_H / step);
+      this.grid = { W, H, step, h: new Float32Array(W * H) };
       for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-        this.grid.h[j * W + i] = elevation(i * 4 - WORLD_W / 2, j * 4 - WORLD_H / 2);
+        this.grid.h[j * W + i] = elevation(i * step - WORLD_W / 2, j * step - WORLD_H / 2);
       }
     }
 
     heightAt(x, y) {
-      const { W, H, h } = this.grid;
-      const gx = clamp((x + WORLD_W / 2) / 4, 0, W - 1.001), gy = clamp((y + WORLD_H / 2) / 4, 0, H - 1.001);
+      const { W, H, h, step } = this.grid;
+      const gx = clamp((x + WORLD_W / 2) / step, 0, W - 1.001), gy = clamp((y + WORLD_H / 2) / step, 0, H - 1.001);
       const i = Math.floor(gx), j = Math.floor(gy), fx = gx - i, fy = gy - j;
       const a = h[j * W + i], b = h[j * W + i + 1], c = h[(j + 1) * W + i], d = h[(j + 1) * W + i + 1];
       return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
@@ -415,10 +469,11 @@
 
     /* ------------------------------------------------- the illustrated texture */
     paintTexture() {
+      const S = this.q.tex, TW = Math.round(WORLD_W * S), TH = Math.round(WORLD_H * S);
       const tex = this.texture || (this.texture = document.createElement('canvas'));
-      tex.width = TEX_W; tex.height = TEX_H;
+      tex.width = TW; tex.height = TH;
       const tctx = tex.getContext('2d');
-      const img = tctx.createImageData(TEX_W, TEX_H);
+      const img = tctx.createImageData(TW, TH);
       const data = img.data;
       const rand = rng(77);
       const tint = {};
@@ -426,11 +481,17 @@
         const r = this.realms[id];
         tint[id] = r && r.active !== false ? hexRgb((r.theme_color || DEFAULT_COLORS[id])) : null;
       }
-      const owners = new Array(TEX_W * TEX_H);
-      for (let py = 0; py < TEX_H; py++) {
-        for (let px = 0; px < TEX_W; px++) {
-          const x = px - WORLD_W / 2, y = py - WORLD_H / 2;
-          const h = this.heightAt(x, y);
+      // 1. sample the height of every pixel once; shading and coastlines reuse it
+      const H = new Float32Array(TW * TH);
+      for (let py = 0; py < TH; py++) {
+        const y = py / S - WORLD_H / 2;
+        for (let px = 0; px < TW; px++) H[py * TW + px] = this.heightAt(px / S - WORLD_W / 2, y);
+      }
+      const d = Math.max(1, Math.round(2 * S));     // shading baseline: about 2 world units
+      const owners = new Array(TW * TH);
+      for (let py = 0; py < TH; py++) {
+        for (let px = 0; px < TW; px++) {
+          const i = py * TW + px, h = H[i];
           let c;
           if (h < 0) {
             const t = clamp(-h / 14, 0, 1);
@@ -443,37 +504,39 @@
             else if (h < 18) c = mix([160, 170, 110], [168, 150, 108], (h - 7) / 11);
             else if (h < 34) c = mix([150, 132, 104], [126, 112, 98], (h - 18) / 16);
             else c = mix([200, 196, 186], [246, 242, 232], clamp((h - 34) / 10, 0, 1));
-            const o = owner(x, y);
-            owners[py * TEX_W + px] = o;
+            const o = owner(px / S - WORLD_W / 2, py / S - WORLD_H / 2);
+            owners[i] = o;
             const t = tint[o];
             if (t) c = mix(c, t, 0.30);
             else c = mix(mix(c, [205, 196, 176], 0.65), [190, 182, 166], 0.2);   // unclaimed: faded parchment
             // hill shading (light from the north-west)
-            const dx = this.heightAt(x + 2, y) - this.heightAt(x - 2, y);
-            const dy = this.heightAt(x, y + 2) - this.heightAt(x, y - 2);
+            const dx = H[py * TW + Math.min(TW - 1, px + d)] - H[py * TW + Math.max(0, px - d)];
+            const dy = H[Math.min(TH - 1, py + d) * TW + px] - H[Math.max(0, py - d) * TW + px];
             const shade = clamp(1 + (-dx - dy) * 0.045, 0.62, 1.25);
             c = [c[0] * shade, c[1] * shade, c[2] * shade];
           }
           const grain = (rand() - 0.5) * 7;                          // paper grain
-          const k = (py * TEX_W + px) * 4;
+          const k = i * 4;
           data[k] = clamp(c[0] + grain, 0, 255); data[k + 1] = clamp(c[1] + grain, 0, 255);
           data[k + 2] = clamp(c[2] + grain, 0, 255); data[k + 3] = 255;
         }
       }
       // borders: dashed ink where ownership changes
-      for (let py = 1; py < TEX_H - 1; py++) for (let px = 1; px < TEX_W - 1; px++) {
-        const o = owners[py * TEX_W + px];
+      const dash = Math.round(9 * S), gap = Math.round(6 * S);
+      for (let py = 1; py < TH - 1; py++) for (let px = 1; px < TW - 1; px++) {
+        const o = owners[py * TW + px];
         if (!o) continue;
-        const r = owners[py * TEX_W + px + 1], d = owners[(py + 1) * TEX_W + px];
-        if ((r && r !== o) || (d && d !== o)) {
-          if ((px + py) % 9 > 5) continue;
-          const k = (py * TEX_W + px) * 4;
+        const r = owners[py * TW + px + 1], dn = owners[(py + 1) * TW + px];
+        if ((r && r !== o) || (dn && dn !== o)) {
+          if ((px + py) % dash > gap) continue;
+          const k = (py * TW + px) * 4;
           data[k] *= 0.45; data[k + 1] *= 0.42; data[k + 2] *= 0.4;
         }
       }
       tctx.putImageData(img, 0, 0);
       // rivers: tapered, widening towards the sea, with a pale highlight
       tctx.save();
+      tctx.scale(S, S);                         // rivers and roads are drawn in world units
       tctx.translate(WORLD_W / 2, WORLD_H / 2);
       tctx.lineCap = 'round'; tctx.lineJoin = 'round';
       for (const river of this.rivers) {
@@ -505,12 +568,12 @@
       // coastline ink
       tctx.globalCompositeOperation = 'multiply';
       tctx.strokeStyle = 'rgba(90,65,34,0.55)';
-      tctx.lineWidth = 1.4;
+      tctx.lineWidth = 1.4 * S;
       tctx.beginPath();
-      for (let py = 0; py < TEX_H; py += 2) for (let px = 0; px < TEX_W; px += 2) {
-        const h = this.heightAt(px - WORLD_W / 2, py - WORLD_H / 2);
-        if (h >= 0 && this.heightAt(px - WORLD_W / 2 + 2, py - WORLD_H / 2) < 0) { tctx.moveTo(px, py); tctx.lineTo(px + 1, py + 1); }
-        if (h >= 0 && this.heightAt(px - WORLD_W / 2, py - WORLD_H / 2 + 2) < 0) { tctx.moveTo(px, py); tctx.lineTo(px + 1, py + 1); }
+      const cs = Math.max(1, Math.round(S));    // one ink mark per world unit along the coast
+      for (let py = 0; py < TH - d; py += cs) for (let px = 0; px < TW - d; px += cs) {
+        if (H[py * TW + px] < 0) continue;
+        if (H[py * TW + px + d] < 0 || H[(py + d) * TW + px] < 0) { tctx.moveTo(px, py); tctx.lineTo(px + cs * 0.6, py + cs * 0.6); }
       }
       tctx.stroke();
       tctx.globalCompositeOperation = 'source-over';
@@ -520,10 +583,12 @@
         g.addColorStop(0, BG); g.addColorStop(1, 'rgba(120,164,176,0)');
         return g;
       };
-      tctx.fillStyle = fade(0, 0, 0, 60); tctx.fillRect(0, 0, TEX_W, 60);
-      tctx.fillStyle = fade(0, TEX_H, 0, TEX_H - 60); tctx.fillRect(0, TEX_H - 60, TEX_W, 60);
-      tctx.fillStyle = fade(0, 0, 60, 0); tctx.fillRect(0, 0, 60, TEX_H);
-      tctx.fillStyle = fade(TEX_W, 0, TEX_W - 60, 0); tctx.fillRect(TEX_W - 60, 0, 60, TEX_H);
+      const F = 60 * S;
+      tctx.fillStyle = fade(0, 0, 0, F); tctx.fillRect(0, 0, TW, F);
+      tctx.fillStyle = fade(0, TH, 0, TH - F); tctx.fillRect(0, TH - F, TW, F);
+      tctx.fillStyle = fade(0, 0, F, 0); tctx.fillRect(0, 0, F, TH);
+      tctx.fillStyle = fade(TW, 0, TW - F, 0); tctx.fillRect(TW - F, 0, F, TH);
+      this.paintedAt = performance.now();
     }
 
     /* ------------------------------------------------------------ state input */
@@ -554,6 +619,7 @@
     resize() {
       const r = this.canvas.getBoundingClientRect();
       this.W = Math.max(320, r.width); this.H = Math.max(240, r.height);
+      this.dpr = Math.min(window.devicePixelRatio || 1, this.q.dpr);
       this.canvas.width = Math.round(this.W * this.dpr); this.canvas.height = Math.round(this.H * this.dpr);
       // fit the continent (~940 x 640 world units) into the visible area, leaving room for the side panel
       this.baseScale = Math.min(this.W * 0.62 / 940, this.H / (640 * this.cam.tilt) * 0.82);
@@ -573,6 +639,13 @@
 
     /* ----------------------------------------------------------------- frame */
     frame(now) {
+      // Low mode draws at most 30 frames per second.
+      if (this.q.fps < 60 && now - this.lastDraw < 1000 / this.q.fps - 2) {
+        requestAnimationFrame(t => this.frame(t));
+        return;
+      }
+      this.lastDraw = now;
+      this.probeFrameRate(now);
       const dt = Math.min(0.05, (now - this.last) / 1000);
       this.last = now;
       this.time = now / 1000;
@@ -614,8 +687,8 @@
       ctx.drawImage(this.texture, -WORLD_W / 2, -WORLD_H / 2, WORLD_W, WORLD_H);
       ctx.restore();
 
-      this.drawRiverGlints(ctx);
-      this.drawSparkles(ctx, s);
+      if (this.q.glints) this.drawRiverGlints(ctx);
+      if (this.q.sparkles) this.drawSparkles(ctx, s);
       this.drawEvents(ctx, s, 'sea');
       this.drawShips(ctx, s);
       this.drawCarts(ctx, s);
@@ -629,7 +702,7 @@
       for (const { sp, p } of items) if (sp.type === 'capital') this.drawBanner(ctx, sp.id, p, s);
 
       this.drawEvents(ctx, s, 'air');
-      this.drawBirds(ctx, s);
+      if (this.q.birds) this.drawBirds(ctx, s);
       this.drawClouds(ctx, s);
       if (this.flash > 0) {                                           // lightning lights up the whole map
         ctx.fillStyle = `rgba(255,255,245,${this.flash * 0.18})`;
@@ -1297,8 +1370,10 @@
         const p = this.project(cl.x, cl.y, 0);
         const shadow = this.project(cl.x + 30, cl.y + 40, 0);
         const r = 50 * cl.s * s;
-        ctx.fillStyle = `rgba(60,50,30,${0.07 * eased})`;
-        this.puff(ctx, shadow.x, shadow.y, r);
+        if (this.q.cloudShadows) {
+          ctx.fillStyle = `rgba(60,50,30,${0.07 * eased})`;
+          this.puff(ctx, shadow.x, shadow.y, r);
+        }
         ctx.fillStyle = `rgba(255,255,255,${0.55 * eased})`;
         this.puff(ctx, p.x, p.y - 120 * s, r);
       }
@@ -1339,6 +1414,7 @@
 
   }
 
+  LivingAtlas.QUALITY = QUALITY;
   LivingAtlas.info = {
     regions: REGION_NAMES,
     capitals: Object.fromEntries(SETTLEMENTS.filter(s => s[4]).map(s => [s[0], s[1]])),
