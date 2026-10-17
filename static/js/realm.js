@@ -77,7 +77,7 @@ class RealmApp {
           <span class="motion-template-summary">${esc(t.summary)}</span>
           <span class="motion-effect"><span>If passed:</span> ${esc(t.effect_plain || t.statutory_effect)}</span>
         </span>
-        <span class="motion-template-go">Use &rsaquo;</span>
+        <span class="motion-template-go">Start from this &rsaquo;</span>
       </button>`).join('');
     this.motionTemplatesRendered = true;
   }
@@ -97,9 +97,6 @@ class RealmApp {
     document.getElementById('motion-chosen-effect').innerText = t.effect_plain || t.statutory_effect;
     document.getElementById('proposal-title').value = t.default_title || t.name;
     document.getElementById('proposal-desc').value = t.default_terms || t.summary;
-    // Questions to the game masters skip co-sponsoring and voting.
-    document.getElementById('proposal-cosponsor-group').style.display = t.no_vote ? 'none' : '';
-    document.getElementById('proposal-submit').innerText = t.no_vote ? 'Send to the game masters' : 'Table this motion';
     const targetGroup = document.getElementById('proposal-target-nation-group');
     targetGroup.style.display = t.needs_target ? 'block' : 'none';
     document.getElementById('proposal-target-nation').required = !!t.needs_target;
@@ -119,7 +116,7 @@ class RealmApp {
       title: document.getElementById('proposal-title').value,
       effect_type: effectType,
       description: document.getElementById('proposal-desc').value,
-      target_seconder_id: t.no_vote ? null : (document.getElementById('proposal-target-realm').value || null),
+      target_seconder_id: document.getElementById('proposal-target-realm').value || null,
       target_realm_id: t.needs_target ? document.getElementById('proposal-target-nation').value : null
     };
     try {
@@ -130,7 +127,7 @@ class RealmApp {
       });
       const res = await resp.json();
       if (res.success) {
-        showToast(t.no_vote ? res.message : 'Motion tabled. Now find a nation to co-sponsor it!', 'success');
+        showToast('Motion tabled. Now find a nation to co-sponsor it!', 'success');
         synth.playChime();
         document.getElementById('proposal-form').reset();
         this.chooseMotionTemplate(null);
@@ -236,6 +233,7 @@ class RealmApp {
     // Motions Tab
     this.renderMotionTemplates(state.resolution_types);
     this.renderProposals(proposals, realm);
+    this.renderMotionQuota(proposals, meta, state.game_settings || {});
 
     // Plenary Session Callout on Mobile
     this.renderPlenarySessionCallout(meta, proposals, realm);
@@ -817,6 +815,19 @@ class RealmApp {
     }
   }
 
+  renderMotionQuota(proposals, meta, settings) {
+    const box = document.getElementById('motion-quota');
+    if (!box) return;
+    const limit = settings.motions_per_turn || 2;
+    const used = proposals.filter(p => p.proposer_id === this.realmId && p.created_turn === meta.current_turn).length;
+    const left = Math.max(0, limit - used);
+    box.className = `motion-quota mt-1${left ? '' : ' empty'}`;
+    box.innerHTML = left
+      ? `You can table <b>${left}</b> more motion${left === 1 ? '' : 's'} this turn <span class="muted">(limit ${limit} per nation)</span>`
+      : `Your nation has tabled its ${limit} motion${limit === 1 ? '' : 's'} for this turn. You can still co-sponsor and vote.`;
+    document.querySelectorAll('#motion-templates .motion-template, #proposal-submit').forEach(b => { b.disabled = !left; });
+  }
+
   renderProposals(proposals, realm) {
     const esc = escapeHtml;
     const types = this.motionTypes || {};
@@ -868,7 +879,6 @@ class RealmApp {
       }).join('') : '<p class="empty-state">No motions on the floor yet. Pick a template above to propose one.</p>';
     }
 
-    this.renderQuestions(proposals);
 
     const decidedCard = document.getElementById('decided-motions-card');
     const decidedList = document.getElementById('decided-motions-list');
@@ -880,7 +890,10 @@ class RealmApp {
         const sum = c => side(c).reduce((a, v) => a + (v.weight || 1), 0);
         const line = c => side(c).map(v => esc(v.realm_name)).join(', ') || '—';
         const pill = p.status === 'passed' ? '<span class="status-pill ok">Passed</span>' : '<span class="status-pill bad">Rejected</span>';
-        return `<div class="motion-card">${head(p, pill)}${effectLine(p)}
+        const answer = p.effect_type === 'gm_question' && p.status === 'passed'
+          ? (p.answer ? `<div class="callout ok mt-1"><b>Game masters' answer:</b> ${esc(p.answer)}</div>`
+                      : '<div class="callout neutral mt-1">Waiting for the game masters to answer.</div>') : '';
+        return `<div class="motion-card">${head(p, pill)}${effectLine(p)}${answer}
           <div class="vote-breakdown">
             <div><b>For</b> ${sum('support')} votes &middot; ${side('support').length} nations<br><span>${line('support')}</span></div>
             <div><b>Against</b> ${sum('oppose')} votes &middot; ${side('oppose').length} nations<br><span>${line('oppose')}</span></div>
@@ -888,30 +901,6 @@ class RealmApp {
           </div></div>`;
       }).join('');
     }
-  }
-
-  renderQuestions(proposals) {
-    const esc = escapeHtml;
-    const mine = proposals.filter(p => p.effect_type === 'gm_question' && p.proposer_id === this.realmId);
-    const card = document.getElementById('gm-questions-card');
-    const list = document.getElementById('gm-questions-list');
-    if (!card || !list) return;
-    card.style.display = mine.length ? '' : 'none';
-    this._answered = this._answered || new Set(mine.filter(p => p.answer).map(p => p.id));
-    for (const p of mine) {
-      if (p.answer && !this._answered.has(p.id)) {
-        this._answered.add(p.id);
-        showToast('The game masters answered your question (Motions tab).', 'success');
-        synth.playChime();
-      }
-    }
-    list.innerHTML = mine.map(p => `
-      <div class="motion-card">
-        <div class="row-between" style="align-items:flex-start;"><div class="motion-title">❓ ${esc(p.title)}</div>
-          ${p.answer ? '<span class="status-pill ok">Answered</span>' : '<span class="status-pill">Waiting for an answer</span>'}</div>
-        <p class="small" style="margin-top:6px; white-space:pre-line;">${esc(p.description)}</p>
-        ${p.answer ? `<div class="callout ok mt-1"><b>Game masters${p.answered_publicly ? ' (shared with everyone)' : ''}:</b> ${esc(p.answer)}</div>` : ''}
-      </div>`).join('');
   }
 
   _motionEffectHtml(p) {

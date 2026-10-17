@@ -73,6 +73,9 @@ def admin_page(browser, base):
     page.goto(base + "/admin")
     page.fill("#admin-passcode", ADMIN_PASSCODE)
     page.click("#unlock-btn")
+    expect(page.locator("#admin-passcode")).to_have_count(0)      # the login page has gone
+    if "/admin/setup" in page.url:            # before a game starts, login lands on the setup screen
+        page.goto(base + "/admin")
     expect(page.locator(".page-title")).to_have_text("Facilitator Command Deck")
     return page
 
@@ -106,6 +109,17 @@ def test_wrong_passcodes_are_refused(server, browser):
     page.fill("#login-realm-pin", "9999")
     page.locator("#pin-login-form button[type=submit]").click()
     expect(page.locator("#login-error-msg")).to_be_visible()
+    page.close()
+
+
+def test_login_before_the_game_opens_the_setup_screen(server, browser):
+    page = browser.new_context().new_page()
+    page.goto(server + "/admin")
+    page.fill("#admin-passcode", ADMIN_PASSCODE)
+    page.click("#unlock-btn")
+    expect(page.locator(".page-title")).to_have_text("Summit setup", timeout=5000)
+    page.goto(server + "/admin")
+    expect(page.locator(".setup-banner")).to_contain_text("Set up this summit before you start")
     page.close()
 
 
@@ -155,11 +169,13 @@ def test_full_round(server, browser):
     admin.close()
 
 
-def test_addressed_motion_and_game_master_question_stay_private(server, browser):
+def test_addressed_motion_and_game_master_question(server, browser):
     admin = admin_page(browser, server)
     sylvan, errors = join(browser, server, "Sylvan Concordat", "1001")
     valkhor, _ = join(browser, server, "Iron Val-Khor", "1002")
     aquila, _ = join(browser, server, "Aquila Maritime League", "1005")
+    # the previous test ended Turn 1's Assembly; start Turn 2 so the Assembly can sit again
+    admin.evaluate("fetch('/api/admin/turn/next', {method: 'POST'})")
 
     # A motion offered only to Val-Khor: Val-Khor sees it, Aquila does not
     tab(sylvan, "Motions")
@@ -173,22 +189,36 @@ def test_addressed_motion_and_game_master_question_stay_private(server, browser)
     aquila.wait_for_timeout(1500)
     expect(aquila.locator("text=Quiet Grain Pact")).to_have_count(0)
 
-    # A question to the game masters: no co-sponsor field, answered privately
-    sylvan.locator(".motion-template", has_text="Question to the Game Masters").click()
-    expect(sylvan.locator("#proposal-cosponsor-group")).to_be_hidden()
-    sylvan.fill("#proposal-title", "Can grain be traded in Turn 3?")
-    sylvan.fill("#proposal-desc", "Asking for a friend.")
-    sylvan.locator("#proposal-submit", has_text="Send to the game masters").click()
-    expect(sylvan.locator("#gm-questions-list")).to_contain_text("Waiting for an answer", timeout=5000)
+    # A question to the game masters is a motion: co-sponsored, voted, then answered for everyone
+    aquila.locator(".motion-template", has_text="Question to the Game Masters").click()
+    expect(aquila.locator(".edit-hint")).to_be_visible()                 # templates are clearly editable
+    aquila.fill("#proposal-title", "Can grain be traded in Turn 3?")
+    aquila.fill("#proposal-desc", "Asking for a friend.")
+    aquila.locator("#proposal-submit").click()
+    card = valkhor.locator("#pending-motions-list .motion-card", has_text="Can grain be traded in Turn 3?")
+    expect(card).to_be_visible(timeout=5000)
+    card.locator("button", has_text="Co-sponsor").click()
+    expect(card.locator(".status-pill", has_text="On the ballot")).to_be_visible(timeout=5000)
 
     admin.locator(".admin-tab-btn", has_text="Resolutions").click()
     question = admin.locator("#gm-inbox .inset", has_text="Can grain be traded in Turn 3?")
-    expect(question).to_be_visible(timeout=5000)
-    question.locator("textarea").fill("Yes, until the working session ends.")
-    question.locator("button", has_text="only").click()
+    expect(question).to_contain_text("waiting for the Assembly vote", timeout=5000)
+    admin.locator(".admin-tab-btn", has_text="Pacing").click()
+    admin.locator("button", has_text="Convene Between-Rounds Plenary").click()
+    for phone in (aquila, valkhor):
+        vote = phone.locator("#plenary-voting-actions-container button", has_text="SUPPORT")
+        expect(vote).to_be_visible(timeout=5000)
+        vote.click()
+    admin.locator("button", has_text="Settle Plenary").click()
 
-    expect(sylvan.locator("#gm-questions-list")).to_contain_text("Yes, until the working session ends.", timeout=5000)
-    expect(aquila.locator("text=Can grain be traded in Turn 3?")).to_have_count(0)
+    admin.locator(".admin-tab-btn", has_text="Resolutions").click()
+    expect(question.locator("textarea")).to_be_visible(timeout=5000)
+    question.locator("textarea").fill("Yes, until the working session ends.")
+    question.locator("button", has_text="Publish answer").click()
+
+    tab(sylvan, "Motions")
+    decided = sylvan.locator("#decided-motions-list .motion-card", has_text="Can grain be traded in Turn 3?")
+    expect(decided).to_contain_text("Yes, until the working session ends.", timeout=5000)
     assert errors == []
     admin.close()
 
@@ -208,12 +238,14 @@ def test_quiz_and_wiki(server, browser):
     # Quiz: answer one question; the teammate's phone sees it answered too
     tab(phone, "Quiz")
     first = phone.locator("#quiz-container .quiz-card").first
+    expect(first).to_be_visible(timeout=5000)
+    left = str(int(phone.locator("#quiz-stat-open").inner_text()) - 1)
     first.locator(".quiz-option").first.click()
     first.locator("button", has_text="Lock in").click()
-    expect(phone.locator("#quiz-stat-open")).to_have_text("9", timeout=5000)
+    expect(phone.locator("#quiz-stat-open")).to_have_text(left, timeout=5000)
 
     tab(teammate, "Quiz")
-    expect(teammate.locator("#quiz-stat-open")).to_have_text("9", timeout=5000)
+    expect(teammate.locator("#quiz-stat-open")).to_have_text(left, timeout=5000)
     assert errors == []
 
 

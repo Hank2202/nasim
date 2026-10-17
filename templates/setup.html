@@ -83,13 +83,14 @@
 
   <!-- 4. Clocks -->
   <section class="card">
-    <div class="card-title">4 · Clocks</div>
+    <div class="card-title">4 · Clocks and limits</div>
     <div class="setup-fields mt-2">
       <label>Working session <span><input type="number" id="working_min" min="1" max="60" value="{{ '%g' % (settings.working_session_seconds / 60) }}"> min</span></label>
       <label>Assembly vote (Turns 1–2) <span><input type="number" id="vote_min" min="0.5" max="15" step="0.5" value="{{ '%g' % (settings.plenary_vote_seconds / 60) }}"> min</span></label>
       <label>Grand Plenary debate, per motion <span><input type="number" id="debate_min" min="0.5" max="20" step="0.5" value="{{ '%g' % (settings.debate_session_seconds / 60) }}"> min</span></label>
       <label>Grand Plenary vote, per motion <span><input type="number" id="grand_vote_sec" min="20" max="600" step="10" value="{{ settings.grand_vote_seconds }}"> s</span></label>
       <label>Pause before the next turn <span><input type="number" id="intermission_sec" min="0" max="600" step="15" value="{{ settings.intermission_seconds }}"> s</span></label>
+      <label>Motions per nation per turn <span><input type="number" id="motions_per_turn" min="1" max="10" step="1" value="{{ settings.motions_per_turn or 2 }}"> motions</span></label>
     </div>
     <label class="check mt-2">
       <input type="checkbox" id="auto_advance" {% if settings.auto_advance %}checked{% endif %}>
@@ -135,6 +136,7 @@
         minor_events_per_turn: parseInt(document.getElementById('events_per_turn').value, 10) || 0,
         minor_event_max: parseFloat(document.getElementById('event_max').value) || 1,
         large_events_per_turn: parseInt(document.getElementById('large_per_turn').value, 10) || 0,
+        motions_per_turn: parseInt(document.getElementById('motions_per_turn').value, 10) || 2,
       };
     },
     applySuggested(radio) {

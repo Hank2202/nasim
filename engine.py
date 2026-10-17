@@ -124,6 +124,7 @@ class SummitEngine:
         "working_session_seconds": (60, 3600), "plenary_vote_seconds": (30, 900),
         "debate_session_seconds": (30, 1200), "grand_vote_seconds": (20, 600),
         "intermission_seconds": (0, 600), "minor_events_per_turn": (0, 30), "large_events_per_turn": (0, 10),
+        "motions_per_turn": (1, 10),
     }
     FLOAT_SETTING_LIMITS = {"minor_event_max": (1, 50)}
 
@@ -1414,10 +1415,13 @@ class SummitEngine:
         if not title or not description:
             return False, "Give the motion a title and terms.", None
 
-        if template.get("no_vote"):
-            # A question for the game masters: no co-sponsor, no vote, visible only to its author and the facilitators.
-            target_seconder_id = None
-            target_realm_id = None
+        # Each nation may table only a few motions per turn (questions to the game masters included).
+        meta = self.db.get_state("meta", {})
+        limit = int(self.settings().get("motions_per_turn", 2))
+        tabled = sum(1 for p in self.db.get_state("proposals", [])
+                     if p.get("proposer_id") == proposer_id and p.get("created_turn") == meta.get("current_turn", 1))
+        if tabled >= limit:
+            return False, f"Your nation has already tabled {tabled} motions this turn (the limit is {limit}).", None
 
         target_realm = None
         if template.get("needs_target"):
@@ -1432,7 +1436,6 @@ class SummitEngine:
                 return False, "The nation you asked to co-sponsor is not taking part.", None
             target_name = seconder_realm["name"]
 
-        meta = self.db.get_state("meta", {})
         prop_id = str(uuid.uuid4())[:8]
         new_prop = {
             "id": prop_id,
@@ -1448,7 +1451,7 @@ class SummitEngine:
             "support_list": [proposer_id],
             "supporters": [{"id": proposer_id, "name": proposer["name"]}],
             "is_qualified": False,
-            "status": "question" if template.get("no_vote") else "draft",
+            "status": "draft",
             "created_turn": meta.get("current_turn", 1),
             "created_at": time.time(),
             "time_str": self._format_now(),
@@ -1465,9 +1468,6 @@ class SummitEngine:
         proposals.insert(0, new_prop)
         self.db.set_state("proposals", proposals)
 
-        if template.get("no_vote"):
-            self.trigger_audio_cue("chime", f"Question for the game masters from {proposer['name']}")
-            return True, "Your question was sent to the game masters.", prop_id
         # A motion addressed to one nation stays private until it qualifies; open motions are announced.
         if not target_name:
             self.add_news(
@@ -1485,8 +1485,6 @@ class SummitEngine:
 
         if prop["status"] not in ("draft", "qualified"):
             return False, f"Motion is already {prop['status']}."
-        if prop.get("effect_type") == "gm_question":
-            return False, "Questions to the game masters cannot be co-sponsored."
 
         realms = self.db.get_state("realms", [])
         supporter = next((r for r in realms if r["id"] == supporter_id), None)
@@ -1527,8 +1525,8 @@ class SummitEngine:
     # -------------------------------------------------------------------------
     # Between-Round Plenary Voting Structure
     # -------------------------------------------------------------------------
-    def answer_question(self, prop_id: str, answer: str, public: bool = False) -> Tuple[bool, str]:
-        """The facilitators answer a nation's question, privately or for everyone to see."""
+    def answer_question(self, prop_id: str, answer: str) -> Tuple[bool, str]:
+        """The facilitators answer a question the Assembly passed; everyone sees the answer."""
         answer = (answer or "").strip()[:1000]
         if not answer:
             return False, "Write an answer first."
@@ -1536,12 +1534,14 @@ class SummitEngine:
         prop = next((p for p in proposals if p["id"] == prop_id and p.get("effect_type") == "gm_question"), None)
         if not prop:
             return False, "Question not found."
-        prop.update(status="answered", answer=answer, answered_publicly=bool(public), answered_at=time.time())
+        if prop.get("status") != "passed":
+            return False, "Only questions the Assembly has passed are answered."
+        prop.update(answer=answer, answered_at=time.time())
         self.db.set_state("proposals", proposals)
-        if public:
-            self.add_news("diplomacy", "THE GAME MASTERS ANSWER",
-                          f"{prop.get('proposer_name')} asked: \"{prop.get('description')}\" Answer: {answer}")
-        return True, "Answer sent " + ("to everyone." if public else f"to {prop.get('proposer_name')}.")
+        self.add_news("diplomacy", "THE GAME MASTERS ANSWER",
+                      f"{prop.get('proposer_name')} asked: \"{prop.get('title')}\" {prop.get('description')} — Answer: {answer}")
+        self.trigger_audio_cue("chime", "The game masters answer")
+        return True, "Answer published to everyone."
 
     def start_plenary_session(self) -> Tuple[bool, str]:
         meta = self.db.get_state("meta", {})
@@ -1855,6 +1855,9 @@ class SummitEngine:
                 self._recalculate_all_realms(realms)
                 self.db.set_state("realms", realms)
                 return f"Emergency Industrial Agriculture Act underfunded: Only {collected}/{quota} Cores collected. Quota not met."
+
+        elif effect_type == "gm_question":
+            return "The question goes to the game masters, who will answer it for everyone."
 
         elif effect_type == "custom":
             proposer = next((r for r in realms if r["id"] == prop.get("proposer_id")), None)
@@ -2189,8 +2192,9 @@ class SummitEngine:
         avg_stability = sum(r.get("civil_stability", 0) for r in active_realms) / max(1, len(active_realms))
         avg_standing = sum(r.get("diplomatic_standing", 0) for r in active_realms) / max(1, len(active_realms))
 
-        passed_proposals = [p for p in proposals if p.get("status") == "passed"]
-        failed_proposals = [p for p in proposals if p.get("status") == "rejected"]
+        # Questions to the game masters are not resolutions: they do not count towards missions.
+        passed_proposals = [p for p in proposals if p.get("status") == "passed" and p.get("effect_type") != "gm_question"]
+        failed_proposals = [p for p in proposals if p.get("status") == "rejected" and p.get("effect_type") != "gm_question"]
         trade_partners = self.db.get_state("trade_partners", {})
         military_trades = self.db.get_state("military_trades", [])
 
@@ -2534,6 +2538,7 @@ class SummitEngine:
             "title": p.get("title"), "type": types.get(p.get("effect_type"), {}).get("name", p.get("effect_type")),
             "tabled_by": p.get("proposer_name"), "sponsors": [s.get("name") for s in p.get("supporters", [])],
             "status": p.get("status"), "turn": p.get("created_turn"), "terms": p.get("description"),
+            "answer": p.get("answer"),
             "votes": [{"nation": v.get("realm_name"), "choice": v.get("choice"), "weight": v.get("weight")} for v in (p.get("votes") or {}).values()],
         } for p in reversed(proposals)]
         trade_log = [{

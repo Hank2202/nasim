@@ -205,7 +205,7 @@ class AdminApp {
 
     // Tab 4: questions to the game masters, then floor resolutions
     this.renderQuestionInbox(proposals);
-    const motions = proposals.filter(p => p.effect_type !== 'gm_question');
+    const motions = proposals;
     const resList = document.getElementById('admin-resolutions-list');
     if (resList) {
       if (motions.length === 0) {
@@ -770,41 +770,46 @@ class AdminApp {
   }
 
   renderQuestionInbox(proposals) {
+    // Questions are ordinary motions: they need a co-sponsor and a passing vote before the facilitators answer.
     const questions = proposals.filter(p => p.effect_type === 'gm_question');
-    const open = questions.filter(p => !p.answer);
+    const toAnswer = questions.filter(p => p.status === 'passed' && !p.answer);
     const badge = document.getElementById('gm-tab-badge');
-    if (badge) { badge.innerText = open.length; badge.style.display = open.length ? 'inline-block' : 'none'; }
+    if (badge) { badge.innerText = toAnswer.length; badge.style.display = toAnswer.length ? 'inline-block' : 'none'; }
     const count = document.getElementById('gm-inbox-count');
-    if (count) count.innerText = open.length ? `· ${open.length} waiting` : '';
+    if (count) count.innerText = toAnswer.length ? `· ${toAnswer.length} to answer` : '';
     const box = document.getElementById('gm-inbox');
     if (!box) return;
     // Re-render only when questions change, so an answer being typed is not wiped by the 1-second refresh.
-    const key = questions.map(p => `${p.id}:${p.status}`).join(',');
+    const key = questions.map(p => `${p.id}:${p.status}:${p.answer ? 1 : 0}`).join(',');
     if (key === this._inboxKey) return;
-    if (this._inboxKey !== undefined && open.some(p => !this._inboxKey.includes(p.id))) {
-      showToast('New question for the game masters', 'info');
+    if (this._inboxKey !== undefined && toAnswer.some(p => !this._inboxKey.includes(`${p.id}:passed`))) {
+      showToast('The Assembly passed a question for the game masters', 'info');
       synth.playChime();
     }
     this._inboxKey = key;
     const esc = escapeHtml;
+    const stateLine = p => ({
+      draft: 'Waiting for a co-sponsor', qualified: 'On the ballot: waiting for the Assembly vote',
+      rejected: 'Rejected by the Assembly: no answer needed',
+    })[p.status] || '';
     box.innerHTML = questions.length ? questions.slice().reverse().map(p => `
       <div class="inset">
         <div class="row-between"><b>${esc(p.proposer_name)}</b><span class="section-sub" style="margin:0;">${esc(p.time_str || '')}</span></div>
         <div style="font-weight:600; margin-top:4px;">${esc(p.title)}</div>
         <p class="small" style="white-space:pre-line; margin-top:2px;">${esc(p.description)}</p>
-        ${p.answer ? `<div class="callout ok mt-1"><b>Answered${p.answered_publicly ? ' publicly' : ' privately'}:</b> ${esc(p.answer)}</div>` : `
+        ${p.answer ? `<div class="callout ok mt-1"><b>Answered:</b> ${esc(p.answer)}</div>`
+          : p.status === 'passed' ? `
+        <div class="callout warn mt-1">Passed by the Assembly: please answer. Everyone sees the answer.</div>
         <textarea class="form-textarea mt-1" rows="2" id="answer-${esc(p.id)}" placeholder="Your answer…"></textarea>
-        <div class="row mt-1">
-          <button class="btn btn-primary btn-sm" onclick="adminApp.answerQuestion('${esc(p.id)}', false)">Answer ${esc(p.proposer_name)} only</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.answerQuestion('${esc(p.id)}', true)">Answer everyone (news)</button>
-        </div>`}
+        <button class="btn btn-primary btn-sm mt-1" onclick="adminApp.answerQuestion('${esc(p.id)}')">Publish answer</button>`
+          : `<div class="section-sub mt-1">${stateLine(p)}</div>`}
       </div>`).join('') : '<p class="empty-state">No questions yet.</p>';
   }
 
-  async answerQuestion(id, isPublic) {
+  async answerQuestion(id) {
     const answer = (document.getElementById(`answer-${id}`) || {}).value || '';
     const res = await (await fetch('/api/admin/question/answer', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, answer, public: isPublic })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, answer })
     })).json();
     showToast(res.message, res.success ? 'success' : 'danger');
     this.pollState();

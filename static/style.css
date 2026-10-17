@@ -1387,6 +1387,14 @@ body.wiki-mode #toast-container { bottom: 16px; }
 .motion-effect { display: block; font-size: 0.8rem; line-height: 1.45; color: var(--text-primary); background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 6px 9px; border-radius: 0 var(--radius-xs) var(--radius-xs) 0; margin-top: 6px; }
 .motion-effect > span:first-child { font-family: var(--font-display); font-weight: 700; color: var(--accent); }
 .motion-chosen { border-color: var(--accent); }
+.motion-template:disabled { opacity: 0.45; cursor: not-allowed; }
+.motion-quota { font-size: 0.85rem; padding: 6px 10px; border-radius: var(--radius-md, 8px); background: var(--accent-soft); color: var(--text-primary); }
+.motion-quota.empty { background: var(--danger-soft); color: var(--text-primary); }
+.edit-hint { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--radius-md, 8px); border: 1.5px dashed var(--accent); background: #fff8e6; font-size: 0.85rem; line-height: 1.4; }
+.edit-hint-icon { font-size: 1.3rem; color: var(--accent); line-height: 1; }
+.edit-tag { margin-left: 6px; padding: 1px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 0.7rem; letter-spacing: 0; text-transform: none; font-weight: 700; }
+.form-input.editable, .form-textarea.editable { border-style: dashed; border-color: var(--accent); background: #fffdf6; }
+.form-input.editable:focus, .form-textarea.editable:focus { border-style: solid; }
 .motion-chosen-name { font-family: var(--font-display); font-size: 1rem; }
 .motion-title { font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--text-primary); }
 .motion-sponsor { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; font-family: var(--font-sans); letter-spacing: 0; }
@@ -1604,6 +1612,13 @@ body.console .bottom-nav-item.active::after { display: none; }
 /* Admin roster */
 .roster-card { display: grid; grid-template-columns: minmax(220px, 1fr) 2.4fr; gap: 14px; align-items: center; margin-bottom: 16px; padding: 14px 16px; border-radius: var(--radius-lg); background: var(--bg-surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-raised); }
 @media (max-width: 900px) { .roster-card { grid-template-columns: 1fr; } }
+.setup-banner { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 10px 16px; border-radius: var(--radius-lg); background: var(--bg-surface); border: 1px solid var(--border-strong); color: var(--text-primary); text-decoration: none; }
+.setup-banner:hover { background: var(--accent-soft); }
+.setup-banner.fresh { border: 2px solid var(--accent); box-shadow: var(--shadow-raised); }
+.setup-banner-icon { font-size: 1.4rem; color: var(--accent); }
+.setup-banner b { display: block; font-family: var(--font-display, serif); }
+.setup-banner em { display: block; font-size: 0.82rem; color: var(--text-secondary); }
+.setup-banner-go { margin-left: auto; font-weight: 700; color: var(--accent); white-space: nowrap; }
 .roster-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
 .roster-chip { display: flex; align-items: center; gap: 8px; text-align: left; padding: 7px 10px; border-radius: 12px; border: 1px dashed var(--border-strong); background: var(--bg-surface-sunken); cursor: pointer; font: inherit; color: var(--text-muted); opacity: 0.75; }
 .roster-chip b { display: block; font-family: var(--font-display); font-size: 0.88rem; }
