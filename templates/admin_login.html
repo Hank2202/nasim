@@ -59,7 +59,7 @@ async function submitAdminLogin() {
     const data = await res.json();
 
     if (res.ok && data.success) {
-      window.location.href = '/admin';
+      window.location.href = data.next || '/admin';
     } else {
       errorBox.innerText = data.message || data.error || 'Access denied: Invalid facilitator passcode.';
       errorBox.style.display = 'block';

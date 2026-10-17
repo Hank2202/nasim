@@ -142,11 +142,9 @@ def sanitize_state(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def _private_view(p: Dict[str, Any], viewers: set):
     """What a nation may know about a motion: who tabled it, never who co-sponsored it.
-    Motions addressed to one nation, and questions to the game masters, stay private."""
+    Motions addressed to one nation stay private until they reach the ballot."""
     mine = p.get("proposer_id") in viewers
     target = p.get("target_seconder_id")
-    if p.get("effect_type") == "gm_question" and not mine:
-        return None
     if target and p.get("status") == "draft" and not mine and target not in viewers:
         return None
     q = dict(p)
@@ -282,7 +280,8 @@ def admin_view():
         server_url=server_url,
         qr_svg=qr_svg,
         host_ip=lan_ip,
-        port=port
+        port=port,
+        in_progress=game_in_progress(),
     )
 
 # -----------------------------------------------------------------------------
@@ -319,6 +318,13 @@ def api_wiki_article(slug: str):
         return jsonify({"success": False, "message": "Article not found."}), 404
     return jsonify({"success": True, "article": article})
 
+def game_in_progress() -> bool:
+    """True once play has begun (clock started, a trade or motion made, or past Turn 1)."""
+    meta = engine.db.get_state("meta", {}) or {}
+    return bool(meta.get("current_turn", 1) > 1 or meta.get("is_timer_running")
+                or meta.get("turn_timer_remaining") != meta.get("turn_timer_total")
+                or engine.db.get_state("trades", []) or engine.db.get_state("proposals", []))
+
 @app.route("/admin/setup")
 def admin_setup():
     """Facilitator setup screen: scenario, difficulty, nations, timers and events."""
@@ -327,8 +333,7 @@ def admin_setup():
     state = engine.get_full_state()
     cfg = load_scenario_config()
     meta = state["meta"]
-    in_progress = meta.get("current_turn", 1) > 1 or meta.get("is_timer_running") or \
-        meta.get("turn_timer_remaining") != meta.get("turn_timer_total") or bool(engine.db.get_state("trades", []))
+    in_progress = game_in_progress()
     return render_template("setup.html", settings=engine.settings(), scenarios=cfg.get("scenarios", {}),
                            difficulties=cfg.get("difficulties", {}), realms=state["realms"], meta=meta,
                            in_progress=in_progress)
@@ -447,7 +452,9 @@ def api_auth_admin():
     if _login_throttled():
         return jsonify({"success": False, "message": "Too many failed attempts. Wait a minute."}), 429
     if engine.verify_admin_passcode(passcode):
-        resp = make_response(jsonify({"success": True, "message": "Command Deck unlocked."}))
+        # Before a game has started, the facilitator lands on the setup screen first.
+        resp = make_response(jsonify({"success": True, "message": "Command Deck unlocked.",
+                                      "next": "/admin" if game_in_progress() else "/admin/setup"}))
         _set_auth_cookie(resp, "auth_admin", "admin")
         return resp
     else:
@@ -814,7 +821,7 @@ def api_admin_event_auto():
 @app.route("/api/admin/question/answer", methods=["POST"])
 def api_admin_question_answer():
     data = request.get_json(silent=True) or {}
-    ok, msg = engine.answer_question(data.get("id"), data.get("answer"), bool(data.get("public")))
+    ok, msg = engine.answer_question(data.get("id"), data.get("answer"))
     return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
 
 @app.route("/api/admin/event/minor", methods=["POST"])

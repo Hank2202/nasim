@@ -1299,7 +1299,7 @@ class TestClockAndEvents(unittest.TestCase):
 
 
 class TestMotionPrivacy(unittest.TestCase):
-    """Co-sponsors are anonymous; addressed motions and game-master questions stay private."""
+    """Co-sponsors are anonymous; addressed motions stay private; questions to the game masters are voted on."""
 
     def setUp(self):
         from app import engine
@@ -1334,18 +1334,42 @@ class TestMotionPrivacy(unittest.TestCase):
         self.assertNotIn("Iron Val-Khor", json.dumps(seen_by_solaris))
         self.assertNotIn("Val-Khor", json.dumps(self.engine.db.get_state("news_feed")[:3]))
 
-    def test_question_to_game_masters(self):
+    def test_question_to_game_masters_goes_through_a_vote(self):
         sylvan, solaris = self._phone("sylvan", "1001"), self._phone("solaria", "1003")
         r = sylvan.post("/api/proposal/create", json={"proposer_id": "sylvan", "title": "Rules?", "description": "Can we trade military?",
                                                       "effect_type": "gm_question"}).json
         self.assertTrue(r["success"])
-        self.assertEqual(self._motions(sylvan)["Rules?"]["status"], "question")
-        self.assertNotIn("Rules?", self._motions(solaris))
         pid = r["proposal_id"]
-        self.assertEqual(solaris.post(f"/api/proposal/{pid}/support", json={"supporter_id": "solaria"}).status_code, 400)
+        self.assertEqual(self._motions(solaris)["Rules?"]["status"], "draft")   # a public motion like any other
         app.config["TESTING"] = True
-        ok, _ = self.engine.answer_question(pid, "Yes, Military can be traded.", public=False)
+        self.assertFalse(self.engine.answer_question(pid, "Not yet.")[0])        # only passed questions are answered
+        app.config["TESTING"] = False
+        self.assertEqual(solaris.post(f"/api/proposal/{pid}/support", json={"supporter_id": "solaria"}).status_code, 200)
+        app.config["TESTING"] = True
+        self.assertTrue(self.engine.start_plenary_session()[0])
+        for rid in ("sylvan", "solaria", "aquila"):
+            self.engine.cast_plenary_vote(rid, pid, "support")
+        self.engine.conclude_quick_plenary()
+        ok, _ = self.engine.answer_question(pid, "Yes, Military can be traded.")
         self.assertTrue(ok)
         app.config["TESTING"] = False
-        self.assertEqual(self._motions(sylvan)["Rules?"]["answer"], "Yes, Military can be traded.")
-        self.assertFalse(self.engine.start_plenary_session()[0])       # questions never reach the ballot
+        self.assertEqual(self._motions(solaris)["Rules?"]["answer"], "Yes, Military can be traded.")
+        self.assertIn("THE GAME MASTERS ANSWER", self.engine.db.get_state("news_feed")[0]["headline"])
+        # questions do not count as resolutions for missions
+        app.config["TESTING"] = True
+        out = self.engine.conclude_summit()[2]
+        self.assertEqual(out["passed_proposals_count"], 0)
+
+    def test_motion_limit_per_turn(self):
+        app.config["TESTING"] = True
+        for i in range(2):
+            self.assertTrue(self.engine.draft_proposal("sylvan", f"M{i}", "x", "aid")[0])
+        ok, msg, _ = self.engine.draft_proposal("sylvan", "M3", "x", "gm_question")
+        self.assertFalse(ok)
+        self.assertIn("limit is 2", msg)
+        self.assertTrue(self.engine.draft_proposal("aquila", "Other nation", "x", "aid")[0])
+        self.engine.update_settings({"motions_per_turn": 3})
+        self.assertTrue(self.engine.draft_proposal("sylvan", "M3", "x", "aid")[0])
+        self.engine.db.set_state("settings", {})
+        self.engine.process_end_of_turn()                                  # a new turn, a new allowance
+        self.assertTrue(self.engine.draft_proposal("sylvan", "Turn 2", "x", "aid")[0])

@@ -223,7 +223,8 @@
     <!-- Step 1: pick a motion template; Step 2: edit its wording -->
     <div class="card">
       <div class="card-title">Propose a Motion</div>
-      <p class="section-sub">Pick a template, then adjust the wording. Another nation must co-sponsor it before the vote.</p>
+      <p class="section-sub">Pick the template closest to your idea, then <b>rewrite its title and terms in your own words</b>. Only the "If passed" effect is fixed. Another nation must co-sponsor it before the vote.</p>
+      <div id="motion-quota" class="motion-quota mt-1"></div>
 
       <div id="motion-templates" class="stack mt-2">
         <p class="empty-state">Loading templates&hellip;</p>
@@ -242,9 +243,14 @@
           <div class="motion-effect mt-1"><span>If passed:</span> <span id="motion-chosen-effect"></span></div>
         </div>
 
+        <div class="edit-hint mt-2">
+          <span class="edit-hint-icon">&#9998;</span>
+          <span><b>This is only the template's example wording.</b> Change the title and terms to say exactly what your nation proposes: amounts, conditions, deadlines, who does what.</span>
+        </div>
+
         <div class="form-group mt-2">
-          <label class="form-label" for="proposal-title">Title</label>
-          <input type="text" id="proposal-title" class="form-input" maxlength="100" required>
+          <label class="form-label" for="proposal-title">Title <span class="edit-tag">&#9998; edit me</span></label>
+          <input type="text" id="proposal-title" class="form-input editable" maxlength="100" required>
         </div>
 
         <div class="form-group" id="proposal-target-nation-group" style="display: none;">
@@ -258,8 +264,8 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="proposal-desc">Terms <span class="muted" style="text-transform:none; letter-spacing:0;">(edit freely)</span></label>
-          <textarea id="proposal-desc" class="form-textarea" rows="6" maxlength="1000" required></textarea>
+          <label class="form-label" for="proposal-desc">Terms <span class="edit-tag">&#9998; rewrite freely</span></label>
+          <textarea id="proposal-desc" class="form-textarea editable" rows="6" maxlength="1000" required></textarea>
         </div>
 
         <div class="form-group" id="proposal-cosponsor-group">
@@ -274,13 +280,6 @@
 
         <button type="submit" class="btn btn-primary btn-block" id="proposal-submit">Table this motion</button>
       </form>
-    </div>
-
-    <!-- Questions this nation asked the game masters (private) -->
-    <div class="card" id="gm-questions-card" style="display: none;">
-      <div class="card-title">Your questions to the game masters</div>
-      <p class="section-sub">Only your nation and the facilitators see these.</p>
-      <div id="gm-questions-list" class="stack mt-2"></div>
     </div>
 
     <!-- Open motions: awaiting a co-sponsor or qualified for the ballot -->

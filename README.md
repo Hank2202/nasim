@@ -212,13 +212,15 @@ Notes:
 Players propose motions from **templates** (`resolution_types` in `scenario_config.json`): each template is shown written out with its plain-language effect ("If passed: …"), ready-made title and terms. The player picks one, edits the title and terms, chooses a target nation if the template needs one (e.g. the Frontier Watch cordon), and optionally limits who may co-sponsor. A motion needs a second nation's co-sponsorship to reach the ballot.
 
 - **Who sees what:** an open motion is visible to everyone, but co-sponsors stay anonymous — other nations only see *that* it has a co-sponsor ("On the ballot"), not who. A motion offered to one nation only ("Who may co-sponsor?") is visible just to the proposer and that nation until it reaches the ballot.
-- **Question to the Game Masters** (template `gm_question`, `no_vote: true`): no co-sponsor and no vote. Only the asking nation and the facilitators see it; it appears in the admin's **Resolutions & Questions** tab (with a badge and a chime), where the facilitator answers that nation privately or everyone as a news item.
+- **Question to the Game Masters** (template `gm_question`): a motion like the others: it needs a co-sponsor and must pass the Assembly vote. Once passed it appears in the admin's **Resolutions & Questions** tab (badge and chime), the facilitator types an answer, and everyone sees it on the motion card and as news. Questions don't count as resolutions for missions.
+- **Limit:** each nation may table **2 motions per turn** (questions included); set on the setup screen. Phones show how many are left.
+- **Templates are starting points:** the phone says so above the list and on the form (dashed, "edit me" fields); only the "If passed" effect is fixed.
 
 Decided motions show how each nation voted (votes and nation count). Continental Food Acts A/B are facilitator-only (`player_selectable: false`) and are tabled automatically in Round 3.
 
 ## ⚙️ Setting up a summit (`/admin/setup`)
 
-The **Setup** link on the command deck opens one page for everything decided before the session:
+Logging in before a game has started opens this page first; afterwards the **Setup** banner at the top of the command deck (and the header link) leads back to it. The facilitator login lasts 24 hours in that browser; **Lock** logs out. The page covers everything decided before the session:
 
 1. **Scenario** — *The Great Famine* (the MGV 2026 storyline: Round 2 border incident, Round 3 famine and Continental Food Acts), *Open Summit* (same nations and missions, no scripted crises) or *Armageddon* (the famine storyline plus 3 large disasters and 10 larger small events per turn). Choosing a scenario fills in its suggested event numbers.
 2. **Difficulty** — grain eaten per turn and the share of good small events: Gentle 15 / 65 %, Standard 20 / 50 %, Harsh 25 / 35 %.

@@ -115,10 +115,9 @@
       "player_selectable": true,
       "icon": "❓",
       "needs_target": false,
-      "no_vote": true,
-      "summary": "Ask the facilitators something: a rule, a fact about the world, or what would happen if…",
-      "effect_plain": "No vote and no co-sponsor: only the game masters see your question, and they answer your nation privately (or, if they choose, publicly).",
-      "statutory_effect": "No mechanical effect; answered by the facilitators.",
+      "summary": "Ask the game masters something: a rule, a fact about the world, or what would happen if… Like any motion it needs a co-sponsor and must pass the Assembly vote.",
+      "effect_plain": "The game masters answer the question in front of everyone (no change to resources).",
+      "statutory_effect": "No mechanical effect; the facilitators answer the question publicly.",
       "default_title": "A question for the game masters",
       "default_terms": "Our question: …"
     }
@@ -1059,7 +1058,8 @@
     "minor_events_per_turn": 6,
     "minor_event_max": 5,
     "intermission_seconds": 45,
-    "large_events_per_turn": 0
+    "large_events_per_turn": 0,
+    "motions_per_turn": 2
   },
   "scenarios": {
     "famine": {

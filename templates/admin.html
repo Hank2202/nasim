@@ -29,6 +29,14 @@
     </div>
   </div>
 
+  <!-- Way to the setup screen (the header links are hidden on narrow screens) -->
+  <a href="/admin/setup" class="setup-banner{% if not in_progress %} fresh{% endif %}">
+    <span class="setup-banner-icon">&#9881;</span>
+    <span><b>{% if in_progress %}Summit setup{% else %}Set up this summit before you start{% endif %}</b>
+      <em>Scenario, difficulty, nations and passcodes, clocks, random events{% if in_progress %}, or start a new summit{% endif %}.</em></span>
+    <span class="setup-banner-go">Open setup &rarr;</span>
+  </a>
+
   <!-- Roster: which nations take part (always visible, the first thing to set) -->
   <section class="roster-card">
     <div>
@@ -273,7 +281,7 @@
   <div id="tab-resolutions" class="admin-tab-content">
     <div class="card" id="gm-inbox-card">
       <div class="card-title">Questions to the game masters <span id="gm-inbox-count" class="muted"></span></div>
-      <p class="section-sub">Only you and the asking nation see a question. Answer it privately, or publicly as news for everyone.</p>
+      <p class="section-sub">Questions are motions: they need a co-sponsor and a passing Assembly vote. Once passed, answer here; the answer goes to everyone as news.</p>
       <div id="gm-inbox" class="stack mt-2"><p class="empty-state">No questions yet.</p></div>
     </div>
     <div class="card">

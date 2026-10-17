@@ -112,6 +112,7 @@
     <b>{{ m.title }}</b> <span class="pill">{{ m.type }}</span> <span class="pill">{{ m.status }}</span> <span class="pill">turn {{ m.turn }}</span>
     <div class="sub">Tabled by {{ m.tabled_by }} · sponsors: {{ m.sponsors | join(', ') }}</div>
     <div>{{ m.terms }}</div>
+    {% if m.answer %}<div><b>Game masters' answer:</b> {{ m.answer }}</div>{% endif %}
     {% if m.votes %}
     <div>{% for v in m.votes %}<span class="pill">{{ v.nation }}: {{ v.choice }}{% if v.choice != 'abstain' %} ({{ v.weight }}){% endif %}</span> {% endfor %}</div>
     {% endif %}

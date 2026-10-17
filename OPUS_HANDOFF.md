@@ -1,12 +1,12 @@
 # Summit of Realms — Status & Review Notes
 
-Last updated 2026-10-17. Run tests with `venv/bin/python -m pytest -q` (84 passing: 76 unit/API + 8 end-to-end).
+Last updated 2026-10-17. Run tests with `venv/bin/python -m pytest -q` (86 passing: 77 unit/API + 9 end-to-end).
 
 ## Decisions from the user
 - Host on the easiest free option: **Render** (`render.yaml`). Players join by scanning a QR code.
 - GitHub repo is **private**. **English only.**
 - Quiz: **same questions for every nation**, **one attempt per question**, wrong answer = **lose the same resource and amount the question would have paid** + permanent lock (changed 2026-10-17; it used to be −5 Standing).
-- Motions: co-sponsors are anonymous; a motion offered to one nation is seen only by that nation. There is a "Question to the Game Masters" template.
+- Motions: co-sponsors are anonymous; a motion offered to one nation is seen only by that nation. "Question to the Game Masters" is a template that, like any motion, needs a co-sponsor and a passing vote; then the facilitators answer it publicly. Each nation may table 2 motions per turn (setting `motions_per_turn`).
 - Crises: no automatic big catastrophes in the famine scenario; the storyline already carries the big crisis. Small random events are a random amount between 0 and the set maximum (float, default 5), many kinds, good and bad, default 6 per turn. The **Armageddon** scenario adds large disasters at random (3 per turn) and more/larger small events.
 - Clocks: when time runs out an alert sounds and the game moves to the next phase by itself.
 - `MGV 2026 školení s Johanem.md` (Czech facilitator notes) is the reference for starting values and missions. `scenario_config.json` matches it.
@@ -215,3 +215,10 @@ Last updated 2026-10-17. Run tests with `venv/bin/python -m pytest -q` (84 passi
 - **Scenarios:** each scenario in `scenarios` has `famine_storyline` (replaces the hard-coded `scenario == "famine"` checks, including the Round 2 grain transit loss, which used to apply in every scenario) and `suggested` event numbers that the setup page fills in. New `armageddon`: famine storyline + 10 small events (max 8) + 3 large disasters per turn.
 - **Simulation with the new defaults** (40 games per row): famine-scenario rows are unchanged within noise. Armageddon, cooperative: good quiz 98 % stable / 2 % fragile, 69 % of missions; weak quiz 70 % stable / 30 % fragile, 61 % of missions. Harder, still winnable.
 - **Large disasters:** `fire_large_event()` picks a catastrophe whose terrain matches an active nation and calls `trigger_catastrophe` (which now targets only active nations; `_apply_catastrophe` also handles `military`). Four new catastrophes: dragon raid, great storm, tornado swarm, meteor shower. `_check_scheduled_events` (was `_check_minor_events`) plans both kinds per working session; changing the counts mid-session replans the remainder. Admin: **Random disaster now** (`POST /api/admin/event/large`).
+- **Finding the setup screen:** `app.game_in_progress()` (clock started, a trade or motion, or past Turn 1). Before that, `/api/auth/admin` returns `next: "/admin/setup"` and the login page goes there; the command deck shows a `.setup-banner` link (highlighted while no game has started), because the header links are hidden on narrow screens. Admin cookies last 24 h, so a browser that logged in earlier is not asked again.
+
+## Update 2026-10-17 (evening): questions are voted, motion limit, editable templates
+- `gm_question` lost `no_vote`: it is drafted, co-sponsored and voted like any motion (`_apply_proposal_effect` just returns a note). `answer_question(id, answer)` works only on passed questions and always publishes a "THE GAME MASTERS ANSWER" news item; the answer is stored on the proposal and shown on the decided motion card. `conclude_summit` leaves questions out of the passed/failed lists, so they cannot be used to farm Solaris' "3 resolutions" mission. The private-question card on phones and the private/public choice on admin are gone.
+- `draft_proposal` refuses a nation's motion once it has tabled `motions_per_turn` (default 2, 1–10, on the setup screen) in the current turn. Phones show "You can table N more" and disable the templates at 0.
+- Phone motion form: hint box, "edit me" tags and dashed fields make clear the template wording is only an example; template buttons say "Start from this".
+
