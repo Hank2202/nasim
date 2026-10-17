@@ -3,39 +3,22 @@
     "purpose": "This is the master, single-source-of-truth configuration file for The Summit of Realms. Facilitators and AI assistants can configure every aspect of the simulation directly here.",
     "how_to_edit": {
       "rules": [
-        "1. SIMULATION SETTINGS: 'simulation_settings' controls round timers, economic consumption rates, quiz penalties, and catastrophe roll intervals & probabilities.",
+        "1. SIMULATION SETTINGS: 'simulation_settings' holds engine constants (max turns, starvation penalties, ...). Per-game choices (scenario, difficulty, clocks, events) are in 'game_settings_defaults' and on the setup screen.",
         "2. REALMS: Define starting nations with unique id, name, pin, theme_color, ethos, backstory, private_agenda, directive goals, starting resources, and geography (world_pos 3D coordinates, terrain, and hazard affinities).",
         "3. RESOLUTION TYPES: 'resolution_types' defines statutory policy mandates available for sovereign proposals.",
-        "4. LORE & QUIZ: lore articles live in lore_articles.json (Spireopedia, /wiki); the shared quiz question bank lives in lore_quiz.json (same questions for every nation, unlocked by turn). Quiz penalty is set here via quiz_fail_penalty_metric / quiz_fail_penalty_amount.",
-        "5. CATASTROPHES CATALOG: 'catastrophes_catalog' defines realistic disasters evaluated every minute. Each disaster has an editable 'base_probability', 'geographic_affinities', 'resource_multipliers', and 'compound_triggers' for realistic multi-disaster cascades."
+        "4. LORE & QUIZ: lore articles live in lore_articles.json (Spireopedia, /wiki); the shared quiz question bank lives in lore_quiz.json (same questions for every nation, unlocked by turn).",
+        "5. GAME SETTINGS: 'game_settings_defaults' are the defaults for the facilitator's setup screen (/admin/setup): scenario, difficulty, timers, automatic phase changes and random events. Changes made on the setup screen are stored per game. Each scenario in 'scenarios' can carry 'suggested' values that the setup screen fills in when the scenario is chosen, and 'famine_storyline' switches the scripted Round 2 border incident and Round 3 famine on.",
+        "6. EVENTS: 'minor_events' are the small random news items during working sessions. Each effect moves a resource by a random amount between 0 and (weight x the largest change set on the setup screen), at least 1. 'catastrophes_catalog' holds the large disasters: they strike at random only when 'large disasters per turn' is above 0 (the Armageddon scenario), otherwise only by hand from the admin page. 'events_catalog' is triggered by hand only.",
+        "7. QUIZ: a wrong answer costs the same resource and amount that a correct answer would have earned."
       ]
     }
   },
   "simulation_settings": {
     "max_turns": 3,
-    "working_session_seconds": 1200,
-    "debate_session_seconds": 300,
-    "baseline_grain_consumption": 20,
     "tech_efficiency_threshold": 75,
-    "tech_efficiency_consumption": 15,
     "starvation_vitality_loss": 25,
     "starvation_stability_loss": 20,
-    "quiz_fail_penalty_metric": "diplomatic_standing",
-    "quiz_fail_penalty_amount": 5,
-    "catastrophe_roll_interval_seconds": 60,
-    "compound_disaster_chance": 0.28,
-    "max_simultaneous_catastrophes": 2,
     "admin_passcode": "admin2026"
-  },
-  "meta_defaults": {
-    "max_turns": 3,
-    "working_session_seconds": 1200,
-    "debate_session_seconds": 300,
-    "baseline_grain_consumption": 20,
-    "tech_efficiency_threshold": 75,
-    "tech_efficiency_consumption": 15,
-    "starvation_vitality_loss": 25,
-    "starvation_stability_loss": 20
   },
   "resolution_types": [
     {
@@ -125,6 +108,19 @@
       "icon": "⚙️",
       "needs_target": false,
       "effect_plain": "Every nation pays 10 Cores; if enough is collected, every nation receives 15 Grain."
+    },
+    {
+      "id": "gm_question",
+      "name": "Question to the Game Masters",
+      "player_selectable": true,
+      "icon": "❓",
+      "needs_target": false,
+      "no_vote": true,
+      "summary": "Ask the facilitators something: a rule, a fact about the world, or what would happen if…",
+      "effect_plain": "No vote and no co-sponsor: only the game masters see your question, and they answer your nation privately (or, if they choose, publicly).",
+      "statutory_effect": "No mechanical effect; answered by the facilitators.",
+      "default_title": "A question for the game masters",
+      "default_terms": "Our question: …"
     }
   ],
   "qualitative_thresholds": {
@@ -787,6 +783,81 @@
         "grain": -15,
         "stability": -15
       }
+    },
+    {
+      "id": "dragon_raid",
+      "name": "Dragon Raid",
+      "category": "Monstrous",
+      "base_probability": 0.15,
+      "geographic_affinities": [
+        "all"
+      ],
+      "resource_multipliers": {},
+      "compound_triggers": [],
+      "headline": "DRAGON RAID",
+      "narrative": "An old red dragon woke in the mountains and swept down on farms and garrisons, carrying off cattle and burning barracks.",
+      "effects": {
+        "grain": -15,
+        "military": -15,
+        "stability": -10
+      }
+    },
+    {
+      "id": "great_storm",
+      "name": "Great Storm",
+      "category": "Meteorological",
+      "base_probability": 0.15,
+      "geographic_affinities": [
+        "coastal_archipelago",
+        "verdant_lowlands",
+        "solar_plateau"
+      ],
+      "resource_multipliers": {},
+      "compound_triggers": [],
+      "headline": "THE GREAT STORM",
+      "narrative": "A storm wall rolled in from the sea for three days, sinking boats, flattening fields and tearing roofs from granaries.",
+      "effects": {
+        "grain": -15,
+        "silk": -15,
+        "vitality": -5
+      }
+    },
+    {
+      "id": "tornado_swarm",
+      "name": "Tornado Swarm",
+      "category": "Meteorological",
+      "base_probability": 0.12,
+      "geographic_affinities": [
+        "northern_steppes",
+        "verdant_lowlands",
+        "solar_plateau"
+      ],
+      "resource_multipliers": {},
+      "compound_triggers": [],
+      "headline": "TORNADO SWARM",
+      "narrative": "A chain of tornadoes cut across the open country, scattering harvests and smashing waystations.",
+      "effects": {
+        "grain": -20,
+        "stability": -10
+      }
+    },
+    {
+      "id": "meteor_shower",
+      "name": "Meteor Shower",
+      "category": "Celestial",
+      "base_probability": 0.1,
+      "geographic_affinities": [
+        "all"
+      ],
+      "resource_multipliers": {},
+      "compound_triggers": [],
+      "headline": "FIRE FROM THE SKY",
+      "narrative": "A shower of burning stones fell on the continent. Forges and workshops took the worst of it.",
+      "effects": {
+        "cores": -20,
+        "vitality": -10,
+        "stability": -5
+      }
     }
   ],
   "events_catalog": [
@@ -975,6 +1046,550 @@
     {
       "text": "What can you take away from this experience for the way you cooperate with others?",
       "context": null
+    }
+  ],
+  "game_settings_defaults": {
+    "scenario": "famine",
+    "difficulty": "standard",
+    "working_session_seconds": 1200,
+    "plenary_vote_seconds": 180,
+    "debate_session_seconds": 300,
+    "grand_vote_seconds": 90,
+    "auto_advance": true,
+    "minor_events_per_turn": 6,
+    "minor_event_max": 5,
+    "intermission_seconds": 45,
+    "large_events_per_turn": 0
+  },
+  "scenarios": {
+    "famine": {
+      "name": "The Great Famine (MGV 2026)",
+      "famine_storyline": true,
+      "suggested": {
+        "minor_events_per_turn": 6,
+        "minor_event_max": 5,
+        "large_events_per_turn": 0
+      },
+      "description": "The scripted three-round crisis from the facilitator notes: the failed harvest, the border incident (Military below 50 costs Stability; Grain trades lose 5 in transit) and the Great Famine (−15 Grain, Continental Food Acts A and B on the ballot). Small random news items only."
+    },
+    "open": {
+      "name": "Open summit",
+      "famine_storyline": false,
+      "suggested": {
+        "minor_events_per_turn": 6,
+        "minor_event_max": 5,
+        "large_events_per_turn": 0
+      },
+      "description": "No scripted crises: only the yearly harvest consumption and the small random events. Good for a shorter or gentler session."
+    },
+    "armageddon": {
+      "name": "Armageddon",
+      "famine_storyline": true,
+      "suggested": {
+        "minor_events_per_turn": 10,
+        "minor_event_max": 8,
+        "large_events_per_turn": 3
+      },
+      "description": "The Great Famine storyline, and the world is falling apart around it: earthquakes, tsunamis, dragon raids and plagues strike at random several times a turn, and the small news items come thicker and larger. For experienced groups."
+    }
+  },
+  "difficulties": {
+    "gentle": {
+      "name": "Gentle",
+      "grain_consumption": 15,
+      "positive_share": 0.65,
+      "description": "Nations eat 15 Grain per turn; two out of three random events are good news."
+    },
+    "standard": {
+      "name": "Standard",
+      "grain_consumption": 20,
+      "positive_share": 0.5,
+      "description": "As in the facilitator notes: 20 Grain per turn; good and bad events are equally likely."
+    },
+    "harsh": {
+      "name": "Harsh",
+      "grain_consumption": 25,
+      "positive_share": 0.35,
+      "description": "Nations eat 25 Grain per turn; most random events are bad news."
+    }
+  },
+  "minor_events": [
+    {
+      "id": "good_harvest_patch",
+      "tone": "good",
+      "headline": "LATE HARVEST IN {nation}",
+      "detail": "A sheltered valley in {nation} brought in a late crop.",
+      "effects": {
+        "grain": 1.0
+      }
+    },
+    {
+      "id": "trade_caravan",
+      "tone": "good",
+      "headline": "SILK CARAVAN REACHES {nation}",
+      "detail": "Merchants from the Sea of Glass paid their tolls in fine silk.",
+      "effects": {
+        "silk": 1.0
+      }
+    },
+    {
+      "id": "forge_breakthrough",
+      "tone": "good",
+      "headline": "FORGE BREAKTHROUGH IN {nation}",
+      "detail": "Smiths in {nation} found a cleaner way to stabilise aether.",
+      "effects": {
+        "cores": 1.0
+      }
+    },
+    {
+      "id": "festival",
+      "tone": "good",
+      "headline": "HARVEST FESTIVAL IN {nation}",
+      "detail": "A spontaneous festival lifts spirits across {nation}.",
+      "effects": {
+        "stability": 1.0,
+        "vitality": 0.6
+      }
+    },
+    {
+      "id": "envoy_praise",
+      "tone": "good",
+      "headline": "SPIRE ARCHIVISTS PRAISE {nation}",
+      "detail": "The Archivists commend the conduct of the {nation} delegation.",
+      "effects": {
+        "standing": 1.0
+      }
+    },
+    {
+      "id": "volunteers",
+      "tone": "good",
+      "headline": "VOLUNTEERS JOIN {nation}'S GUARD",
+      "detail": "Young citizens of {nation} volunteer for the frontier watch.",
+      "effects": {
+        "military": 1.0
+      }
+    },
+    {
+      "id": "hidden_granary",
+      "tone": "good",
+      "headline": "FORGOTTEN GRANARY FOUND IN {nation}",
+      "detail": "Surveyors in {nation} opened a sealed granary from the Salt War years, its grain still sound.",
+      "effects": {
+        "grain": 1.0,
+        "vitality": 0.3
+      }
+    },
+    {
+      "id": "fishing_shoal",
+      "tone": "good",
+      "headline": "GREAT SHOAL OFF {nation}'S COAST",
+      "detail": "Fishing fleets of {nation} came home with nets full to bursting.",
+      "effects": {
+        "grain": 0.8,
+        "vitality": 0.5
+      }
+    },
+    {
+      "id": "spring_rains",
+      "tone": "good",
+      "headline": "GENTLE RAINS OVER {nation}",
+      "detail": "Long-awaited rain soaked the fields of {nation}; farmers expect a fuller second sowing.",
+      "effects": {
+        "grain": 1.0
+      }
+    },
+    {
+      "id": "mushroom_caves",
+      "tone": "good",
+      "headline": "GLOWCAP BLOOM IN {nation}'S CAVES",
+      "detail": "Edible glowcaps carpeted the caverns beneath {nation} overnight.",
+      "effects": {
+        "grain": 0.7,
+        "cores": 0.3
+      }
+    },
+    {
+      "id": "new_vein",
+      "tone": "good",
+      "headline": "NEW AETHER VEIN IN {nation}",
+      "detail": "Miners in {nation} struck a fresh seam of raw aether.",
+      "effects": {
+        "cores": 1.0
+      }
+    },
+    {
+      "id": "falling_star",
+      "tone": "good",
+      "headline": "FALLING STAR LANDS IN {nation}",
+      "detail": "A small meteorite rich in aether crystal fell harmlessly in a {nation} pasture.",
+      "effects": {
+        "cores": 0.8,
+        "standing": 0.3
+      }
+    },
+    {
+      "id": "tinker_guild",
+      "tone": "good",
+      "headline": "TINKERS' GUILD GIFT TO {nation}",
+      "detail": "The wandering Tinkers' Guild repaired {nation}'s old forges for free.",
+      "effects": {
+        "cores": 0.7,
+        "stability": 0.4
+      }
+    },
+    {
+      "id": "moth_season",
+      "tone": "good",
+      "headline": "RECORD MOTH SEASON IN {nation}",
+      "detail": "{nation}'s silk moths spun twice their usual thread this month.",
+      "effects": {
+        "silk": 1.0
+      }
+    },
+    {
+      "id": "royal_wedding",
+      "tone": "good",
+      "headline": "ROYAL WEDDING IN {nation}",
+      "detail": "A wedding between two great houses of {nation} filled the streets with music and guests from abroad.",
+      "effects": {
+        "stability": 0.6,
+        "standing": 0.6,
+        "silk": -0.3
+      }
+    },
+    {
+      "id": "pilgrims",
+      "tone": "good",
+      "headline": "PILGRIMS FLOCK TO {nation}",
+      "detail": "Pilgrims crossing to the Spire stopped in {nation} and paid well for lodging.",
+      "effects": {
+        "silk": 0.7,
+        "standing": 0.4
+      }
+    },
+    {
+      "id": "healer_order",
+      "tone": "good",
+      "headline": "HEALERS' ORDER OPENS HOUSE IN {nation}",
+      "detail": "The Grey Healers opened a hospice in {nation}; fevers are falling.",
+      "effects": {
+        "vitality": 1.0
+      }
+    },
+    {
+      "id": "clean_wells",
+      "tone": "good",
+      "headline": "WELLS CLEANSED IN {nation}",
+      "detail": "Water-wardens purified the town wells of {nation}.",
+      "effects": {
+        "vitality": 0.8,
+        "stability": 0.3
+      }
+    },
+    {
+      "id": "bard_song",
+      "tone": "good",
+      "headline": "A SONG ABOUT {nation} SWEEPS THE CONTINENT",
+      "detail": "Bards in every tavern are singing a ballad about {nation}'s generosity.",
+      "effects": {
+        "standing": 1.0
+      }
+    },
+    {
+      "id": "peace_envoy",
+      "tone": "good",
+      "headline": "{nation}'S ENVOY CALMS A BORDER QUARREL",
+      "detail": "A {nation} envoy talked two quarrelling villages out of a feud.",
+      "effects": {
+        "standing": 0.8,
+        "stability": 0.4
+      }
+    },
+    {
+      "id": "mercenaries",
+      "tone": "good",
+      "headline": "FREE COMPANY ENLISTS WITH {nation}",
+      "detail": "A free company of mercenaries swore to {nation} for the winter, asking only bread.",
+      "effects": {
+        "military": 1.0,
+        "grain": -0.3
+      }
+    },
+    {
+      "id": "old_fortress",
+      "tone": "good",
+      "headline": "{nation} RESTORES AN OLD FORTRESS",
+      "detail": "Stonemasons rebuilt a ruined hill fort on {nation}'s frontier.",
+      "effects": {
+        "military": 0.8,
+        "stability": 0.3
+      }
+    },
+    {
+      "id": "griffin_riders",
+      "tone": "good",
+      "headline": "GRIFFIN RIDERS RETURN TO {nation}",
+      "detail": "A wing of griffin riders, long abroad, returned home to {nation}.",
+      "effects": {
+        "military": 0.8,
+        "standing": 0.3
+      }
+    },
+    {
+      "id": "good_omen",
+      "tone": "good",
+      "headline": "GOOD OMEN OVER {nation}",
+      "detail": "A double rainbow over {nation}'s capital is taken as a blessing.",
+      "effects": {
+        "stability": 1.0
+      }
+    },
+    {
+      "id": "lost_treasure",
+      "tone": "good",
+      "headline": "SUNKEN TREASURE RAISED BY {nation}",
+      "detail": "Divers of {nation} raised a merchant wreck full of silk bales.",
+      "effects": {
+        "silk": 1.0,
+        "standing": 0.2
+      }
+    },
+    {
+      "id": "bee_swarm",
+      "tone": "good",
+      "headline": "HONEY YEAR IN {nation}",
+      "detail": "{nation}'s beekeepers report the best honey year in living memory.",
+      "effects": {
+        "grain": 0.6,
+        "vitality": 0.5
+      }
+    },
+    {
+      "id": "granary_rats",
+      "tone": "bad",
+      "headline": "RATS IN THE GRANARIES OF {nation}",
+      "detail": "Vermin spoiled part of {nation}'s grain store.",
+      "effects": {
+        "grain": -1.0
+      }
+    },
+    {
+      "id": "silk_moth_sickness",
+      "tone": "bad",
+      "headline": "MOTH SICKNESS HITS {nation}",
+      "detail": "A blight among the silk moths reduces {nation}'s silk output.",
+      "effects": {
+        "silk": -1.0
+      }
+    },
+    {
+      "id": "core_leak",
+      "tone": "bad",
+      "headline": "CORE LEAK IN {nation}",
+      "detail": "An aether conduit cracked; engineers contained it, but cores were lost.",
+      "effects": {
+        "cores": -1.0
+      }
+    },
+    {
+      "id": "market_riot",
+      "tone": "bad",
+      "headline": "BREAD QUEUE UNREST IN {nation}",
+      "detail": "Long queues for bread led to scuffles in {nation}'s markets.",
+      "effects": {
+        "stability": -1.0
+      }
+    },
+    {
+      "id": "fever",
+      "tone": "bad",
+      "headline": "MARSH FEVER IN {nation}",
+      "detail": "A mild fever spreads through {nation}'s lowland villages.",
+      "effects": {
+        "vitality": -1.0
+      }
+    },
+    {
+      "id": "diplomatic_gaffe",
+      "tone": "bad",
+      "headline": "DIPLOMATIC GAFFE BY {nation}",
+      "detail": "An envoy of {nation} insulted the host at a Spire banquet.",
+      "effects": {
+        "standing": -1.0
+      }
+    },
+    {
+      "id": "desertion",
+      "tone": "bad",
+      "headline": "DESERTIONS IN {nation}'S ARMY",
+      "detail": "Hungry soldiers of {nation} slipped away from the frontier forts.",
+      "effects": {
+        "military": -1.0
+      }
+    },
+    {
+      "id": "hailstorm",
+      "tone": "bad",
+      "headline": "HAILSTORM OVER {nation}",
+      "detail": "Hail the size of plums flattened fields across {nation}.",
+      "effects": {
+        "grain": -1.0,
+        "stability": -0.2
+      }
+    },
+    {
+      "id": "mildew",
+      "tone": "bad",
+      "headline": "MILDEW IN {nation}'S SILOS",
+      "detail": "Damp got into the silos of {nation}; part of the grain is mouldy.",
+      "effects": {
+        "grain": -0.8,
+        "vitality": -0.3
+      }
+    },
+    {
+      "id": "crows",
+      "tone": "bad",
+      "headline": "CROW SWARMS DESCEND ON {nation}",
+      "detail": "Clouds of crows stripped the last standing crops of {nation}.",
+      "effects": {
+        "grain": -0.8
+      }
+    },
+    {
+      "id": "smugglers",
+      "tone": "bad",
+      "headline": "SMUGGLERS RAID {nation}'S WAREHOUSES",
+      "detail": "A smuggling ring emptied a warehouse of {nation} silk overnight.",
+      "effects": {
+        "silk": -1.0,
+        "stability": -0.2
+      }
+    },
+    {
+      "id": "fashion_turn",
+      "tone": "bad",
+      "headline": "{nation}'S SILK FALLS OUT OF FASHION",
+      "detail": "Spire courtiers have decided that {nation}'s silk patterns are passé.",
+      "effects": {
+        "silk": -0.8,
+        "standing": -0.3
+      }
+    },
+    {
+      "id": "forge_fire",
+      "tone": "bad",
+      "headline": "FORGE FIRE IN {nation}",
+      "detail": "A forge fire gutted one of {nation}'s aether workshops.",
+      "effects": {
+        "cores": -1.0,
+        "vitality": -0.2
+      }
+    },
+    {
+      "id": "sabotage",
+      "tone": "bad",
+      "headline": "SABOTAGE AT {nation}'S CORE WORKS",
+      "detail": "Someone jammed the pumps of {nation}'s core works. Nobody has claimed it.",
+      "effects": {
+        "cores": -0.8,
+        "stability": -0.4
+      }
+    },
+    {
+      "id": "tax_revolt",
+      "tone": "bad",
+      "headline": "TAX PROTEST IN {nation}",
+      "detail": "Townsfolk of {nation} refused to pay the new granary levy.",
+      "effects": {
+        "stability": -1.0
+      }
+    },
+    {
+      "id": "heretic_preacher",
+      "tone": "bad",
+      "headline": "FIERY PREACHER STIRS {nation}",
+      "detail": "A wandering preacher in {nation} blames the famine on the government.",
+      "effects": {
+        "stability": -0.8,
+        "standing": -0.2
+      }
+    },
+    {
+      "id": "cough",
+      "tone": "bad",
+      "headline": "WINTER COUGH SPREADS IN {nation}",
+      "detail": "A hacking cough has kept many of {nation}'s workers in bed.",
+      "effects": {
+        "vitality": -1.0
+      }
+    },
+    {
+      "id": "bad_water",
+      "tone": "bad",
+      "headline": "BAD WATER IN {nation}",
+      "detail": "A flooded well poisoned several districts of {nation}.",
+      "effects": {
+        "vitality": -0.8,
+        "stability": -0.2
+      }
+    },
+    {
+      "id": "spy_scandal",
+      "tone": "bad",
+      "headline": "{nation} SPY CAUGHT AT THE SPIRE",
+      "detail": "A clerk of the {nation} delegation was caught copying Spire papers.",
+      "effects": {
+        "standing": -1.0
+      }
+    },
+    {
+      "id": "broken_promise",
+      "tone": "bad",
+      "headline": "{nation} ACCUSED OF BROKEN PROMISES",
+      "detail": "Neighbours say {nation} quietly failed to deliver last year's aid.",
+      "effects": {
+        "standing": -0.8
+      }
+    },
+    {
+      "id": "armoury_rust",
+      "tone": "bad",
+      "headline": "RUST IN {nation}'S ARMOURIES",
+      "detail": "Damp armouries in {nation} left blades and mail rusted through.",
+      "effects": {
+        "military": -1.0
+      }
+    },
+    {
+      "id": "officer_feud",
+      "tone": "bad",
+      "headline": "OFFICERS FEUD IN {nation}",
+      "detail": "Two generals of {nation} fell out; their regiments refuse to drill together.",
+      "effects": {
+        "military": -0.7,
+        "stability": -0.3
+      }
+    },
+    {
+      "id": "bridge_collapse",
+      "tone": "bad",
+      "headline": "BRIDGE COLLAPSES IN {nation}",
+      "detail": "The old toll bridge of {nation} gave way; carts and goods were lost.",
+      "effects": {
+        "grain": -0.5,
+        "silk": -0.5
+      }
+    },
+    {
+      "id": "wolf_packs",
+      "tone": "bad",
+      "headline": "WOLF PACKS ROAM {nation}",
+      "detail": "Starving wolves are attacking flocks on {nation}'s uplands.",
+      "effects": {
+        "grain": -0.6,
+        "vitality": -0.4
+      }
     }
   ]
 }

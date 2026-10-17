@@ -155,6 +155,44 @@ def test_full_round(server, browser):
     admin.close()
 
 
+def test_addressed_motion_and_game_master_question_stay_private(server, browser):
+    admin = admin_page(browser, server)
+    sylvan, errors = join(browser, server, "Sylvan Concordat", "1001")
+    valkhor, _ = join(browser, server, "Iron Val-Khor", "1002")
+    aquila, _ = join(browser, server, "Aquila Maritime League", "1005")
+
+    # A motion offered only to Val-Khor: Val-Khor sees it, Aquila does not
+    tab(sylvan, "Motions")
+    sylvan.locator(".motion-template", has_text="General Sovereign Concordat").click()
+    sylvan.fill("#proposal-title", "Quiet Grain Pact")
+    sylvan.select_option("#proposal-target-realm", "val_khor")
+    sylvan.locator("#proposal-submit").click()
+    tab(valkhor, "Motions")
+    expect(valkhor.locator("#pending-motions-list .motion-card", has_text="Quiet Grain Pact")).to_be_visible(timeout=5000)
+    tab(aquila, "Motions")
+    aquila.wait_for_timeout(1500)
+    expect(aquila.locator("text=Quiet Grain Pact")).to_have_count(0)
+
+    # A question to the game masters: no co-sponsor field, answered privately
+    sylvan.locator(".motion-template", has_text="Question to the Game Masters").click()
+    expect(sylvan.locator("#proposal-cosponsor-group")).to_be_hidden()
+    sylvan.fill("#proposal-title", "Can grain be traded in Turn 3?")
+    sylvan.fill("#proposal-desc", "Asking for a friend.")
+    sylvan.locator("#proposal-submit", has_text="Send to the game masters").click()
+    expect(sylvan.locator("#gm-questions-list")).to_contain_text("Waiting for an answer", timeout=5000)
+
+    admin.locator(".admin-tab-btn", has_text="Resolutions").click()
+    question = admin.locator("#gm-inbox .inset", has_text="Can grain be traded in Turn 3?")
+    expect(question).to_be_visible(timeout=5000)
+    question.locator("textarea").fill("Yes, until the working session ends.")
+    question.locator("button", has_text="only").click()
+
+    expect(sylvan.locator("#gm-questions-list")).to_contain_text("Yes, until the working session ends.", timeout=5000)
+    expect(aquila.locator("text=Can grain be traded in Turn 3?")).to_have_count(0)
+    assert errors == []
+    admin.close()
+
+
 def test_quiz_and_wiki(server, browser):
     phone, errors = join(browser, server, "Solaris Ascendancy", "1003")
     teammate, _ = join(browser, server, "Solaris Ascendancy", "1003")
@@ -223,4 +261,40 @@ def test_saves_report_and_reflection(server, browser):
     expect(report.locator("h1")).to_contain_text("Results")
     expect(report.locator("text=Spire Relief Mission").first).to_be_visible()
     assert errors == []
+    admin.close()
+
+
+def test_map_quality_modes(server, browser):
+    page = browser.new_page(viewport={"width": 1280, "height": 720})
+    errors = watch_errors(page)
+    page.goto(server + "/projector")
+    page.wait_for_function("window.projApp && window.projApp.map")
+    sizes = page.evaluate("""() => ['low', 'balanced', 'high'].map(q => {
+        projApp.map.setQuality(q);
+        return [q, projApp.map.texture.width, projApp.map.quality];
+    })""")
+    assert sizes == [["low", 1200, "low"], ["balanced", 1800, "balanced"], ["high", 2700, "high"]]
+    # the choice is remembered for the next visit
+    page.reload()
+    page.wait_for_function("window.projApp && window.projApp.map")
+    assert page.evaluate("projApp.map.qualityMode") == "high"
+    page.evaluate("projApp.map.setQuality('auto')")
+    assert errors == []
+
+
+def test_setup_screen_starts_a_new_summit(server, browser):
+    admin = admin_page(browser, server)
+    admin.goto(server + "/admin/setup")
+    admin.locator("input[name=difficulty][value=gentle]").check()
+    admin.fill("#working_min", "12")
+    admin.locator("input[name=scenario][value=armageddon]").check()     # fills in its suggested event numbers
+    expect(admin.locator("#large_per_turn")).to_have_value("3")
+    admin.fill("#event_max", "7.5")
+    admin.on("dialog", lambda d: d.accept())
+    admin.locator("button", has_text="Start a new summit").click()
+    expect(admin.locator(".page-title")).to_have_text("Facilitator Command Deck", timeout=5000)
+    settings = admin.evaluate("fetch('/api/state').then(r => r.json()).then(s => s.game_settings)")
+    assert settings["difficulty"] == "gentle" and settings["working_session_seconds"] == 720
+    assert settings["scenario"] == "armageddon" and settings["large_events_per_turn"] == 3
+    assert settings["minor_event_max"] == 7.5 and settings["minor_events_per_turn"] == 10
     admin.close()

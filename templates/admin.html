@@ -3,6 +3,7 @@
 {% block title %}Facilitator Command Deck - The Summit of Realms{% endblock %}
 
 {% block nav_links %}
+  <a href="/admin/setup" class="nav-link">Setup</a>
   <a href="/overview" target="_blank" class="nav-link">Guide</a>
   <a href="/projector" target="_blank" class="nav-link">Projector &#8599;</a>
 {% endblock %}
@@ -42,7 +43,7 @@
     <button class="admin-tab-btn active" data-tab="tab-pacing">Pacing & Timers</button>
     <button class="admin-tab-btn" data-tab="tab-events">Events & Crises</button>
     <button class="admin-tab-btn" data-tab="tab-resources">Resource Overrides</button>
-    <button class="admin-tab-btn" data-tab="tab-resolutions">Resolutions & Docket</button>
+    <button class="admin-tab-btn" data-tab="tab-resolutions">Resolutions & Questions <span id="gm-tab-badge" class="bottom-nav-badge" style="position:static; display:none; margin-left:4px;">0</span></button>
     <button class="admin-tab-btn" data-tab="tab-access">Delegations & Passcodes</button>
     <button class="admin-tab-btn" data-tab="tab-saves">Saves</button>
   </div>
@@ -189,11 +190,11 @@
             </button>
           </div>
 
-          <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-subtle);">
-            <label style="font-size: 0.78rem; font-family: var(--font-mono); display: flex; align-items: center; gap: 8px; color: var(--text-secondary); cursor: pointer;">
-              <input type="checkbox" id="check-auto-inject-turn" onchange="adminApp.toggleAutoCrisisOnTurn(this.checked)">
-              <span>AUTO-INJECT CRISIS ON TURN ADVANCE</span>
-            </label>
+          <div class="row wrap mt-2" style="padding-top: 10px; border-top: 1px solid var(--border-subtle);">
+            <span class="section-sub" style="margin:0;">Random events (how many per turn: <a href="/admin/setup" style="text-decoration:underline;">setup screen</a>):</span>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.minorEvent('good')">Good news now</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.minorEvent('bad')">Bad news now</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.largeEvent()">Random disaster now</button>
           </div>
         </div>
 
@@ -270,6 +271,11 @@
   <!-- TAB 4: RESOLUTIONS & PLENARY DOCKET -->
   <!-- ========================================================================= -->
   <div id="tab-resolutions" class="admin-tab-content">
+    <div class="card" id="gm-inbox-card">
+      <div class="card-title">Questions to the game masters <span id="gm-inbox-count" class="muted"></span></div>
+      <p class="section-sub">Only you and the asking nation see a question. Answer it privately, or publicly as news for everyone.</p>
+      <div id="gm-inbox" class="stack mt-2"><p class="empty-state">No questions yet.</p></div>
+    </div>
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div class="card-title">Floor Resolutions & Plenary Docket</div>

@@ -248,6 +248,18 @@
         </div>
       </div>
 
+      <!-- Map quality: sharper map vs. lighter load on older laptops -->
+      <div style="margin-bottom: 16px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+        <div class="form-label">Map quality</div>
+        <div class="chip-row" id="quality-picker">
+          <button type="button" class="chip" data-q="auto" onclick="setMapQuality('auto')">Auto</button>
+          <button type="button" class="chip" data-q="high" onclick="setMapQuality('high')">High</button>
+          <button type="button" class="chip" data-q="balanced" onclick="setMapQuality('balanced')">Balanced</button>
+          <button type="button" class="chip" data-q="low" onclick="setMapQuality('low')">Low</button>
+        </div>
+        <p class="section-sub" id="quality-status" style="margin-top: 6px;"></p>
+      </div>
+
       <!-- Map events: the facilitator can summon any of the map's events -->
       <div style="margin-bottom: 16px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
         <div class="form-label">Summon on the map</div>
@@ -320,6 +332,27 @@
     }
 
 
+    const QUALITY_TEXT = {
+      high: 'High: sharpest map, every effect.',
+      balanced: 'Balanced: sharp map, every effect.',
+      low: 'Low: lighter map, fewer effects, 30 frames per second, for older laptops.',
+    };
+    function showQuality(mode, effective) {
+      document.querySelectorAll('#quality-picker .chip').forEach(b => b.classList.toggle('active', b.dataset.q === mode));
+      const el = document.getElementById('quality-status');
+      if (!el) return;
+      const fps = window.projApp && window.projApp.map && window.projApp.map.measuredFps;
+      el.innerText = mode === 'auto'
+        ? `Auto chose ${effective}${fps ? ` (measured ${fps} frames per second)` : ' (measuring…)'}. ${QUALITY_TEXT[effective]}`
+        : QUALITY_TEXT[effective];
+    }
+    function setMapQuality(mode) {
+      const map = window.projApp && window.projApp.map;
+      if (!map) return;
+      document.getElementById('quality-status').innerText = 'Redrawing the map…';
+      setTimeout(() => map.setQuality(mode), 30);   // let the message paint before the redraw
+    }
+
     function summon(type) {
       if (window.projApp && window.projApp.map) window.projApp.map.summon(type);
     }
@@ -344,6 +377,10 @@
     const projApp = new ProjectorApp();
     window.projApp = projApp;
     projApp.start();
+    if (projApp.map) {
+      projApp.map.onQuality = showQuality;
+      showQuality(projApp.map.qualityMode, projApp.map.quality);
+    }
     keepScreenAwake();
   </script>
 </body>

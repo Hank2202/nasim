@@ -117,6 +117,73 @@ class SummitEngine:
         self.prune_expired_sessions()
         return session_id in self.active_sessions.get(realm_id, {})
 
+    # -------------------------------------------------------------------------
+    # Per-game settings (facilitator setup screen); defaults in scenario_config.json
+    # -------------------------------------------------------------------------
+    SETTING_LIMITS = {
+        "working_session_seconds": (60, 3600), "plenary_vote_seconds": (30, 900),
+        "debate_session_seconds": (30, 1200), "grand_vote_seconds": (20, 600),
+        "intermission_seconds": (0, 600), "minor_events_per_turn": (0, 30), "large_events_per_turn": (0, 10),
+    }
+    FLOAT_SETTING_LIMITS = {"minor_event_max": (1, 50)}
+
+    def settings(self) -> Dict[str, Any]:
+        cfg = load_scenario_config()
+        s = dict(cfg.get("game_settings_defaults", {}))
+        s.update(self.db.get_state("settings", {}) or {})
+        s["max_turns"] = cfg.get("simulation_settings", {}).get("max_turns", 3)
+        diff = cfg.get("difficulties", {}).get(s.get("difficulty"), {})
+        s["grain_consumption"] = diff.get("grain_consumption", 20)
+        s["positive_share"] = diff.get("positive_share", 0.5)
+        s["famine_storyline"] = bool(cfg.get("scenarios", {}).get(s.get("scenario"), {}).get("famine_storyline", False))
+        return s
+
+    def update_settings(self, changes: Dict[str, Any]) -> Tuple[bool, str]:
+        cfg = load_scenario_config()
+        current = self.db.get_state("settings", {}) or {}
+        for key, value in (changes or {}).items():
+            if key in self.SETTING_LIMITS:
+                lo, hi = self.SETTING_LIMITS[key]
+                try:
+                    current[key] = int(max(lo, min(hi, int(value))))
+                except (TypeError, ValueError):
+                    return False, f"{key} must be a number."
+            elif key in self.FLOAT_SETTING_LIMITS:
+                lo, hi = self.FLOAT_SETTING_LIMITS[key]
+                try:
+                    current[key] = round(max(lo, min(hi, float(value))), 1)
+                except (TypeError, ValueError):
+                    return False, f"{key} must be a number."
+            elif key == "auto_advance":
+                current[key] = bool(value)
+            elif key == "scenario" and value in cfg.get("scenarios", {}):
+                current[key] = value
+            elif key == "difficulty" and value in cfg.get("difficulties", {}):
+                current[key] = value
+        self.db.set_state("settings", current)
+        # A changed working-session length applies straight away if the session has not started yet.
+        meta = self.db.get_state("meta", {}) or {}
+        if "working_session_seconds" in changes and meta.get("phase") == "working" and not meta.get("is_timer_running") \
+                and meta.get("turn_timer_remaining") == meta.get("turn_timer_total"):
+            meta["turn_timer_remaining"] = meta["turn_timer_total"] = current["working_session_seconds"]
+            self.db.set_state("meta", meta)
+        # New event counts apply to the rest of this working session: drop its plan and plan the remainder anew.
+        if {"minor_events_per_turn", "large_events_per_turn", "working_session_seconds"} & set(changes or {}):
+            meta = self.db.get_state("meta", {}) or {}
+            schedule = meta.get("minor_event_schedule") or {}
+            key = str(meta.get("current_turn", 1))
+            if key in schedule and meta.get("phase") == "working":
+                total = meta.get("turn_timer_total", 1200)
+                elapsed = total - meta.get("turn_timer_remaining", total)
+                s = self.settings()
+                left = lambda n, done: sorted(random.uniform(max(elapsed + 5, 0.08 * total), 0.92 * total)
+                                              for _ in range(max(0, int(n) - done))) if elapsed < 0.92 * total else []
+                old = schedule[key]
+                schedule[key] = {"times": left(s["minor_events_per_turn"], old.get("fired", 0)), "fired": 0,
+                                 "large_times": left(s["large_events_per_turn"], old.get("large_fired", 0)), "large_fired": 0}
+                self.db.set_state("meta", meta)
+        return True, "Settings saved."
+
     def _ensure_initial_state(self):
         if self.db.get_state("meta") is None:
             self.reset_simulation()
@@ -124,9 +191,9 @@ class SummitEngine:
     def reset_simulation(self):
         """Reset the simulation back to Turn 1 using parameters from scenario_config.json."""
         config = load_scenario_config()
-        meta_defaults = config.get("meta_defaults", {})
-        working_secs = meta_defaults.get("working_session_seconds", 300)
-        debate_secs = meta_defaults.get("debate_session_seconds", 300)
+        settings = self.settings()
+        working_secs = settings.get("working_session_seconds", 1200)
+        debate_secs = settings.get("debate_session_seconds", 300)
 
         meta = {
             "current_turn": 1,
@@ -142,9 +209,12 @@ class SummitEngine:
             "is_discussion_timer_running": False,
             "plenary_docket": [],
             "current_motion_index": 0,
-            "auto_inject_crisis": True,
+            "vote_timer_end": None,
+            "vote_timer_remaining": 0,
+            "intermission_end": None,
+            "minor_event_schedule": {},
+            "final_consumption_done": False,
             "triggered_events": [],
-            "catastrophe_checked_minutes": [],
             "latest_catastrophe": None,
             "audio_cue": {
                 "seq": 0,
@@ -163,6 +233,9 @@ class SummitEngine:
         self.db.set_state("realms", realms)
         
         self.db.set_state("trades", [])
+        self.db.set_state("trade_partners", {})     # who traded with whom (Aquila's missions)
+        self.db.set_state("military_trades", [])    # military sales (Sylvan's independence mission)
+        self.db.set_state("news_archive", [])       # full timeline for the results report
         self.db.set_state("proposals", [])
         self.db.set_state("active_assembly", None)
         self.db.set_state("summit_outcome", None)
@@ -387,6 +460,7 @@ class SummitEngine:
 
     def get_full_state(self) -> Dict[str, Any]:
         self.autosave()
+        self._tick()
         meta = self.db.get_state("meta", {})
         realms = self.db.get_state("realms", [])
         trades = self.db.get_state("trades", [])
@@ -406,45 +480,7 @@ class SummitEngine:
         meta["active_realms_count"] = len(active_realms)
         meta["total_realms_count"] = len(realms)
 
-        now = time.time()
-
-        # Wall-clock synchronization for turn timer
-        if meta.get("is_timer_running", False):
-            end_time = meta.get("turn_timer_end")
-            if not end_time:
-                end_time = now + meta.get("turn_timer_remaining", 300)
-                meta["turn_timer_end"] = end_time
-
-            rem = max(0, int(end_time - now))
-            meta["turn_timer_remaining"] = rem
-
-            if rem == 0 and meta.get("phase") == "working":
-                self.trigger_audio_cue("gong", "Working Session Concluded")
-                meta["is_timer_running"] = False
-                meta["turn_timer_end"] = None
-
-            self.db.set_state("meta", meta)
-
-            # Automated background event trigger check
-            if meta.get("phase") == "working":
-                self._check_automated_event_triggers(meta)
-
-        # Wall-clock synchronization for Grand Plenary debate timer
-        if meta.get("is_discussion_timer_running", False) and meta.get("phase") == "grand_plenary_discussion":
-            end_time = meta.get("discussion_timer_end")
-            if not end_time:
-                end_time = now + meta.get("discussion_timer_remaining", 300)
-                meta["discussion_timer_end"] = end_time
-
-            rem = max(0, int(end_time - now))
-            meta["discussion_timer_remaining"] = rem
-
-            if rem == 0:
-                meta["discussion_timer_end"] = None
-                self.start_grand_motion_vote()
-            else:
-                self.db.set_state("meta", meta)
-
+        self._add_display_timer(meta)
         self._recalculate_all_realms(realms)
 
         cfg = load_scenario_config()
@@ -460,191 +496,198 @@ class SummitEngine:
             "simulation_settings": cfg.get("simulation_settings", {}),
             "catastrophes_catalog": cfg.get("catastrophes_catalog", []),
             "summit_outcome": self.db.get_state("summit_outcome", None),
+            "game_settings": self.settings(),
             "reflection_questions": cfg.get("reflection_questions", [])
         }
 
     # -------------------------------------------------------------------------
-    # Automated Event & Catastrophe Trigger Scheduler
+    # Clock: timers, automatic phase changes and small events (runs on every state poll)
     # -------------------------------------------------------------------------
-    def _check_automated_event_triggers(self, meta: Dict[str, Any]):
-        # 1. Minute-by-Minute Realistic Catastrophe Simulation
-        self._check_minute_catastrophes(meta)
+    def _tick(self):
+        meta = self.db.get_state("meta", {}) or {}
+        if not meta:
+            return
+        s = self.settings()
+        auto = bool(s.get("auto_advance", True))
+        now = time.time()
+        phase = meta.get("phase")
 
-        # 2. Recommended Turn Dilemmas
-        events = self.get_catalog_events()
-        current_turn = meta.get("current_turn", 1)
-        triggered = meta.get("triggered_events", [])
-        rem_secs = meta.get("turn_timer_remaining", 300)
-        total_secs = meta.get("turn_timer_total", 300)
-
-        for ev in events:
-            ev_id = ev.get("id")
-            if ev_id in triggered:
-                continue
-
-            # Must match turn recommendation
-            if ev.get("turn_recommended") != current_turn:
-                continue
-
-            should_trigger = False
-            trigger_on = ev.get("trigger_on", "turn_mid")
-
-            if trigger_on == "turn_start" and rem_secs >= total_secs - 5:
-                should_trigger = True
-            elif ev.get("trigger_at_seconds_remaining") is not None:
-                if rem_secs <= ev["trigger_at_seconds_remaining"]:
-                    should_trigger = True
-            elif trigger_on == "turn_mid" and rem_secs <= (total_secs // 2):
-                should_trigger = True
-
-            if should_trigger:
-                self.trigger_catalog_event(ev_id)
-                break
-
-    def _check_minute_catastrophes(self, meta: Dict[str, Any]):
-        if not meta.get("auto_inject_crisis", True) or meta.get("phase") != "working":
+        # Short pause before an automatically started turn (time to read out the breaking news).
+        if meta.get("intermission_end") and phase == "working":
+            if now >= meta["intermission_end"]:
+                meta["intermission_end"] = None
+                meta["is_timer_running"] = True
+                meta["turn_timer_end"] = now + meta.get("turn_timer_remaining", s["working_session_seconds"])
+                self.db.set_state("meta", meta)
+                self.trigger_audio_cue("gong", f"Turn {meta.get('current_turn', 1)} begins")
             return
 
-        total_secs = meta.get("turn_timer_total", 300)
-        rem_secs = meta.get("turn_timer_remaining", 300)
-        elapsed_secs = total_secs - rem_secs
+        # Working-session clock
+        if meta.get("is_timer_running"):
+            end = meta.get("turn_timer_end") or now + meta.get("turn_timer_remaining", 300)
+            meta["turn_timer_end"] = end
+            rem = max(0, int(round(end - now)))
+            meta["turn_timer_remaining"] = rem
+            if rem == 0 and phase == "working":
+                meta["is_timer_running"] = False
+                meta["turn_timer_end"] = None
+                self.db.set_state("meta", meta)
+                self.trigger_audio_cue("alert", "Time is up! The working session has ended.")
+                self.add_news("turn", "TIME IS UP",
+                              f"The working session of Turn {meta.get('current_turn', 1)} has ended.")
+                if auto:
+                    self._advance_after_working()
+                return
+            self.db.set_state("meta", meta)
+            if phase == "working":
+                self._check_scheduled_events(meta, s)
 
-        # Check at each 60-second boundary (1m, 2m, 3m, 4m)
-        current_minute = int(elapsed_secs // 60)
-        if current_minute <= 0:
+        # Grand Plenary debate clock (always opens the vote when it runs out)
+        if meta.get("is_discussion_timer_running") and phase == "grand_plenary_discussion":
+            end = meta.get("discussion_timer_end") or now + meta.get("discussion_timer_remaining", 300)
+            meta["discussion_timer_end"] = end
+            rem = max(0, int(round(end - now)))
+            meta["discussion_timer_remaining"] = rem
+            self.db.set_state("meta", meta)
+            if rem == 0:
+                self.trigger_audio_cue("alert", "Debate time is up")
+                self.start_grand_motion_vote()
             return
 
-        checked_minutes = meta.setdefault("catastrophe_checked_minutes", [])
-        if current_minute in checked_minutes:
-            return
+        # Voting clocks
+        if meta.get("vote_timer_end") and phase in ("plenary_quick", "grand_plenary_voting"):
+            rem = max(0, int(round(meta["vote_timer_end"] - now)))
+            meta["vote_timer_remaining"] = rem
+            self.db.set_state("meta", meta)
+            if rem == 0 and auto:
+                meta["vote_timer_end"] = None
+                self.db.set_state("meta", meta)
+                self.trigger_audio_cue("alert", "Voting has closed")
+                if phase == "plenary_quick":
+                    self.conclude_quick_plenary()
+                    self._advance_turn_or_finish()
+                else:
+                    self.advance_grand_plenary_next()
+                    if (self.db.get_state("meta", {}) or {}).get("phase") == "turn_summary":
+                        self._advance_turn_or_finish()
 
-        checked_minutes.append(current_minute)
-        self.db.set_state("meta", meta)
+    def _qualified_motions(self) -> List[Dict[str, Any]]:
+        return [p for p in self.db.get_state("proposals", [])
+                if p.get("status") in ("draft", "qualified") and (len(p.get("support_list", [])) >= 2 or p.get("is_qualified"))]
 
-        config = load_scenario_config()
-        catalog = config.get("catastrophes_catalog", [])
-        if not catalog:
-            return
+    def _advance_after_working(self):
+        """When the working session ends: Assembly vote if there are motions, otherwise end the turn."""
+        if self._qualified_motions():
+            self.start_plenary_session()
+        else:
+            self.add_news("assembly", "NO MOTIONS ON THE BALLOT",
+                          "No motion found a co-sponsor this turn, so the Assembly does not sit.")
+            self._advance_turn_or_finish()
 
-        sim_settings = config.get("simulation_settings", {})
-        compound_chance = float(sim_settings.get("compound_disaster_chance", 0.28))
-        max_simul = int(sim_settings.get("max_simultaneous_catastrophes", 2))
+    def _advance_turn_or_finish(self):
+        meta = self.db.get_state("meta", {}) or {}
+        s = self.settings()
+        if meta.get("current_turn", 1) < s["max_turns"]:
+            self.process_end_of_turn()
+            if s.get("auto_advance", True):
+                meta = self.db.get_state("meta", {})
+                pause = int(s.get("intermission_seconds", 45))
+                if pause > 0:
+                    meta["intermission_end"] = time.time() + pause
+                else:
+                    meta["is_timer_running"] = True
+                    meta["turn_timer_end"] = time.time() + meta.get("turn_timer_remaining", 0)
+                self.db.set_state("meta", meta)
+        else:
+            self.conclude_summit()
+
+    def _add_display_timer(self, meta: Dict[str, Any]):
+        """One clock for the screens: whatever is counting down in the current phase."""
+        phase, now = meta.get("phase"), time.time()
+        if meta.get("intermission_end") and phase == "working":
+            meta["display_timer"] = {"label": f"Turn {meta.get('current_turn', 1)} starts in", "seconds": max(0, int(meta["intermission_end"] - now))}
+        elif phase == "grand_plenary_discussion":
+            meta["display_timer"] = {"label": "Debate", "seconds": meta.get("discussion_timer_remaining", 0)}
+        elif phase in ("plenary_quick", "grand_plenary_voting") and meta.get("vote_timer_end"):
+            meta["display_timer"] = {"label": "Voting closes in", "seconds": max(0, int(meta["vote_timer_end"] - now))}
+        else:
+            meta["display_timer"] = {"label": "Working session", "seconds": meta.get("turn_timer_remaining", 0)}
+
+    def _check_scheduled_events(self, meta: Dict[str, Any], s: Dict[str, Any]):
+        """Random events at random moments of each working session: small news items and, if set, large disasters."""
+        key = str(meta.get("current_turn", 1))
+        total = meta.get("turn_timer_total", 1200)
+        elapsed = total - meta.get("turn_timer_remaining", total)
+        schedule = meta.setdefault("minor_event_schedule", {})
+        if key not in schedule:
+            pick = lambda n: sorted(random.uniform(0.08, 0.92) * total for _ in range(int(n)))
+            schedule[key] = {"times": pick(s.get("minor_events_per_turn", 6)), "fired": 0,
+                             "large_times": pick(s.get("large_events_per_turn", 0)), "large_fired": 0}
+            self.db.set_state("meta", meta)
+        entry = schedule[key]
+        entry.setdefault("large_times", [])
+        entry.setdefault("large_fired", 0)
+        # at most one event per poll, so two never land in the same second
+        if entry["large_fired"] < len(entry["large_times"]) and elapsed >= entry["large_times"][entry["large_fired"]]:
+            entry["large_fired"] += 1
+            self.db.set_state("meta", meta)
+            self.fire_large_event()
+        elif entry["fired"] < len(entry["times"]) and elapsed >= entry["times"][entry["fired"]]:
+            entry["fired"] += 1
+            self.db.set_state("meta", meta)
+            self.fire_minor_event(s)
+
+    def fire_minor_event(self, s: Optional[Dict[str, Any]] = None, tone: Optional[str] = None) -> Tuple[bool, str]:
+        """One small news item for one nation. Each effect is a random amount between 0 and the set maximum
+        (scaled by the effect's weight in scenario_config.json), never less than 1."""
+        s = s or self.settings()
+        cfg = load_scenario_config()
+        events = cfg.get("minor_events", [])
         realms = self.db.get_state("realms", [])
-        if not realms:
-            return
+        active = [r for r in realms if r.get("active", True)]
+        if not events or not active:
+            return False, "No events or nations."
+        tone = tone or ("good" if random.random() < s.get("positive_share", 0.5) else "bad")
+        pool = [ev for ev in events if ev.get("tone") == tone] or events
+        ev = random.choice(pool)
+        realm = random.choice(active)
+        cap = float(s.get("minor_event_max", 5))
+        fields = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk", "military": "military_power",
+                  "vitality": "public_vitality", "standing": "diplomatic_standing", "stability": "civil_stability"}
+        labels = {"grain": "Grain", "cores": "Cores", "silk": "Silk", "military": "Military",
+                  "vitality": "Vitality", "standing": "Standing", "stability": "Stability"}
+        parts = []
+        for res, weight in ev.get("effects", {}).items():
+            amount = max(1, round(random.uniform(0, cap * abs(weight))))
+            amount = amount if weight > 0 else -amount
+            field = fields[res]
+            value = realm.get(field, 0) + amount
+            realm[field] = max(0, min(100, value)) if res in ("vitality", "standing", "stability") else max(0, value)
+            parts.append(f"{amount:+d} {labels[res]}")
+        self._recalculate_all_realms(realms)
+        self.db.set_state("realms", realms)
+        name = realm["name"]
+        self.add_news("boon" if ev.get("tone") == "good" else "crisis",
+                      ev["headline"].replace("{nation}", name.upper()),
+                      ev["detail"].replace("{nation}", name) + f" ({', '.join(parts)})")
+        return True, f"{ev['id']} → {name} ({', '.join(parts)})"
 
-        triggered_count = 0
-        candidate_disasters = list(catalog)
-        random.shuffle(candidate_disasters)
-
-        for cat in candidate_disasters:
-            if triggered_count >= max_simul:
-                break
-
-            base_prob = float(cat.get("base_probability", 0.20))
-            affinities = cat.get("geographic_affinities", [])
-            multipliers = cat.get("resource_multipliers", {})
-
-            # Filter candidate realms that match geography
-            eligible_realms = [
-                r for r in realms
-                if r.get("geography", {}).get("terrain") in affinities
-                or "all" in affinities
-                or cat.get("id") in r.get("geography", {}).get("hazard_affinities", [])
-            ]
-            if not eligible_realms:
-                eligible_realms = realms
-
-            best_realm = None
-            highest_risk_prob = base_prob
-            applied_damage_extra = {}
-            damage_multiplier = 1.0
-
-            for r in eligible_realms:
-                realm_prob = base_prob
-                r_damage_extra = {}
-                r_damage_mult = 1.0
-
-                if "cores_high_risk" in multipliers:
-                    rule = multipliers["cores_high_risk"]
-                    if r.get("aether_cores", 0) >= rule.get("threshold", 60):
-                        realm_prob += rule.get("prob_boost", 0.10)
-                        r_damage_extra.update(rule.get("extra_damage", {}))
-
-                if "grain_high_risk" in multipliers:
-                    rule = multipliers["grain_high_risk"]
-                    if r.get("alchemical_grain", 0) >= rule.get("threshold", 60):
-                        realm_prob += rule.get("prob_boost", 0.15)
-                        r_damage_extra.update(rule.get("extra_damage", {}))
-
-                if "grain_low_risk" in multipliers:
-                    rule = multipliers["grain_low_risk"]
-                    if r.get("alchemical_grain", 0) <= rule.get("threshold", 35):
-                        realm_prob += rule.get("prob_boost", 0.12)
-                        r_damage_extra.update(rule.get("extra_damage", {}))
-
-                if "silk_high_risk" in multipliers:
-                    rule = multipliers["silk_high_risk"]
-                    if r.get("echo_silk", 0) >= rule.get("threshold", 50):
-                        realm_prob += rule.get("prob_boost", 0.10)
-                        r_damage_extra.update(rule.get("extra_damage", {}))
-
-                if "vitality_low_risk" in multipliers:
-                    rule = multipliers["vitality_low_risk"]
-                    if r.get("public_vitality", 0) <= rule.get("threshold", 45):
-                        realm_prob += rule.get("prob_boost", 0.12)
-                        r_damage_extra.update(rule.get("extra_damage", {}))
-
-                if "stability_low_risk" in multipliers:
-                    rule = multipliers["stability_low_risk"]
-                    if r.get("civil_stability", 0) <= rule.get("threshold", 45):
-                        realm_prob += rule.get("prob_boost", 0.10)
-                        r_damage_extra.update(rule.get("extra_damage", {}))
-
-                if "quarantined_mitigation" in multipliers and r.get("is_quarantined", False):
-                    rule = multipliers["quarantined_mitigation"]
-                    realm_prob = max(0.02, realm_prob + rule.get("prob_boost", -0.10))
-                    r_damage_mult *= (1.0 - rule.get("damage_reduction", 0.5))
-
-                if "cores_efficiency_mitigation" in multipliers and r.get("tech_efficiency_unlocked", False):
-                    rule = multipliers["cores_efficiency_mitigation"]
-                    r_damage_mult *= (1.0 - rule.get("damage_reduction", 0.3))
-
-                if realm_prob > highest_risk_prob or best_realm is None:
-                    highest_risk_prob = realm_prob
-                    best_realm = r
-                    applied_damage_extra = r_damage_extra
-                    damage_multiplier = r_damage_mult
-
-            # Roll random chance
-            roll = random.random()
-            if roll < highest_risk_prob and best_realm is not None:
-                self._apply_catastrophe(cat, best_realm, applied_damage_extra, damage_multiplier)
-                triggered_count += 1
-
-                # Check for compound disaster
-                compound_roll = random.random()
-                if compound_roll < compound_chance and triggered_count < max_simul:
-                    compound_triggers = cat.get("compound_triggers", [])
-                    if compound_triggers:
-                        secondary_id = random.choice(compound_triggers)
-                        sec_cat = next((c for c in catalog if c["id"] == secondary_id), None)
-                        if sec_cat:
-                            sec_affinities = sec_cat.get("geographic_affinities", [])
-                            sec_realms = [
-                                r for r in realms
-                                if r.get("geography", {}).get("terrain") in sec_affinities
-                                or "all" in sec_affinities
-                            ]
-                            sec_target = random.choice(sec_realms) if sec_realms else best_realm
-                            self._apply_catastrophe(sec_cat, sec_target, {}, 1.0, is_compound=True, source_cat_name=cat["name"])
-                            triggered_count += 1
+    def fire_large_event(self) -> Tuple[bool, str]:
+        """A random disaster from the catastrophe catalog, striking a nation whose land suits it."""
+        catalog = load_scenario_config().get("catastrophes_catalog", [])
+        active = [r for r in self.db.get_state("realms", []) if r.get("active", True)]
+        terrains = {r.get("geography", {}).get("terrain") for r in active}
+        pool = [c for c in catalog if "all" in c.get("geographic_affinities", [])
+                or terrains & set(c.get("geographic_affinities", []))] or catalog
+        if not pool or not active:
+            return False, "No disasters or nations."
+        return self.trigger_catastrophe(random.choice(pool)["id"])
 
     def _apply_catastrophe(self, cat: Dict[str, Any], target_realm: Dict[str, Any], extra_damage: Dict[str, int], damage_mult: float, is_compound: bool = False, source_cat_name: str = ""):
         realms = self.db.get_state("realms", [])
         realm = next((r for r in realms if r["id"] == target_realm["id"]), target_realm)
 
-        res_keys = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk"}
+        res_keys = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk", "military": "military_power"}
         metric_keys = {"vitality": "public_vitality", "standing": "diplomatic_standing", "stability": "civil_stability"}
 
         effects = dict(cat.get("effects", {}))
@@ -699,14 +742,15 @@ class SummitEngine:
             return False, f"Catastrophe '{catastrophe_id}' not found in catalog."
 
         realms = self.db.get_state("realms", [])
+        active = [r for r in realms if r.get("active", True)] or realms
         if target_realm_id:
             target = next((r for r in realms if r["id"] == target_realm_id), None)
             if not target:
                 return False, f"Realm '{target_realm_id}' not found."
         else:
             affinities = cat.get("geographic_affinities", [])
-            eligible = [r for r in realms if r.get("geography", {}).get("terrain") in affinities or "all" in affinities]
-            target = random.choice(eligible) if eligible else (realms[0] if realms else None)
+            eligible = [r for r in active if r.get("geography", {}).get("terrain") in affinities or "all" in affinities]
+            target = random.choice(eligible or active) if active else None
 
         if not target:
             return False, "No realms available to target."
@@ -940,6 +984,11 @@ class SummitEngine:
         realm = next((r for r in realms if r["id"] == realm_id), None)
         if not realm:
             return False, "Realm not found."
+        new_pin = str(new_pin).strip()
+        if not new_pin.isdigit() or not 3 <= len(new_pin) <= 8:
+            return False, "A passcode is 3 to 8 digits."
+        if any(r["id"] != realm_id and str(r.get("pin")) == new_pin for r in realms):
+            return False, "Another nation already uses that passcode."
         realm["pin"] = str(new_pin).strip()
         self.db.set_state("realms", realms)
         return True, f"PIN updated for {realm['name']}."
@@ -1017,32 +1066,15 @@ class SummitEngine:
         current_turn = meta.get("current_turn", 1)
 
         config = load_scenario_config()
-        meta_defaults = config.get("meta_defaults", {})
-        base_consumption = meta_defaults.get("baseline_grain_consumption", 20)
-        eff_consumption = meta_defaults.get("tech_efficiency_consumption", 15)
-        starv_vit = meta_defaults.get("starvation_vitality_loss", 25)
-        starv_stab = meta_defaults.get("starvation_stability_loss", 20)
+        settings = self.settings()
+        famine = settings.get("famine_storyline", False)
 
         active_realms = [r for r in realms if r.get("active", True)]
-        for r in active_realms:
-            r_name = r["name"]
-            grain_needed = eff_consumption if r.get("tech_efficiency_unlocked") else base_consumption
-            r["alchemical_grain"] = max(0, r.get("alchemical_grain", 0) - grain_needed)
+        self._consume_grain(active_realms, settings)
 
-            if r["alchemical_grain"] <= 0:
-                r["is_starving"] = True
-                r["public_vitality"] = max(0, r["public_vitality"] - starv_vit)
-                r["civil_stability"] = max(0, r["civil_stability"] - starv_stab)
-                self.add_news(
-                    "crisis",
-                    f"FAMINE EMERGENCY IN {r_name.upper()}",
-                    f"Silos ran dry this cycle. Populations are starving (-{starv_vit} Vitality, -{starv_stab} Stability)!"
-                )
-            else:
-                r["is_starving"] = False
 
-        # Round 2 rule: Military < 50 at end of Round 2 incurs -10 Stability
-        if current_turn == 2:
+        # Round 2 rule (famine scenario): Military < 50 at end of Round 2 incurs -10 Stability
+        if current_turn == 2 and famine:
             for r in active_realms:
                 if r.get("military_power", 0) < 50:
                     r["civil_stability"] = max(0, r["civil_stability"] - 10)
@@ -1059,7 +1091,7 @@ class SummitEngine:
         meta["current_turn"] = new_turn
         meta["phase"] = "working"
         meta["round_type"] = "grand" if new_turn >= 3 else "quick"
-        work_secs = meta_defaults.get("working_session_seconds", 1200)
+        work_secs = settings.get("working_session_seconds", 1200)
         meta["turn_timer_remaining"] = work_secs
         meta["turn_timer_total"] = work_secs
         meta["is_timer_running"] = False
@@ -1069,14 +1101,14 @@ class SummitEngine:
         meta["catastrophe_checked_minutes"] = []
         meta["latest_catastrophe"] = None
 
-        if new_turn == 2:
+        if new_turn == 2 and famine:
             self.trigger_audio_cue("alert", "Round 2: Security Crisis")
             self.add_news(
                 "crisis",
                 "BREAKING NEWS — BORDER INCIDENT",
                 "A serious military incident has occurred along the continental borderlands. It is unclear who provoked it. The event has ignited widespread fears that economic stagnation could transform into armed conflict. Citizens demand protection. (Round 2 Rule: Any nation finishing with Military < 50 suffers -10 Stability. All Grain trades lose 5 Grain in transit due to route disruptions.)"
             )
-        elif new_turn == 3:
+        elif new_turn == 3 and famine:
             # Round 3 immediate effect: all active realms receive -15 Grain
             for r in active_realms:
                 r["alchemical_grain"] = max(0, r.get("alchemical_grain", 0) - 15)
@@ -1150,6 +1182,24 @@ class SummitEngine:
             "previous_turn": current_turn,
             "new_turn": new_turn
         }
+
+    def _consume_grain(self, active_realms: List[Dict[str, Any]], settings: Dict[str, Any]):
+        """End of a turn: every nation eats; empty silos mean famine."""
+        cfg = load_scenario_config().get("simulation_settings", {})
+        base = settings.get("grain_consumption", 20)
+        efficient = round(base * 0.75)
+        starv_vit = cfg.get("starvation_vitality_loss", 25)
+        starv_stab = cfg.get("starvation_stability_loss", 20)
+        for r in active_realms:
+            r["alchemical_grain"] = max(0, r.get("alchemical_grain", 0) - (efficient if r.get("tech_efficiency_unlocked") else base))
+            if r["alchemical_grain"] <= 0:
+                r["is_starving"] = True
+                r["public_vitality"] = max(0, r["public_vitality"] - starv_vit)
+                r["civil_stability"] = max(0, r["civil_stability"] - starv_stab)
+                self.add_news("crisis", f"FAMINE EMERGENCY IN {r['name'].upper()}",
+                              f"Silos ran dry this cycle. Populations are starving (-{starv_vit} Vitality, -{starv_stab} Stability)!")
+            else:
+                r["is_starving"] = False
 
     def add_news(self, news_type: str, headline: str, detail: str):
         news = self.db.get_state("news_feed", [])
@@ -1281,7 +1331,7 @@ class SummitEngine:
 
             meta = self.db.get_state("meta", {})
             current_turn = meta.get("current_turn", 1)
-            is_round_2 = (current_turn == 2 or meta.get("active_crisis_round") == 2)
+            is_round_2 = (current_turn == 2 or meta.get("active_crisis_round") == 2) and self.settings()["famine_storyline"]
 
             actual_offer_delivered = trade["offer_amount"]
             transit_offer_loss = 0
@@ -1364,6 +1414,11 @@ class SummitEngine:
         if not title or not description:
             return False, "Give the motion a title and terms.", None
 
+        if template.get("no_vote"):
+            # A question for the game masters: no co-sponsor, no vote, visible only to its author and the facilitators.
+            target_seconder_id = None
+            target_realm_id = None
+
         target_realm = None
         if template.get("needs_target"):
             target_realm = next((r for r in realms if r["id"] == target_realm_id and r.get("active", True)), None)
@@ -1372,10 +1427,10 @@ class SummitEngine:
 
         target_name = None
         if target_seconder_id:
-            target_realm = next((r for r in realms if r["id"] == target_seconder_id and r.get("active", True)), None)
-            if not target_realm:
+            seconder_realm = next((r for r in realms if r["id"] == target_seconder_id and r.get("active", True)), None)
+            if not seconder_realm:
                 return False, "The nation you asked to co-sponsor is not taking part.", None
-            target_name = target_realm["name"]
+            target_name = seconder_realm["name"]
 
         meta = self.db.get_state("meta", {})
         prop_id = str(uuid.uuid4())[:8]
@@ -1393,7 +1448,7 @@ class SummitEngine:
             "support_list": [proposer_id],
             "supporters": [{"id": proposer_id, "name": proposer["name"]}],
             "is_qualified": False,
-            "status": "draft",
+            "status": "question" if template.get("no_vote") else "draft",
             "created_turn": meta.get("current_turn", 1),
             "created_at": time.time(),
             "time_str": self._format_now(),
@@ -1410,13 +1465,17 @@ class SummitEngine:
         proposals.insert(0, new_prop)
         self.db.set_state("proposals", proposals)
 
-        endorsement_msg = f"Direct envoy sent to {target_name}." if target_name else "Open for continental co-sponsorship."
-        self.add_news(
-            "assembly",
-            f"RESOLUTION DRAFTED BY {proposer['name'].upper()}",
-            f"'{title}' introduced on the floor. Requires support from at least two sovereign countries to enter the Plenary Ballot. {endorsement_msg}"
-        )
-        return True, "Motion filed. Awaiting sovereign co-sponsorship.", prop_id
+        if template.get("no_vote"):
+            self.trigger_audio_cue("chime", f"Question for the game masters from {proposer['name']}")
+            return True, "Your question was sent to the game masters.", prop_id
+        # A motion addressed to one nation stays private until it qualifies; open motions are announced.
+        if not target_name:
+            self.add_news(
+                "assembly",
+                f"MOTION TABLED BY {proposer['name'].upper()}",
+                f"'{title}' is on the floor. It needs a co-sponsoring nation to reach the Assembly vote."
+            )
+        return True, "Motion filed. Awaiting a co-sponsor.", prop_id
 
     def support_proposal(self, prop_id: str, supporter_id: str) -> Tuple[bool, str]:
         proposals = self.db.get_state("proposals", [])
@@ -1426,6 +1485,8 @@ class SummitEngine:
 
         if prop["status"] not in ("draft", "qualified"):
             return False, f"Motion is already {prop['status']}."
+        if prop.get("effect_type") == "gm_question":
+            return False, "Questions to the game masters cannot be co-sponsored."
 
         realms = self.db.get_state("realms", [])
         supporter = next((r for r in realms if r["id"] == supporter_id), None)
@@ -1451,10 +1512,11 @@ class SummitEngine:
             prop["seconder_id"] = supporter_id
             prop["seconder_name"] = supporter["name"]
             self.db.set_state("proposals", proposals)
+            # Co-sponsors stay anonymous: only the nation that tabled the motion is named.
             self.add_news(
                 "assembly",
-                f"MOTION QUALIFIED: '{prop['title']}'",
-                f"Seconded by {supporter['name']}. Supported by {len(support_list)} sovereign nations. Placed on the Between-Rounds Plenary Ballot!"
+                f"MOTION ON THE BALLOT: '{prop['title']}'",
+                f"Tabled by {prop.get('proposer_name')}, the motion found a co-sponsor and goes to the Assembly vote."
             )
             self.trigger_audio_cue("chime", f"Motion Qualified: {prop['title']}")
             return True, f"Endorsement recorded! '{prop['title']}' has met the 2-country threshold and qualified for the Plenary Ballot."
@@ -1465,6 +1527,22 @@ class SummitEngine:
     # -------------------------------------------------------------------------
     # Between-Round Plenary Voting Structure
     # -------------------------------------------------------------------------
+    def answer_question(self, prop_id: str, answer: str, public: bool = False) -> Tuple[bool, str]:
+        """The facilitators answer a nation's question, privately or for everyone to see."""
+        answer = (answer or "").strip()[:1000]
+        if not answer:
+            return False, "Write an answer first."
+        proposals = self.db.get_state("proposals", [])
+        prop = next((p for p in proposals if p["id"] == prop_id and p.get("effect_type") == "gm_question"), None)
+        if not prop:
+            return False, "Question not found."
+        prop.update(status="answered", answer=answer, answered_publicly=bool(public), answered_at=time.time())
+        self.db.set_state("proposals", proposals)
+        if public:
+            self.add_news("diplomacy", "THE GAME MASTERS ANSWER",
+                          f"{prop.get('proposer_name')} asked: \"{prop.get('description')}\" Answer: {answer}")
+        return True, "Answer sent " + ("to everyone." if public else f"to {prop.get('proposer_name')}.")
+
     def start_plenary_session(self) -> Tuple[bool, str]:
         meta = self.db.get_state("meta", {})
         proposals = self.db.get_state("proposals", [])
@@ -1483,13 +1561,14 @@ class SummitEngine:
         meta["plenary_docket"] = docket_ids
         meta["current_motion_index"] = 0
 
-        config = load_scenario_config()
-        meta_defaults = config.get("meta_defaults", {})
-        debate_secs = meta_defaults.get("debate_session_seconds", 300)
+        settings = self.settings()
+        debate_secs = settings.get("debate_session_seconds", 300)
 
         current_turn = meta.get("current_turn", 1)
-        if current_turn < 3:
+        if current_turn < settings["max_turns"]:
             meta["phase"] = "plenary_quick"
+            meta["vote_timer_end"] = time.time() + settings.get("plenary_vote_seconds", 180)
+            meta["vote_timer_total"] = settings.get("plenary_vote_seconds", 180)
             self.db.set_state("meta", meta)
             self.add_news(
                 "assembly",
@@ -1523,6 +1602,8 @@ class SummitEngine:
         meta["phase"] = "grand_plenary_voting"
         meta["is_discussion_timer_running"] = False
         meta["discussion_timer_end"] = None
+        meta["vote_timer_end"] = time.time() + self.settings().get("grand_vote_seconds", 90)
+        meta["vote_timer_total"] = self.settings().get("grand_vote_seconds", 90)
         self.db.set_state("meta", meta)
 
         proposals = self.db.get_state("proposals", [])
@@ -1562,8 +1643,8 @@ class SummitEngine:
 
         if idx + 1 < len(docket):
             next_idx = idx + 1
-            config = load_scenario_config()
-            debate_secs = config.get("meta_defaults", {}).get("debate_session_seconds", 300)
+            debate_secs = self.settings().get("debate_session_seconds", 300)
+            meta["vote_timer_end"] = None
             meta["current_motion_index"] = next_idx
             meta["phase"] = "grand_plenary_discussion"
             meta["discussion_timer_remaining"] = debate_secs
@@ -1586,6 +1667,7 @@ class SummitEngine:
             meta["phase"] = "turn_summary"
             meta["is_discussion_timer_running"] = False
             meta["discussion_timer_end"] = None
+            meta["vote_timer_end"] = None
             self.db.set_state("meta", meta)
             self.db.set_state("proposals", proposals)
             self.add_news(
@@ -1671,6 +1753,7 @@ class SummitEngine:
 
         self.db.set_state("proposals", proposals)
         meta["phase"] = "turn_summary"
+        meta["vote_timer_end"] = None
         self.db.set_state("meta", meta)
 
         self.add_news(
@@ -1685,8 +1768,11 @@ class SummitEngine:
         effect_type = prop.get("effect_type", "custom")
         realms = self.db.get_state("realms", [])
         
+        # Only nations at the table take part (an inactive nation keeps its numbers untouched).
+        active = [r for r in realms if r.get("active", True)] or realms
+
         if effect_type == "tax":
-            for r in realms:
+            for r in active:
                 if r["alchemical_grain"] > 50:
                     r["alchemical_grain"] -= 10
                 elif r["alchemical_grain"] < 25:
@@ -1704,8 +1790,8 @@ class SummitEngine:
                 return f"Humanitarian Aid ratified: {proposer['name']} gained +10 Diplomatic Standing."
 
         elif effect_type == "embargo":
-            max_wealth = max(r["total_wealth"] for r in realms)
-            wealthiest = next((r for r in realms if r["total_wealth"] == max_wealth), None)
+            max_wealth = max(r["total_wealth"] for r in active)
+            wealthiest = next((r for r in active if r["total_wealth"] == max_wealth), None)
             if wealthiest:
                 wealthiest["civil_stability"] = max(0, wealthiest["civil_stability"] - 15)
                 self._recalculate_all_realms(realms)
@@ -1722,7 +1808,7 @@ class SummitEngine:
                     self._recalculate_all_realms(realms)
                     self.db.set_state("realms", realms)
                     return f"Environmental Cordon deployed around {target_realm['name']}: Borders fortified against unrest (+10 Stability)."
-            for r in realms:
+            for r in active:
                 r["is_quarantined"] = True
             self._recalculate_all_realms(realms)
             self.db.set_state("realms", realms)
@@ -1837,6 +1923,34 @@ class SummitEngine:
             self.db.set_state("meta", meta)
             return True, "Assembly docket reset to working session."
         return False, f"Unknown assembly action: '{action}'."
+
+    def shuffle_pins(self) -> Dict[str, str]:
+        """New random 4-digit passcodes for every nation (all different)."""
+        realms = self.db.get_state("realms", [])
+        pins = random.sample(range(1000, 10000), len(realms))
+        for r, pin in zip(realms, pins):
+            r["pin"] = str(pin)
+        self.db.set_state("realms", realms)
+        self.clear_realm_sessions()          # everyone logs in again with the new codes
+        return {r["id"]: r["pin"] for r in realms}
+
+    def start_new_summit(self) -> Tuple[bool, str]:
+        """Fresh game with the current settings, keeping the roster, delegation sizes and passcodes."""
+        self.autosave(label="Before new summit", force=True)
+        keep = {r["id"]: {k: r.get(k) for k in ("active", "player_count", "pin")} for r in self.db.get_state("realms", [])}
+        self.reset_simulation()
+        realms = self.db.get_state("realms", [])
+        for r in realms:
+            r.update({k: v for k, v in keep.get(r["id"], {}).items() if v is not None})
+        self._recalculate_all_realms(realms)
+        self.db.set_state("realms", realms)
+        self.clear_realm_sessions()
+        s = self.settings()
+        cfg = load_scenario_config()
+        self.add_news("turn", "A NEW SUMMIT IS PREPARED",
+                      f"Scenario: {cfg.get('scenarios', {}).get(s['scenario'], {}).get('name', s['scenario'])} · "
+                      f"difficulty {s['difficulty']} · {len([r for r in realms if r.get('active', True)])} nations.")
+        return True, "New summit ready. Start the clock on the command deck when everyone has joined."
 
     def admin_toggle_realm(self, realm_id: str, active: Optional[bool] = None) -> Tuple[bool, str]:
         """Enables or disables participation of a country."""
@@ -2053,6 +2167,14 @@ class SummitEngine:
         meta = self.db.get_state("meta", {})
         realms = self.db.get_state("realms", [])
         proposals = self.db.get_state("proposals", [])
+
+        # The last turn ends like the others: nations eat before the results are counted.
+        if not meta.get("final_consumption_done") and meta.get("current_turn", 1) >= self.settings()["max_turns"] \
+                and meta.get("phase") != "summit_concluded":
+            self._consume_grain([r for r in realms if r.get("active", True)], self.settings())
+            meta["final_consumption_done"] = True
+            self.db.set_state("meta", meta)
+            self.db.set_state("realms", realms)
 
         self._recalculate_all_realms(realms)
 
@@ -2373,7 +2495,6 @@ class SummitEngine:
         claimed = set(realm.get("claimed_lore", []))
         failed = set(realm.get("failed_lore", []))
         picks = realm.get("quiz_answers", {})
-        penalty = load_scenario_config().get("simulation_settings", {}).get("quiz_fail_penalty_amount", 5)
         questions = []
         for q in load_quiz()["questions"]:
             item = {k: q[k] for k in ("id", "turn", "article", "question", "options", "reward_resource", "reward_amount")}
@@ -2387,7 +2508,7 @@ class SummitEngine:
             else:
                 item["status"] = "open"
             questions.append(item)
-        return {"current_turn": turn, "fail_penalty": penalty, "questions": questions}
+        return {"current_turn": turn, "questions": questions}
 
     def build_report(self) -> Dict[str, Any]:
         """Everything that happened in this summit, for the facilitator's results download."""
@@ -2482,17 +2603,17 @@ class SummitEngine:
             )
             return True, f"Correct! {label} added to your reserves.", dict(payload, status="correct", reward_label=label)
 
-        sim_settings = config.get("simulation_settings", {})
-        penalty_metric = sim_settings.get("quiz_fail_penalty_metric", "diplomatic_standing")
-        penalty_amt = sim_settings.get("quiz_fail_penalty_amount", 5)
-        realm[penalty_metric] = max(0, realm.get(penalty_metric, 0) - penalty_amt)
+        # A wrong answer costs exactly what a right answer would have earned.
+        field = RESOURCE_FIELDS.get(res_type, "alchemical_grain")
+        lost = min(amt, realm.get(field, 0))
+        realm[field] = realm.get(field, 0) - lost
         failed.append(question_id)
         self._recalculate_all_realms(realms)
         self.db.set_state("realms", realms)
         self.add_news(
             "lore",
             f"SCHOLARLY BLUNDER: {realm['name'].upper()}",
-            f"{realm['name']} delegates gave a wrong answer in the Spireopedia quiz (-{penalty_amt} Diplomatic Standing)."
+            f"{realm['name']} delegates gave a wrong answer in the Spireopedia quiz (-{amt} {RESOURCE_LABELS.get(res_type, res_type)})."
         )
-        return False, f"Wrong answer. -{penalty_amt} Diplomatic Standing; this question is now locked.", dict(
-            payload, status="failed", penalty_metric=penalty_metric, penalty_amount=penalty_amt)
+        return False, f"Wrong answer. -{amt} {RESOURCE_LABELS.get(res_type, res_type)}; this question is now locked.", dict(
+            payload, status="failed", penalty_resource=res_type, penalty_amount=amt)

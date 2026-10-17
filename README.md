@@ -23,10 +23,10 @@ A lightweight, real-time web application built for live educational simulations.
   - Real-time P2P Trading Hub with atomic transfers and pending trade notification badges.
   - Player-driven emergency motions with a **Second Motion** trigger.
   - 60-Second Flash Assembly Modal Overlay with animated countdown and live roll-call.
-- **Automated Event Deck & External Library (`events.json`)**:
-  - Pre-loaded catalog of 20+ narrative geopolitical dilemmas across all turns.
-  - Facilitator can click **⚡ Trigger Next Recommended Crisis** to automatically select and inject an appropriate crisis, or pick from the catalog dropdown.
-  - Option to enable **Auto-inject crisis on Turn advance**.
+- **Random events**:
+  - During each working session the game posts small news items (default 6 per turn, 50 different ones, good and bad) that hit one nation. Each resource an item touches moves by a random amount between 0 and the largest change set on the setup screen (default 5; decimals allowed), at least 1. The share of good news depends on difficulty.
+  - **Large disasters** (12: earthquake, tsunami, drought, blight, reactor breach, plague, revolt, border surge, dragon raid, great storm, tornado swarm, meteor shower; usually −10 to −25) strike at random only when *Large disasters per turn* is above 0 — the Armageddon scenario sets 3. They show on the projector map.
+  - The famine storyline's crises (Round 2 border incident, Round 3 Great Famine) are built in. Catalog crises can also be triggered by hand (**⚡ Trigger Next Recommended Crisis**, the catalog dropdown), and there are **Good news now**, **Bad news now** and **Random disaster now** buttons.
 - **Facilitator Command Deck (`/admin`)**:
   - Local LAN IP gateway & projected SVG QR code.
   - One-click launcher for the `/projector` display.
@@ -84,13 +84,13 @@ Values follow the facilitator notes (`MGV 2026 školení s Johanem.md`) and live
 ---
 
 ### 4. Turn Cadence & Workshop Flow (3 Turns Total)
-1. **Working & Bilateral Trade Session (5:00 Min)**:
+1. **Working & Bilateral Trade Session (default 20:00, set on the setup screen)**:
    - Roam the room freely for face-to-face bilateral diplomacy.
    - Execute instant atomic P2P trades (Grain, Cores, Silk, Military Power).
    - Enact internal state decrees (relief, forges, galas, security, mustering).
-   - Read the Spireopedia and answer the shared quiz (+5 resource per correct answer; -5 Standing and a permanent lock per wrong answer).
+   - Read the Spireopedia and answer the shared quiz (+5 of a resource per correct answer; −5 of the same resource and a permanent lock per wrong answer).
    - Author statutory resolutions for the Plenary docket.
-2. **Plenary Floor Debate & Flash Assembly (3:00–5:00 Min)**:
+2. **Plenary Floor Debate & Assembly vote (default 3:00 vote in Turns 1–2; 5:00 debate + 1:30 vote per motion in the Turn 3 Grand Plenary)**:
    - **Two-Sponsor Mandate**: A resolution reaches the floor only if a second realm endorses it.
    - Delegations cast weighted votes (1, 2, or 3 votes). Passed resolutions take statutory effect immediately.
 3. **Turn Settlement**: Engine executes consumption, starvation checks, news ticker dispatches.
@@ -164,7 +164,8 @@ The server binds to `0.0.0.0:5000` and displays:
    - The large timer, QR code, and continental standing are immediately visible to all nations.
 2. **Facilitator Command**:
    - Open `http://localhost:5000/admin` on the facilitator laptop.
-   - Use the **Automated Event Deck** to trigger crises or set **Auto-inject crisis on Turn advance**.
+   - Before the session, open **Setup** (`/admin/setup`) to choose the scenario, difficulty, nations, delegates, passcodes and clocks.
+   - During play, clocks run out on their own (see *Setting up a summit*); crises from the catalog are optional and manual.
 3. **Student Mobile Experience**:
    - Students scan the QR code and select their realm.
    - Use the **persistent bottom navigation bar** to switch between **Overview**, **News**, **Trade**, **Motions**, and **Continent**.
@@ -202,13 +203,32 @@ Notes:
 ## 📖 Spireopedia & Quiz
 
 - **Spireopedia**: the game's built-in, Wikipedia-style encyclopedia, read in the phone console's **Wiki** tab (no separate site). 22 articles in `lore_articles.json` (`[[slug|label]]` links, infoboxes, contents, search, "what links here"), served as JSON by `/api/wiki`, `/api/wiki/<slug>` and `/api/wiki/search` to logged-in delegations and the facilitator.
-- **Quiz** (phone **Quiz** tab): one shared bank in `lore_quiz.json` — every nation gets the same questions. Questions unlock by turn (`turn` field); each nation has **one attempt per question**. Correct: `reward_amount` of `reward_resource`. Wrong: `quiz_fail_penalty_amount` (5) of `quiz_fail_penalty_metric` (Standing) from `scenario_config.json`, and the question locks for that nation.
+- **Quiz** (phone **Quiz** tab): one shared bank in `lore_quiz.json` — every nation gets the same questions. Questions unlock by turn (`turn` field); each nation has **one attempt per question**. Correct: `reward_amount` of `reward_resource`. Wrong: the same resource and amount is lost, and the question locks for that nation.
 - Answers never reach the browser before submission: `GET /api/quiz/<realm_id>` (delegation login required) omits `correct_index`/`explanation` for unanswered questions; `POST /api/lore/quiz` checks the answer on the server.
 - Every question names the article that contains its answer; `pytest` checks slugs, option counts and links.
 
 ## 📜 Motions
 
-Players propose motions from **templates** (`resolution_types` in `scenario_config.json`): each template is shown written out with its plain-language effect ("If passed: …"), ready-made title and terms. The player picks one, edits the title and terms, chooses a target nation if the template needs one (e.g. the Frontier Watch cordon), and optionally limits who may co-sponsor. A motion needs a second nation's co-sponsorship to reach the ballot. Decided motions show how each nation voted (votes and nation count). Continental Food Acts A/B are facilitator-only (`player_selectable: false`) and are tabled automatically in Round 3.
+Players propose motions from **templates** (`resolution_types` in `scenario_config.json`): each template is shown written out with its plain-language effect ("If passed: …"), ready-made title and terms. The player picks one, edits the title and terms, chooses a target nation if the template needs one (e.g. the Frontier Watch cordon), and optionally limits who may co-sponsor. A motion needs a second nation's co-sponsorship to reach the ballot.
+
+- **Who sees what:** an open motion is visible to everyone, but co-sponsors stay anonymous — other nations only see *that* it has a co-sponsor ("On the ballot"), not who. A motion offered to one nation only ("Who may co-sponsor?") is visible just to the proposer and that nation until it reaches the ballot.
+- **Question to the Game Masters** (template `gm_question`, `no_vote: true`): no co-sponsor and no vote. Only the asking nation and the facilitators see it; it appears in the admin's **Resolutions & Questions** tab (with a badge and a chime), where the facilitator answers that nation privately or everyone as a news item.
+
+Decided motions show how each nation voted (votes and nation count). Continental Food Acts A/B are facilitator-only (`player_selectable: false`) and are tabled automatically in Round 3.
+
+## ⚙️ Setting up a summit (`/admin/setup`)
+
+The **Setup** link on the command deck opens one page for everything decided before the session:
+
+1. **Scenario** — *The Great Famine* (the MGV 2026 storyline: Round 2 border incident, Round 3 famine and Continental Food Acts), *Open Summit* (same nations and missions, no scripted crises) or *Armageddon* (the famine storyline plus 3 large disasters and 10 larger small events per turn). Choosing a scenario fills in its suggested event numbers.
+2. **Difficulty** — grain eaten per turn and the share of good small events: Gentle 15 / 65 %, Standard 20 / 50 %, Harsh 25 / 35 %.
+3. **Nations** — which nations play, delegates per nation (sets seats and how many secret missions it gets), and passcodes (edit one, or **Shuffle passcodes**).
+4. **Clocks** — working session, Assembly vote, Grand Plenary debate and vote per motion, and the pause before the next turn.
+5. **Random events** — small news items per turn (0–30, default 6), the largest change per small item (1–50, decimals allowed, default 5) and large disasters per turn (0–10). A change made mid-turn applies to the rest of that working session.
+
+**Save settings** changes the running game from now on; **Start a new summit with these settings** begins a fresh game (the old one is kept on the Saves tab). Defaults live in `game_settings_defaults` in `scenario_config.json`.
+
+**When time runs out** a bell sounds on every screen and, with *Move on automatically* ticked (default), the game advances by itself: working session → Assembly vote (or straight to the next turn when no motion is on the ballot) → short pause → next turn … → results after Turn 3. In the Grand Plenary each motion's debate rolls into its vote and then into the next motion. Untick it to only sound the bell and move on by hand.
 
 ## 🧭 Running a session: saves, debrief and results
 
@@ -226,7 +246,8 @@ venv/bin/python -m pytest -q
 ```
 
 - `test_summit.py`: engine and API tests.
-- `test_e2e.py`: click-through tests. They start the real server with logins enforced and drive a headless browser as phones, the facilitator and the projector, covering trading, motions and voting, the quiz, the wiki, roster changes, saves, the debrief and the report. They are skipped if Playwright isn't installed.
+- `test_e2e.py`: click-through tests. They start the real server with logins enforced and drive a headless browser as phones, the facilitator and the projector, covering trading, motions and voting, private motions and game-master questions, the quiz, the wiki, roster changes, saves, the debrief, the report and the setup screen. They are skipped if Playwright isn't installed.
+- `tools/simulate.py`: plays hundreds of complete summits through the real engine with computer-controlled delegations (cooperative or selfish, different quiz skill and difficulty) and prints how often the continent ends stable and how often each mission is met. Use it to check balance after changing numbers in `scenario_config.json`.
 
 ## 🗂️ Front-end files
 
