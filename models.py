@@ -306,6 +306,15 @@ class Database:
                     value TEXT NOT NULL
                 )
             """)
+            # Rolling autosaves (snapshots of game_state), newest kept
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS autosaves (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created REAL NOT NULL,
+                    label TEXT NOT NULL,
+                    data TEXT NOT NULL
+                )
+            """)
             conn.commit()
 
     def get_state(self, key: str, default: Any = None) -> Any:
@@ -327,6 +336,38 @@ class Database:
                 ON CONFLICT(key) DO UPDATE SET value = excluded.value
             """, (key, encoded))
             conn.commit()
+
+    # ------------------------------------------------------------------ saves
+    def dump_all(self) -> Dict[str, Any]:
+        """The whole game state as one JSON-able dict (a save file)."""
+        with self._get_conn() as conn:
+            rows = conn.execute("SELECT key, value FROM game_state").fetchall()
+        return {r["key"]: json.loads(r["value"]) for r in rows}
+
+    def restore_all(self, snapshot: Dict[str, Any]):
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM game_state")
+            conn.executemany("INSERT INTO game_state (key, value) VALUES (?, ?)",
+                             [(k, json.dumps(v)) for k, v in snapshot.items()])
+            conn.commit()
+
+    def add_autosave(self, snapshot: Dict[str, Any], label: str, keep: int = 12) -> int:
+        with self._get_conn() as conn:
+            cur = conn.execute("INSERT INTO autosaves (created, label, data) VALUES (?, ?, ?)",
+                               (time.time(), label, json.dumps(snapshot)))
+            conn.execute("DELETE FROM autosaves WHERE id NOT IN (SELECT id FROM autosaves ORDER BY id DESC LIMIT ?)", (keep,))
+            conn.commit()
+            return cur.lastrowid
+
+    def list_autosaves(self) -> List[Dict[str, Any]]:
+        with self._get_conn() as conn:
+            rows = conn.execute("SELECT id, created, label FROM autosaves ORDER BY id DESC").fetchall()
+        return [dict(r) for r in rows]
+
+    def get_autosave(self, save_id: int) -> Optional[Dict[str, Any]]:
+        with self._get_conn() as conn:
+            row = conn.execute("SELECT data FROM autosaves WHERE id = ?", (save_id,)).fetchone()
+        return json.loads(row["data"]) if row else None
 
     def reset_all(self):
         with self._get_conn() as conn:

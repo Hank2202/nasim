@@ -117,6 +117,18 @@
   </div>
 
   <!-- ========================================================================= -->
+  <!-- REFLECTION: the facilitator steps through the debrief questions from the admin page -->
+  <!-- ========================================================================= -->
+  <div id="proj-reflection-stage" class="reflection-stage" style="display: none;">
+    <div class="reflection-card">
+      <div class="reflection-kicker" id="reflection-kicker">Reflection</div>
+      <h1 class="reflection-question" id="reflection-question"></h1>
+      <div id="reflection-context" class="reflection-context"></div>
+      <div id="reflection-dots" class="reflection-dots"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
   <!-- SUMMIT CONCLUDED: CONTINENTAL DEBRIEF & SOVEREIGN VERDICT STAGE -->
   <!-- ========================================================================= -->
   <div id="proj-concluded-stage" style="display: none; flex: 1; min-height: 0; overflow-y: auto;">
@@ -289,8 +301,9 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='realm_map.js') }}"></script>
-  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/projector.js') }}"></script>
   <script>
     function toggleSettingsModal() {
       const modal = document.getElementById('proj-settings-modal');
@@ -331,6 +344,7 @@
     const projApp = new ProjectorApp();
     window.projApp = projApp;
     projApp.start();
+    keepScreenAwake();
   </script>
 </body>
 </html>

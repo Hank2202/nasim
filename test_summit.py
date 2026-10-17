@@ -480,7 +480,7 @@ class TestFlaskEndpoints(unittest.TestCase):
         resp = self.client.get("/projector")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b'id="realm-map"', resp.data)
-        self.assertIn(b"realm_map.js", resp.data)
+        self.assertIn(b"js/map.js", resp.data)
         self.assertIn(b"projector-realms-list", resp.data)
         self.assertIn(b"btn-open-settings", resp.data)
         self.assertIn(b"proj-settings-modal", resp.data)
@@ -558,11 +558,11 @@ class TestFlaskEndpoints(unittest.TestCase):
         self.assertIn("reward_label", data["data"])
 
     def test_js_syntax_integrity(self):
-        """Ensure static/app.js and static/realm_map.js are free of JavaScript syntax errors using macOS JavaScriptCore evaluator."""
+        """Ensure the scripts in static/js/ are free of JavaScript syntax errors using macOS JavaScriptCore evaluator."""
         import subprocess
         cmd = [
             "osascript", "-l", "JavaScript", "-e",
-            'var window = this; var document = { getElementById: function() { return null; }, querySelectorAll: function() { return []; }, addEventListener: function() {} }; eval($.NSString.stringWithContentsOfFileEncodingError("static/realm_map.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/app.js", $.NSUTF8StringEncoding, null).js); "OK"'
+            'var window = this; var document = { getElementById: function() { return null; }, querySelectorAll: function() { return []; }, addEventListener: function() {} }; eval($.NSString.stringWithContentsOfFileEncodingError("static/js/common.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/map.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/realm.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/projector.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/admin.js", $.NSUTF8StringEncoding, null).js); "OK"'
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, f"JS Syntax Error detected: {result.stderr}")
@@ -1037,3 +1037,82 @@ class TestSpireopedia(unittest.TestCase):
     def test_markup_is_escaped(self):
         import wiki
         self.assertNotIn("<script>", str(wiki.render_markup("<script>alert(1)</script> [[nope]]")))
+
+
+class TestSaves(unittest.TestCase):
+    def setUp(self):
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+        from app import engine
+        engine.reset_simulation()
+
+    def test_autosave_and_restore_round_trip(self):
+        from app import engine
+        engine._last_autosave = 0
+        engine.get_full_state()                       # first poll triggers an autosave
+        saves = self.client.get("/api/admin/saves").json["saves"]
+        self.assertTrue(saves)
+        engine.get_full_state()                       # no second autosave within 5 minutes
+        self.assertEqual(len(self.client.get("/api/admin/saves").json["saves"]), len(saves))
+
+        exported = self.client.get("/api/admin/save/export").json["snapshot"]
+        grain = next(r for r in exported["realms"] if r["id"] == "sylvan")["alchemical_grain"]
+        engine.admin_override_realm("sylvan", {"alchemical_grain": 1})
+        r = self.client.post("/api/admin/save/restore", json={"snapshot": exported})
+        self.assertTrue(r.json["success"])
+        sylvan = next(x for x in engine.get_full_state()["realms"] if x["id"] == "sylvan")
+        self.assertEqual(sylvan["alchemical_grain"], grain)
+
+    def test_restore_rejects_garbage_and_needs_admin(self):
+        self.assertEqual(self.client.post("/api/admin/save/restore", json={"snapshot": {"x": 1}}).status_code, 400)
+        app.config["TESTING"] = False
+        try:
+            c = app.test_client()
+            self.assertEqual(c.get("/api/admin/saves").status_code, 401)
+            self.assertEqual(c.get("/api/admin/save/export").status_code, 401)
+            self.assertEqual(c.post("/api/admin/save/restore", json={"id": 1}).status_code, 401)
+        finally:
+            app.config["TESTING"] = True
+
+
+class TestDebriefAndReport(unittest.TestCase):
+    def setUp(self):
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+        from app import engine
+        self.engine = engine
+        engine.reset_simulation()
+
+    def test_reflection_only_after_conclusion(self):
+        r = self.client.post("/api/admin/reflection", json={"step": 0})
+        self.assertEqual(r.status_code, 400)
+        self.engine.conclude_summit()
+        self.assertTrue(self.client.post("/api/admin/reflection", json={"step": 3}).json["success"])
+        state = self.engine.get_full_state()
+        self.assertEqual(state["meta"]["reflection_step"], 3)
+        self.assertEqual(len(state["reflection_questions"]), 12)
+        self.client.post("/api/admin/reflection", json={"step": 99})
+        self.assertEqual(self.engine.get_full_state()["meta"]["reflection_step"], 11)  # clamped
+        self.client.post("/api/admin/reflection", json={"step": None})
+        self.assertIsNone(self.engine.get_full_state()["meta"]["reflection_step"])
+
+    def test_results_report(self):
+        self.engine.create_trade("sylvan", "aquila", "grain", 10, "silk", 5)
+        trade = self.engine.db.get_state("trades")[0]
+        self.engine.respond_trade(trade["id"], "accept", "aquila")
+        self.engine.conclude_summit()
+        html = self.client.get("/admin/report").data.decode()
+        self.assertIn("Final standings", html)
+        self.assertIn("Sylvan Concordat", html)
+        data = self.client.get("/admin/report?format=json").json
+        self.assertTrue(data["outcome"])
+        sylvan = next(n for n in data["nations"] if n["id"] == "sylvan")
+        self.assertIn("Aquila Maritime League", sylvan["trade_partners"])
+        self.assertTrue(any("CONCLUDES" in n["headline"] for n in data["timeline"]))
+
+    def test_report_needs_admin(self):
+        app.config["TESTING"] = False
+        try:
+            self.assertEqual(app.test_client().get("/admin/report").status_code, 302)
+        finally:
+            app.config["TESTING"] = True

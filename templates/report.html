@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Summit of Realms – Results ({{ r.generated }})</title>
+<style>
+  /* Self-contained so the downloaded file looks the same anywhere; prints cleanly to PDF. */
+  :root { --ink: #2b2016; --muted: #7a6142; --line: #e0cfa8; --accent: #a87412; --ok: #1f6b4f; --bad: #a1322a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f3ead7; color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; padding: 28px 22px 60px; background: #fffaf0; min-height: 100vh; }
+  h1, h2, h3 { font-family: "Palatino Linotype", Palatino, Georgia, serif; margin: 0; }
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.35rem; margin: 30px 0 10px; padding-bottom: 4px; border-bottom: 2px solid var(--line); }
+  .sub { color: var(--muted); font-style: italic; }
+  .verdict { margin-top: 16px; padding: 14px 16px; border-radius: 10px; background: #fbf1d9; border: 1px solid var(--line); }
+  .verdict b { font-family: "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.3rem; }
+  .stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #f6ecd6; font-family: "Palatino Linotype", Palatino, Georgia, serif; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ok { color: var(--ok); font-weight: 700; } .bad { color: var(--bad); font-weight: 700; }
+  .nation { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; break-inside: avoid; }
+  .nation h3 { font-size: 1.1rem; }
+  .motion { border-left: 4px solid var(--line); padding: 6px 12px; margin-bottom: 12px; break-inside: avoid; }
+  .motion.passed { border-color: var(--ok); } .motion.rejected { border-color: var(--bad); }
+  .pill { display: inline-block; font-size: 0.75rem; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  .timeline td:first-child { white-space: nowrap; color: var(--muted); }
+  .actions { margin: 14px 0 0; display: flex; gap: 8px; }
+  .actions a, .actions button { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--accent); background: #fff6df; color: var(--ink); cursor: pointer; text-decoration: none; }
+  @media print { body { background: #fff; } main { padding: 0; } .actions { display: none; } h2 { break-after: avoid; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>The Summit of Realms — Results</h1>
+  <div class="sub">Report generated {{ r.generated }} · Turn {{ r.meta.current_turn }} · {{ (r.meta.phase or '').replace('_', ' ') }}</div>
+  <div class="actions">
+    <button onclick="window.print()">Print / save as PDF</button>
+    <a href="/admin/report?download=1">Download this page</a>
+    <a href="/admin/report?format=json">Download raw data (JSON)</a>
+  </div>
+
+  {% if r.outcome %}
+  <div class="verdict">
+    <b>{{ r.outcome.continental_verdict }}</b>
+    <div>{{ r.outcome.continental_desc }}</div>
+    <div class="stats">
+      <span>Starving nations: {{ r.outcome.starving_count }}</span>
+      <span>Average stability: {{ r.outcome.avg_stability }}</span>
+      <span>Average standing: {{ r.outcome.avg_standing }}</span>
+      <span>Motions passed: {{ r.outcome.passed_proposals_count }}</span>
+    </div>
+  </div>
+  {% else %}
+  <div class="verdict"><b>The summit is still in progress.</b> This is a snapshot of the game so far.</div>
+  {% endif %}
+
+  <h2>Final standings</h2>
+  <table>
+    <tr><th>Nation</th><th>Delegates</th><th>Votes</th><th>Grain</th><th>Cores</th><th>Silk</th><th>Military</th><th>Vitality</th><th>Standing</th><th>Stability</th><th>Quiz ✓/✗</th></tr>
+    {% for n in r.nations %}
+    <tr><td>{{ n.name }}</td><td class="num">{{ n.delegates }}</td><td class="num">{{ n.votes }}</td><td class="num">{{ n.grain }}</td>
+      <td class="num">{{ n.cores }}</td><td class="num">{{ n.silk }}</td><td class="num">{{ n.military }}</td><td class="num">{{ n.vitality }}</td>
+      <td class="num">{{ n.standing }}</td><td class="num">{{ n.stability }}</td><td class="num">{{ n.quiz_correct }} / {{ n.quiz_wrong }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <h2>Missions</h2>
+  {% if r.outcome %}
+    {% for e in r.outcome.realm_evaluations %}
+    <div class="nation">
+      <h3>{{ loop.index }}. {{ e.name }} <span class="pill">{{ e.success_ratio }} missions · {{ e.score }} pts</span></h3>
+      {% if e.public_mission_eval %}
+      <div><span class="{{ 'ok' if e.public_mission_eval.achieved else 'bad' }}">{{ '✓' if e.public_mission_eval.achieved else '✗' }}</span>
+        Public: <b>{{ e.public_mission_eval.title }}</b> — {{ e.public_mission_eval.explanation }}</div>
+      {% endif %}
+      {% for s in e.secret_missions_eval or [] %}
+      <div><span class="{{ 'ok' if s.achieved else 'bad' }}">{{ '✓' if s.achieved else '✗' }}</span>
+        Secret: <b>{{ s.title }}</b> — {{ s.explanation }}</div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  {% else %}
+    {% for n in r.nations %}
+    <div class="nation"><h3>{{ n.name }}</h3>
+      <div>Public: <b>{{ n.public_mission }}</b></div>
+      <div>Secret: {{ n.secret_missions | join(' · ') }}</div>
+      <div class="sub">Missions are evaluated when the summit concludes.</div></div>
+    {% endfor %}
+  {% endif %}
+
+  <h2>Who traded with whom</h2>
+  <table>
+    <tr><th>Nation</th><th>Completed trades with</th></tr>
+    {% for n in r.nations %}<tr><td>{{ n.name }}</td><td>{{ n.trade_partners | join(', ') or '—' }}</td></tr>{% endfor %}
+  </table>
+  <h3 style="margin-top:14px;">All trade offers ({{ r.trades | length }})</h3>
+  <table>
+    <tr><th>Time</th><th>From</th><th>To</th><th>Gives</th><th>Asks for</th><th>Result</th><th>Message</th></tr>
+    {% for t in r.trades %}
+    <tr><td>{{ t.time }}</td><td>{{ t.from }}</td><td>{{ t.to }}</td><td>{{ t.gives }}</td><td>{{ t.asks }}</td>
+      <td class="{{ 'ok' if t.status == 'accepted' else 'bad' if t.status == 'declined' else '' }}">{{ t.status }}</td><td>{{ t.note }}</td></tr>
+    {% else %}<tr><td colspan="7" class="sub">No trades.</td></tr>{% endfor %}
+  </table>
+
+  <h2>Motions and votes ({{ r.motions | length }})</h2>
+  {% for m in r.motions %}
+  <div class="motion {{ m.status }}">
+    <b>{{ m.title }}</b> <span class="pill">{{ m.type }}</span> <span class="pill">{{ m.status }}</span> <span class="pill">turn {{ m.turn }}</span>
+    <div class="sub">Tabled by {{ m.tabled_by }} · sponsors: {{ m.sponsors | join(', ') }}</div>
+    <div>{{ m.terms }}</div>
+    {% if m.votes %}
+    <div>{% for v in m.votes %}<span class="pill">{{ v.nation }}: {{ v.choice }}{% if v.choice != 'abstain' %} ({{ v.weight }}){% endif %}</span> {% endfor %}</div>
+    {% endif %}
+  </div>
+  {% else %}<p class="sub">No motions were tabled.</p>{% endfor %}
+
+  <h2>Timeline</h2>
+  <table class="timeline">
+    {% for n in r.timeline %}
+    <tr><td>Turn {{ n.turn or '' }} · {{ n.time }}</td><td><b>{{ n.headline }}</b><br>{{ n.detail }}</td></tr>
+    {% endfor %}
+  </table>
+</main>
+</body>
+</html>

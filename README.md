@@ -209,3 +209,32 @@ Notes:
 ## 📜 Motions
 
 Players propose motions from **templates** (`resolution_types` in `scenario_config.json`): each template is shown written out with its plain-language effect ("If passed: …"), ready-made title and terms. The player picks one, edits the title and terms, chooses a target nation if the template needs one (e.g. the Frontier Watch cordon), and optionally limits who may co-sponsor. A motion needs a second nation's co-sponsorship to reach the ballot. Decided motions show how each nation voted (votes and nation count). Continental Food Acts A/B are facilitator-only (`player_selectable: false`) and are tabled automatically in Round 3.
+
+## 🧭 Running a session: saves, debrief and results
+
+- **Autosave:** every 5 minutes, on the server and in the facilitator's browser (admin → **Saves**). After a server restart, restore the newest copy from "In this browser". **Save now**, **Download save file** and **Load save file** are there too.
+- **Reflection debrief:** after concluding the summit, press **Start reflection** on the admin page. The projector shows the 12 reflection questions one at a time (`reflection_questions` in `scenario_config.json`), several with results from the game beside them. **Next question** and **Previous** step through them.
+- **Results report:** admin → **Results report** (or **Download results** after the summit) opens a printable page with the outcome, final stats, missions, every trade, every motion and vote, and the full timeline. You can print it, save it as a PDF, or download it as HTML or JSON.
+- **Screens stay awake:** the projector, phones and admin page ask the browser not to dim. This works on the hosted (https) site; on a plain-http LAN, browsers don't allow it.
+
+## 🧪 Tests
+
+```bash
+venv/bin/pip install -r requirements-dev.txt
+venv/bin/python -m playwright install chromium   # once, for the browser tests
+venv/bin/python -m pytest -q
+```
+
+- `test_summit.py`: engine and API tests.
+- `test_e2e.py`: click-through tests. They start the real server with logins enforced and drive a headless browser as phones, the facilitator and the projector, covering trading, motions and voting, the quiz, the wiki, roster changes, saves, the debrief and the report. They are skipped if Playwright isn't installed.
+
+## 🗂️ Front-end files
+
+| File | Used by |
+| :--- | :--- |
+| `static/js/common.js` | every page (sounds, toasts, escaping, keep-screen-awake) |
+| `static/js/realm.js` | phone console |
+| `static/js/admin.js` | facilitator command deck |
+| `static/js/projector.js` | projector screen |
+| `static/js/map.js` | projector's animated map (Living Atlas) |
+| `static/style.css` | all pages; the header comment explains its sections |

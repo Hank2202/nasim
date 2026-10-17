@@ -926,5 +926,55 @@
         "stability": -15
       }
     }
+  ],
+  "reflection_questions": [
+    {
+      "text": "How are you feeling right now? What happened during the game?",
+      "context": "verdict"
+    },
+    {
+      "text": "What was the biggest challenge for your country?",
+      "context": null
+    },
+    {
+      "text": "What mattered most to you – your public mission, your personal secret mission, or your country’s survival?",
+      "context": "missions"
+    },
+    {
+      "text": "How did cooperation within your delegation work? Did you all have the same priorities?",
+      "context": null
+    },
+    {
+      "text": "When did you trust or distrust other countries, and why?",
+      "context": null
+    },
+    {
+      "text": "Who do you think had the most power in the game? Why?",
+      "context": "power"
+    },
+    {
+      "text": "Did you feel the game was fair? Why or why not?",
+      "context": null
+    },
+    {
+      "text": "How did the different delegation sizes affect the game? What was it like to have four people in one country and only one in another?",
+      "context": "sizes"
+    },
+    {
+      "text": "Did your behaviour change as resources became scarcer? If so, how?",
+      "context": null
+    },
+    {
+      "text": "Who actually “won” the game – a country that achieved its missions, or the continent if it managed to overcome the crisis?",
+      "context": "winners"
+    },
+    {
+      "text": "Can you see any parallels between what happened in the game and situations in the real world or in groups and organisations you are part of?",
+      "context": null
+    },
+    {
+      "text": "What can you take away from this experience for the way you cooperate with others?",
+      "context": null
+    }
   ]
 }
