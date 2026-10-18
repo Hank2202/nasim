@@ -83,7 +83,7 @@
       </div>
       <div class="scroll secret agenda-card">
         <button type="button" id="toggle-agenda-btn" class="agenda-toggle-btn">
-          <span>&#x1F512; Secret directives ({{ (realm.active_secret_missions or [])|length }})</span>
+          <span id="secret-count-label">&#x1F512; Secret directives ({{ (realm.active_secret_missions or [])|length }})</span>
           <span class="toggle-indicator">&#9660;</span>
         </button>
         <div id="agenda-content" class="agenda-content">

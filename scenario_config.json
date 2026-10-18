@@ -9,7 +9,8 @@
         "4. LORE & QUIZ: lore articles live in lore_articles.json (Spireopedia, /wiki); the shared quiz question bank lives in lore_quiz.json (same questions for every nation, unlocked by turn).",
         "5. GAME SETTINGS: 'game_settings_defaults' are the defaults for the facilitator's setup screen (/admin/setup): scenario, difficulty, timers, automatic phase changes and random events. Changes made on the setup screen are stored per game. Each scenario in 'scenarios' can carry 'suggested' values that the setup screen fills in when the scenario is chosen, and 'famine_storyline' switches the scripted Round 2 border incident and Round 3 famine on.",
         "6. EVENTS: 'minor_events' are the small random news items during working sessions. Each effect moves a resource by a random amount between 0 and (weight x the largest change set on the setup screen), at least 1. 'catastrophes_catalog' holds the large disasters: they strike at random only when 'large disasters per turn' is above 0 (the Armageddon scenario), otherwise only by hand from the admin page. 'events_catalog' is triggered by hand only.",
-        "7. QUIZ: a wrong answer costs the same resource and amount that a correct answer would have earned."
+        "7. QUIZ: a wrong answer costs the same resource and amount that a correct answer would have earned.",
+        "8. FEWER NATIONS: a secret mission with 'requires' needs those nations at the table. When one is missing, the mission's 'stand_in' version is used instead (same idea, no reference to the absent nation); without a stand_in the mission is skipped. Public-mission targets (Val-Khor's Cores, Solaris' broad support, Aquila's network) scale with the number of nations playing."
       ]
     }
   },
@@ -63,15 +64,15 @@
     {
       "id": "cordon",
       "name": "Frontier Defense & Quarantine Cordon",
-      "summary": "Militarizes frontier checkpoints along borders to insulate against refugee surges and civil unrest.",
+      "summary": "Fortifies a nation's frontier checkpoints against refugee surges, plague and unrest.",
       "effect_badge": "BORDER QUARANTINE",
-      "statutory_effect": "Targeted realm's borders are quarantined (is_quarantined = true) and gain +10 Stability.",
+      "statutory_effect": "Targeted realm gains +10 Stability and the cordon flag (disaster damage from plague, border surge and tsunami reduced by 50–70%).",
       "player_selectable": true,
       "icon": "🛡️",
       "needs_target": true,
       "target_label": "Nation whose borders are guarded",
       "default_title": "Frontier Watch Covenant",
-      "effect_plain": "The chosen nation is quarantined (its borders sealed against trade with outsiders) and gains 10 Stability.",
+      "effect_plain": "The chosen nation gains 10 Stability, and plagues, border surges and tsunamis hit it far less hard from then on. Trade is not affected.",
       "default_terms": "To keep unrest from spreading, the borders of the named nation shall be guarded and its frontier checkpoints reinforced until the crisis passes."
     },
     {
@@ -170,7 +171,16 @@
           "id": "sylvan_defense",
           "title": "Independent Defense",
           "narrative": "Intelligence reports suggest that growing food shortages could eventually lead to military pressure on Sylvan. The government refuses to become dependent on Aethelgard for its security.",
-          "objective": "SECRET OBJECTIVE: Finish with at least 40 Military and do not purchase Military from Aethelgard."
+          "objective": "SECRET OBJECTIVE: Finish with at least 40 Military and do not purchase Military from Aethelgard.",
+          "requires": [
+            "aethelgard"
+          ],
+          "stand_in": {
+            "id": "sylvan_defense_home",
+            "title": "Independent Defense",
+            "narrative": "Intelligence reports suggest that growing food shortages could eventually lead to military pressure on Sylvan. The government refuses to depend on any foreign army for its security.",
+            "objective": "SECRET OBJECTIVE: Finish with at least 40 Military and do not buy Military from any other nation."
+          }
         }
       ],
       "alchemical_grain": 100,
@@ -231,7 +241,16 @@
           "id": "valkhor_contain_military",
           "title": "Strategic Parity",
           "narrative": "Military intelligence is increasingly concerned about Aethelgard's growing armed forces. A major military imbalance would leave Val-Khor vulnerable to political pressure.",
-          "objective": "SECRET OBJECTIVE: Aethelgard must not finish more than 10 Military ahead of Val-Khor."
+          "objective": "SECRET OBJECTIVE: Aethelgard must not finish more than 10 Military ahead of Val-Khor.",
+          "requires": [
+            "aethelgard"
+          ],
+          "stand_in": {
+            "id": "valkhor_parity",
+            "title": "Strategic Parity",
+            "narrative": "Military intelligence is increasingly concerned about the armies growing around Val-Khor. A major military imbalance would leave Val-Khor vulnerable to political pressure.",
+            "objective": "SECRET OBJECTIVE: No nation may finish more than 10 Military ahead of Val-Khor."
+          }
         }
       ],
       "alchemical_grain": 30,
@@ -291,7 +310,16 @@
           "id": "solaris_contain_valkhor",
           "title": "Check Industrial Rivals",
           "narrative": "Intelligence services warn that Val-Khor's combination of industrial and military power could eventually challenge the continental order. It must not dominate both sectors simultaneously.",
-          "objective": "SECRET OBJECTIVE: Val-Khor must not finish with both the highest Cores and the highest Military."
+          "objective": "SECRET OBJECTIVE: Val-Khor must not finish with both the highest Cores and the highest Military.",
+          "requires": [
+            "val_khor"
+          ],
+          "stand_in": {
+            "id": "solaris_contain_rivals",
+            "title": "Check Rival Powers",
+            "narrative": "Intelligence services warn that a nation combining industrial and military power could eventually challenge the continental order. No rival may dominate both sectors at once.",
+            "objective": "SECRET OBJECTIVE: No other nation may finish with both the highest Cores and the highest Military."
+          }
         },
         {
           "id": "solaris_silk",
@@ -346,7 +374,10 @@
           "id": "umbra_challenge",
           "title": "Break the Hegemon",
           "narrative": "Umbra has watched Solaris shape the continental order for decades while smaller nations were expected to follow. Your government believes that a stable continent requires proof that Solaris can be challenged. However, Umbra cannot afford to become internationally isolated in the process.",
-          "objective": "SECRET OBJECTIVE: At least one resolution supported by Solaris must fail, while Umbra must finish with at least 50 Standing."
+          "objective": "SECRET OBJECTIVE: At least one resolution supported by Solaris must fail, while Umbra must finish with at least 50 Standing.",
+          "requires": [
+            "solaria"
+          ]
         },
         {
           "id": "umbra_autonomy",
@@ -460,7 +491,16 @@
           "id": "aethelgard_contain_valkhor",
           "title": "Contain Industrial Rearmament",
           "narrative": "Intelligence reports indicate that Val-Khor is rapidly expanding its military-industrial capacity. If left unchecked, it could become the first genuine strategic threat to Aethelgard in decades.",
-          "objective": "SECRET OBJECTIVE: Val-Khor must finish with no more than 75 Military."
+          "objective": "SECRET OBJECTIVE: Val-Khor must finish with no more than 75 Military.",
+          "requires": [
+            "val_khor"
+          ],
+          "stand_in": {
+            "id": "aethelgard_contain_rivals",
+            "title": "Contain Rearmament",
+            "narrative": "Intelligence reports indicate that Aethelgard's neighbours are expanding their armies. If left unchecked, one of them could become the first genuine strategic threat to Aethelgard in decades.",
+            "objective": "SECRET OBJECTIVE: No other nation may finish with more than 60 Military."
+          }
         },
         {
           "id": "aethelgard_reserves",
@@ -503,7 +543,7 @@
     {
       "type": "system",
       "headline": "THE SUMMIT OF REALMS CONVENES",
-      "detail": "Delegates have assembled at the Spire of Accords for Turn 1 (20-minute working session)."
+      "detail": "Delegates have assembled at the Spire of Accords for Turn 1 ({working_minutes}-minute working session)."
     }
   ],
   "world_lore": {
@@ -512,7 +552,7 @@
     "resources": {
       "alchemical_grain": "Food & Lifeblood. Every turn, populations consume 20 grain (15 if Technological Efficiency is unlocked). Silos running empty triggers Famine Emergencies (-25 Vitality, -20 Stability).",
       "aether_cores": "Power & Technology. High-density energy matrices that power cities. Reaching 75+ Cores unlocks Technological Efficiency, cutting grain consumption by 25%.",
-      "echo_silk": "Luxury & Diplomacy. Precious gossamer thread prized by international courts. Used to fund Grand Galas, prevent Complacency Slumps, and sway swing votes."
+      "echo_silk": "Luxury & Diplomacy. Precious gossamer thread prized by international courts. Used to fund Grand Galas and sway swing votes."
     }
   },
   "catastrophes_catalog": [

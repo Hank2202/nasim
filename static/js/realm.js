@@ -157,6 +157,12 @@ class RealmApp {
   }
 
   renderState(state) {
+    // A new game started (or the server restarted): this login belonged to the old one, so start over.
+    const gameId = state.meta && state.meta.game_id;
+    if (gameId) {
+      if (this.gameId && this.gameId !== gameId) { window.location.reload(); return; }
+      this.gameId = gameId;
+    }
     const { meta, realms, trades, proposals, news_feed } = state;
     const realm = realms.find(r => r.id === this.realmId);
     this._lastRealms = realms;
@@ -220,6 +226,9 @@ class RealmApp {
       if (realm.is_plutocrat) voteText += ` · richest nation (+1)`;
       votesBadge.innerText = voteText;
     }
+
+    // Missions follow the roster: targets and stand-in missions change when nations join or leave
+    this.renderMissions(realm);
 
     // Flags
     this.renderFlags(realm);
@@ -302,6 +311,25 @@ class RealmApp {
     document.getElementById('trade-receiver').value = realmId;
     this._partnerKey = null;
     this.renderTradePartners(this._lastRealms || []);
+  }
+
+  renderMissions(realm) {
+    const secrets = realm.active_secret_missions;
+    if (!realm.public_mission || !secrets) return;
+    const key = JSON.stringify([realm.public_mission, secrets]);
+    if (key === this._missionKey) return;
+    this._missionKey = key;
+    const esc = escapeHtml;
+    this._setVal('realm-public-title', realm.public_mission.title || '');
+    this._setVal('realm-public-desc', realm.public_mission.description || '');
+    this._setVal('secret-count-label', `🔒 Secret directives (${secrets.length})`);
+    const list = document.getElementById('secret-missions-list');
+    if (list) list.innerHTML = secrets.map((sm, i) => `
+      <div class="secret-item">
+        <strong>${i + 1}. ${esc(sm.title)}</strong>
+        ${sm.narrative ? `<p>${esc(sm.narrative)}</p>` : ''}
+        <div class="secret-goal">${esc(sm.objective)}</div>
+      </div>`).join('');
   }
 
   renderMotionNationOptions(realms) {
@@ -443,7 +471,7 @@ class RealmApp {
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
           <span class="badge" style="background:var(--text-primary); color:var(--bg-surface); font-weight:800;">SUMMIT CONCLUDED</span>
           <span class="badge" style="font-size:0.75rem; background:${verdictColor}; color:#fff; font-weight:800;">
-            ${myEval.success_ratio || ''} MANDATES (${myEval.score} PTS)
+            ${myEval.success_ratio || ''} MANDATES (${myEval.score}%)
           </span>
         </div>
 
@@ -759,10 +787,9 @@ class RealmApp {
 
     let html = '';
     if (realm.is_starving) html += `<span class="flag bad">🥀 Starving</span>`;
-    if (realm.complacency_warning) html += `<span class="flag warn">😴 Complacency risk: spend Silk on a Gala</span>`;
     if (realm.is_plutocrat) html += `<span class="flag good">👑 Richest nation: +1 vote</span>`;
     if (realm.tech_efficiency_unlocked) html += `<span class="flag good">✨ Efficient: eats 25% less Grain</span>`;
-    if (realm.is_quarantined) html += `<span class="flag bad">🚧 Borders sealed</span>`;
+    if (realm.is_quarantined) html += `<span class="flag good">🛡️ Cordon: shielded from plague & surges</span>`;
     if (realm.is_striking) html += `<span class="flag bad">✊ Workers on strike</span>`;
 
     container.innerHTML = html;

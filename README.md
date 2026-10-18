@@ -14,7 +14,7 @@ A lightweight, real-time web application built for live educational simulations.
   - Dynamic Plenary Floor mode: when a Flash Assembly is active, it transforms into a full-screen roll-call visualizer with real-time weighted voting bars.
 - **Comprehensive Game Overview & Guide (`/overview`)**:
   - Detailed simulation primer explaining the 6 sovereign nations, starting endowments, and geography.
-  - Socioeconomic formulas and mathematical laws cheat sheet (starvation thresholds, technological efficiency, plutocratic drift, complacency paradox).
+  - Socioeconomic formulas and mathematical laws cheat sheet (starvation thresholds, technological efficiency, the wealthiest nation's bonus vote).
   - Parliamentary statutory resolution dockets, domestic governance levers, the Spireopedia quiz, and room setup guide.
 - **Mobile Participant Cockpit (`/realm/<id>`)**:
   - **Persistent Bottom Navigation Bar**: Six tabs: **Realm** (stats, decrees, secret directives), **World** (news + continental registry), **Trade**, **Motions**, **Wiki** (Spireopedia, reading only) and **Quiz** (questions, answering only).
@@ -34,12 +34,10 @@ A lightweight, real-time web application built for live educational simulations.
   - Clean real-time telemetry grid with inline `+` / `-` override controls (no raw IDs!).
   - Flash Assembly manager with override controls (Force Pass, Force Fail, Extend +30s, Dismiss).
 - **Hidden Socioeconomic Engine**:
-  - **Per-Turn Consumption**: -20 baseline Alchemical Grain per operational turn.
+  - **Per-Turn Consumption**: 20 Grain per turn at Standard difficulty (15 Gentle, 25 Harsh).
   - **The Starvation Threshold**: If Grain drops to $\le 0$, automatic penalty of -25 Public Vitality and -20 Civil Stability.
-  - **The Complacency Paradox**: If Civil Stability $\ge 85$ and Public Vitality $\ge 85$, domestic output slumps by 10% each turn unless luxury Echo Silk is expended.
   - **Technological Efficiency**: If Aether Cores $\ge 75$, permanently cuts grain consumption by 25% (-15 instead of -20).
-  - **Plutocratic Drift**: The realm with highest total tangible wealth gains +1 bonus Assembly Vote, but suffers -5 Civil Stability per turn due to domestic inequality.
-  - **Dynamic Voting Weights**: Derived from Diplomatic Standing ($\ge 80 \to 3$ votes, $45\text{--}79 \to 2$ votes, $< 45 \to 1$ vote) plus Plutocratic Drift.
+  - **Voting weights**: fixed per nation as in the facilitator notes (Solaris 3, Umbra 1, the others 2), plus +1 for the single wealthiest nation (Grain + Cores + Silk) while it stays the wealthiest.
 - **State Persistence**: Uses SQLite (`summit.db`) so server restarts or laptop battery sleeps never wipe simulation progress.
 
 ---
@@ -78,8 +76,6 @@ Values follow the facilitator notes (`MGV 2026 školení s Johanem.md`) and live
   - Baseline: **-20 Grain** consumed every operational turn.
   - With **Technological Efficiency** (Cores $\ge 75$): Grain consumption drops permanently by 25% to **-15 Grain**.
   - **Starvation Penalty**: If Grain drops to $\le 0 \implies$ immediate penalty of **-25 Vitality** and **-20 Stability**.
-- **Plutocratic Drift**: The wealthiest realm gains +1 Assembly Vote, but suffers **-5 Stability per turn** due to domestic inequality.
-- **Complacency Paradox**: If both Vitality $\ge 85$ and Stability $\ge 85 \implies$ **-10% domestic output slump** unless luxury Echo Silk is expended (via Grand Gala).
 
 ---
 
@@ -113,7 +109,7 @@ Values follow the facilitator notes (`MGV 2026 školení s Johanem.md`) and live
 - **Emergency Grain Redistribution**: Silos with $>50$ Grain contribute $-10$ Grain; starving realms ($<25$ Grain) receive $+15$ Grain.
 - **Continental Wealth Surtax & Embargo**: Chokes trade for the wealthiest plutocrat, inflicting $-15$ Civil Stability.
 - **Sovereign Relief Mission**: Sponsoring realm gains $+10$ Diplomatic Standing for international leadership.
-- **Frontier Defense & Quarantine Cordon**: Quarantines borders of target realm (blocking external trade) and grants $+10$ Stability.
+- **Frontier Defense & Quarantine Cordon**: the target nation gains $+10$ Stability, and plague, border-surge and tsunami disasters hit it 50–70 % less hard. Trade is not affected.
 - **General Sovereign Concordat**: Multilateral treaty providing $+5$ Standing and $+5$ Stability.
 
 ---
@@ -195,9 +191,9 @@ The repo ships a `render.yaml` blueprint; participants join by scanning the QR c
 
 Notes:
 - Free instances **sleep after ~15 min idle** (first load takes 30–60 s): open the site 5 minutes before class.
-- State lives in `/tmp/summit.db` (ephemeral): a restart/redeploy resets the game. Don't redeploy mid-session.
+- State lives in `/tmp/summit.db` (ephemeral), and every server start begins a fresh game anyway (see below). Don't redeploy mid-session.
 - Runs as a single gunicorn worker on purpose (timers + SQLite state are per-process).
-- Local run is unchanged: `./run.sh`. Env vars: `SECRET_KEY`, `ADMIN_PASSCODE`, `SUMMIT_DB_PATH`, `PUBLIC_URL` (override QR/base URL).
+- Local run is unchanged: `./run.sh`. Env vars: `SECRET_KEY`, `ADMIN_PASSCODE`, `SUMMIT_DB_PATH`, `PUBLIC_URL` (override QR/base URL), `FRESH_START=0` (keep the game across restarts).
 - Realm PINs (`scenario_config.json`) are visible to the facilitator in `/admin`; keep the repo private.
 
 ## 📖 Spireopedia & Quiz
@@ -218,6 +214,15 @@ Players propose motions from **templates** (`resolution_types` in `scenario_conf
 
 Decided motions show how each nation voted (votes and nation count). Continental Food Acts A/B are facilitator-only (`player_selectable: false`) and are tabled automatically in Round 3.
 
+## 👥 Fewer than six nations
+
+Untick a nation on the setup screen and the game adapts:
+
+- **Mission targets scale** with the number of nations playing (`engine.scaled_targets`): Val-Khor's "4 of 6 nations reach 60 Cores" and Solaris' "resolutions backed by 4 nations" become 3 of 5; Aquila's "trade with 4 of the other 5" becomes 3 of 4. With six nations the numbers are exactly the facilitator notes'.
+- **Every delegate keeps a secret mission.** A mission about a nation that is not playing switches to a stand-in version (`stand_in` in `scenario_config.json`): without Aethelgard, Sylvan's "Independent Defense" becomes "don't buy Military from anyone" and Val-Khor's parity mission is measured against the strongest army; without Val-Khor, Solaris and Aethelgard check any rival instead. Without Solaris, Umbra plays "Sovereign Independence". The setup screen shows each nation's number of secret missions.
+- **Which nation to leave out:** Umbra (1 delegate) or Aquila (2) change the least: no other nation's missions depend on them. Without Sylvan food is tighter (46 Grain per nation at the start instead of 55). `venv/bin/python tools/simulate.py --rosters` plays every 5-nation roster: with cooperative play all of them end stable as often as the full game.
+- Food Act B's quota scales too (10 Cores × (nations − 1)).
+
 ## ⚙️ Setting up a summit (`/admin/setup`)
 
 Logging in before a game has started opens this page first; afterwards the **Setup** banner at the top of the command deck (and the header link) leads back to it. The facilitator login lasts 24 hours in that browser; **Lock** logs out. The page covers everything decided before the session:
@@ -234,6 +239,9 @@ Logging in before a game has started opens this page first; afterwards the **Set
 
 ## 🧭 Running a session: saves, debrief and results
 
+- **Every server start is a fresh game** straight from `scenario_config.json` (settings, roster, delegates and passcodes), so config changes always take effect and the facilitator lands on the setup screen. A game that was under way is kept on the Saves tab as "Before server restart" (restore it if the restart was an accident). Set `FRESH_START=0` to keep the game across restarts instead. For gunicorn (Render) this runs once at server start from `gunicorn.conf.py`, never when a worker restarts.
+- **Logins belong to one game:** a new game (server start, Reset, or "Start a new summit") logs every phone out; open phones return to the passcode screen by themselves. The facilitator login is kept.
+- **No stale files:** pages and scripts are sent with `Cache-Control: no-cache` (the browser checks for a newer version every time) and game state with `no-store`.
 - **Autosave:** every 5 minutes, on the server and in the facilitator's browser (admin → **Saves**). After a server restart, restore the newest copy from "In this browser". **Save now**, **Download save file** and **Load save file** are there too.
 - **Reflection debrief:** after concluding the summit, press **Start reflection** on the admin page. The projector shows the 12 reflection questions one at a time (`reflection_questions` in `scenario_config.json`), several with results from the game beside them. **Next question** and **Previous** step through them.
 - **Results report:** admin → **Results report** (or **Download results** after the summit) opens a printable page with the outcome, final stats, missions, every trade, every motion and vote, and the full timeline. You can print it, save it as a PDF, or download it as HTML or JSON.

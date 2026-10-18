@@ -19,7 +19,7 @@ import time
 import uuid
 from typing import Dict, Any
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, Response, make_response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, Response, make_response, g
 from itsdangerous import URLSafeSerializer, BadSignature
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -60,8 +60,17 @@ def _cookie_role(name: str):
 def is_admin() -> bool:
     return _cookie_role("auth_admin") == "admin"
 
+def _game_id() -> str:
+    """Logins belong to one game: a new game (or a server restart, which starts one) logs phones out."""
+    if "summit_game_id" not in g:
+        g.summit_game_id = (engine.db.get_state("meta", {}) or {}).get("game_id", "")
+    return g.summit_game_id
+
+def _realm_role(realm_id: str) -> str:
+    return f"realm:{realm_id}:{_game_id()}"
+
 def is_realm_authed(realm_id: str) -> bool:
-    return bool(realm_id) and _cookie_role(f"auth_{realm_id}") == f"realm:{realm_id}"
+    return bool(realm_id) and _cookie_role(f"auth_{realm_id}") == _realm_role(realm_id)
 
 def _auth_param_allowed() -> bool:
     # ?auth=1 shortcut exists only for automated tests / explicit local debugging.
@@ -96,6 +105,16 @@ def acquire_state_lock():
     if not (request.path.startswith("/static/") or request.path.startswith("/api/wiki") or request.path == "/healthz"):
         _state_lock.acquire()
         request.environ["summit.locked"] = True
+
+@app.after_request
+def no_stale_copies(resp):
+    """Browsers must check for a newer version every time, so a restart or redeploy is seen at once
+    (unchanged files still come back as a cheap 304), and game state is never cached at all."""
+    if request.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-store"
+    elif request.path.startswith("/static/") or resp.mimetype == "text/html":
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 @app.teardown_request
 def release_state_lock(_exc=None):
@@ -223,7 +242,10 @@ def realm_view(realm_id: str):
     # Verify delegation auth cookie (or allow override via query param ?auth=1)
     has_auth_param = request.args.get("auth") == "1" and _auth_param_allowed()
     if not is_realm_authed(realm_id) and not has_auth_param:
-        return redirect(f"/?login={realm_id}")
+        # Forget the "already logged in" marker too, so the lobby asks for the passcode again.
+        resp = redirect(f"/?login={realm_id}")
+        resp.delete_cookie(f"has_auth_{realm_id}")
+        return resp
 
     session_id = request.cookies.get("summit_session_id")
     if not session_id:
@@ -319,11 +341,7 @@ def api_wiki_article(slug: str):
     return jsonify({"success": True, "article": article})
 
 def game_in_progress() -> bool:
-    """True once play has begun (clock started, a trade or motion made, or past Turn 1)."""
-    meta = engine.db.get_state("meta", {}) or {}
-    return bool(meta.get("current_turn", 1) > 1 or meta.get("is_timer_running")
-                or meta.get("turn_timer_remaining") != meta.get("turn_timer_total")
-                or engine.db.get_state("trades", []) or engine.db.get_state("proposals", []))
+    return engine.game_in_progress()
 
 @app.route("/admin/setup")
 def admin_setup():
@@ -423,7 +441,7 @@ def api_auth_realm():
     if engine.verify_realm_pin(realm_id, pin):
         engine.register_realm_session(realm_id, session_id)
         resp = make_response(jsonify({"success": True, "message": "Authentication successful."}))
-        _set_auth_cookie(resp, f"auth_{realm_id}", f"realm:{realm_id}")
+        _set_auth_cookie(resp, f"auth_{realm_id}", _realm_role(realm_id))
         # Non-secret marker so the lobby page JS can tell this device already logged in.
         resp.set_cookie(f"has_auth_{realm_id}", "1", max_age=86400, samesite="Lax", secure=IS_HOSTED)
         resp.set_cookie("summit_session_id", session_id, max_age=86400, httponly=False, samesite="Lax", secure=IS_HOSTED)
@@ -908,5 +926,9 @@ if __name__ == "__main__":
     print(f"  * Projector View: http://{lan_ip}:{port}/projector")
     print(f"  * Local Loopback: http://127.0.0.1:{port}")
     print("=" * 65)
+    if os.environ.get("FRESH_START", "1") != "0":
+        engine.fresh_start()
+        print("  * Fresh game from scenario_config.json (the previous one is on the Saves tab).")
+        print("    Set FRESH_START=0 to keep the game across restarts.")
 
     app.run(host="0.0.0.0", port=port, debug=False)

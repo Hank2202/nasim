@@ -72,7 +72,7 @@
   {% if r.outcome %}
     {% for e in r.outcome.realm_evaluations %}
     <div class="nation">
-      <h3>{{ loop.index }}. {{ e.name }} <span class="pill">{{ e.success_ratio }} missions · {{ e.score }} pts</span></h3>
+      <h3>{{ loop.index }}. {{ e.name }} <span class="pill">{{ e.success_ratio }} missions · {{ e.score }}%</span></h3>
       {% if e.public_mission_eval %}
       <div><span class="{{ 'ok' if e.public_mission_eval.achieved else 'bad' }}">{{ '✓' if e.public_mission_eval.achieved else '✗' }}</span>
         Public: <b>{{ e.public_mission_eval.title }}</b> — {{ e.public_mission_eval.explanation }}</div>

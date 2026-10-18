@@ -1,6 +1,6 @@
 # Summit of Realms — Status & Review Notes
 
-Last updated 2026-10-17. Run tests with `venv/bin/python -m pytest -q` (86 passing: 77 unit/API + 9 end-to-end).
+Last updated 2026-10-18. Run tests with `venv/bin/python -m pytest -q` (102 passing: 93 unit/API + 9 end-to-end).
 
 ## Decisions from the user
 - Host on the easiest free option: **Render** (`render.yaml`). Players join by scanning a QR code.
@@ -221,4 +221,34 @@ Last updated 2026-10-17. Run tests with `venv/bin/python -m pytest -q` (86 passi
 - `gm_question` lost `no_vote`: it is drafted, co-sponsored and voted like any motion (`_apply_proposal_effect` just returns a note). `answer_question(id, answer)` works only on passed questions and always publishes a "THE GAME MASTERS ANSWER" news item; the answer is stored on the proposal and shown on the decided motion card. `conclude_summit` leaves questions out of the passed/failed lists, so they cannot be used to farm Solaris' "3 resolutions" mission. The private-question card on phones and the private/public choice on admin are gone.
 - `draft_proposal` refuses a nation's motion once it has tabled `motions_per_turn` (default 2, 1–10, on the setup screen) in the current turn. Phones show "You can table N more" and disable the templates at 0.
 - Phone motion form: hint box, "edit me" tags and dashed fields make clear the template wording is only an example; template buttons say "Start from this".
+
+## Update 2026-10-18: review for fewer nations and gameplay gotchas
+**Fewer nations**
+- `scaled_targets(n)` in `engine.py` is the single place for mission targets written for six nations (Val-Khor's Cores, Solaris' broad support, Aquila's network and partners). Mission texts and the end-of-game check both use it. Changed at five nations: Solaris needs 3 nations per resolution (was 4 of 5), Aquila's network needs 3 of 4 (was all 4). Six-nation values are unchanged.
+- Secret missions with `requires` in `scenario_config.json` switch to their `stand_in` when the nation they are about is absent: `sylvan_defense_home`, `valkhor_parity`, `solaris_contain_rivals`, `aethelgard_contain_rivals` (evaluated in `conclude_summit`). Before, these missions were dropped, leaving delegates without a mission (e.g. without Aethelgard, Sylvan had 1 mission for 2 delegates and Val-Khor 2 for 3).
+- Phones re-render the public and secret missions when they change (`renderMissions` in `realm.js`); they used to be fixed at page load. The setup page shows each nation's number of secret missions and advises which nation to leave out.
+- `tools/simulate.py --rosters` plays every 5-nation roster. With cooperative play all rosters ended stable in all games (30 per row, good and weak quiz). Missions met least often are the designed conflicts (`aethelgard_superiority` vs `valkhor_contain_military`) and tension missions.
+
+**Bugs fixed**
+- A nation whose Stability hit 0 at the end of a turn was forgotten: the flag was written to `meta` inside `_recalculate_all_realms`, and `process_end_of_turn` then saved its older copy of `meta` over it. The flag now lives on the realm (`stability_hit_zero`), which callers save with their changes.
+- Food Act A destroyed the surplus above 50 Grain when no nation was below 20. Now nothing changes in that case.
+- The admin's Round 1/2/3 buttons applied effects on top of the automatic ones: pressing "Round 3" in Turn 3 took another 15 Grain from everyone, and "Round 2" left the grain transit loss on in later turns. In scenarios with the famine storyline the buttons now only repeat the announcement; in the Open summit they apply Round 2 rules for the current turn (`meta.round2_rules_turn`) and the famine once (`meta.famine_applied`, shared `_apply_great_famine`).
+- After the summit concluded, phones could still trade, answer the quiz and table motions (changing numbers after the results). Blocked (`_summit_over`). Motions and co-sponsoring are now only possible during the working session, since the Assembly docket is fixed once the vote starts.
+- `create_trade` did not validate the requested resource (accepting such an offer crashed); accepting an offer from a nation that has left is refused.
+- Trade offers and their private notes were broadcast to everyone in the news, with amounts. Now offers are private and the news only says which two nations traded (the doc: nations learn about each other from people, not the screen).
+- Hard-coded texts: "5-minute debate", "-20 Grain awaits", "20-minute working session" now follow the settings.
+- The Guide, README and phones described rules the engine never had: the "Complacency Paradox" output slump (phones even showed a warning), a −5 Stability per turn for the wealthiest nation, and a cordon that "blocks foreign trade". Texts now describe what the engine does (cordon: +10 Stability and less damage from plague, border surge and tsunami).
+- Ranking: `score` is now the percentage of the nation's missions met (ties: public mission, then count). It used to be 100 points per mission plus all stats, which ranked big delegations (more secret missions) and rich nations higher by construction.
+
+**Open design questions for the user** (not changed)
+- The doc's reflection questions speak of each delegate's *personal* secret mission; phones show all of a nation's secret missions to every delegate.
+- The +1 vote for the wealthiest nation is not in the doc: Aquila (Grain + Cores + Silk = 170) starts with 3 votes instead of the doc's 2.
+- Vitality counts for nothing at the end, so the Relief decree (−15 Grain → +15 Vitality) is a trap during a famine.
+- Technological Efficiency (Val-Khor eats 15 instead of 20 from the start) is not in the doc.
+
+## Update 2026-10-18: fresh game on every server start
+- `engine.fresh_start()` (autosave "Before server restart" if a game was under way → clear `settings` → `reset_simulation`) runs at every server start: from `app.py`'s `__main__` (run.sh) and from `gunicorn.conf.py`'s `on_starting` hook (master process, once per start; gunicorn loads that file automatically). `FRESH_START=0` turns it off.
+- `meta.game_id` is new for every game. Nation login cookies are signed as `realm:<id>:<game_id>`, so any new game (restart, Reset, new summit) logs phones out; `realm.js` reloads when it sees a different `game_id`, and the realm page clears the lobby's `has_auth_*` marker when it bounces a stale login. `reset_simulation` also frees all seats. The admin cookie is unchanged.
+- `after_request`: `Cache-Control: no-cache` for pages and `/static/`, `no-store` for `/api/`.
+- `game_in_progress()` moved into the engine.
 

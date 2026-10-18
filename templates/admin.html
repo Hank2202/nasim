@@ -132,11 +132,11 @@
         <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 12px; border-radius: var(--radius-sm); margin: 12px 0; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
           <strong>End-of-Turn Routine Executes:</strong>
           <ul style="padding-left: 18px; margin-top: 6px;">
-            <li>Deducts baseline grain (-20 Grain default, -15 with Efficiency).</li>
+            <li>Deducts grain (20 at Standard difficulty, a quarter less with Technological Efficiency).</li>
             <li>Enforces Starvation penalties if grain ≤ 0 (-25 Vitality, -20 Stability).</li>
-            <li>Enforces Complacency penalties if stability & vitality ≥ 85 without 10 Silk.</li>
-            <li>Calculates Plutocratic Drift (+1 bonus vote, -5 Stability).</li>
-            <li>Resets working session timer to 5:00.</li>
+            <li>Applies the scenario's round rules (Turn 2 border incident, Turn 3 famine).</li>
+            <li>Gives the single wealthiest nation +1 vote.</li>
+            <li>Resets the working session clock (length set on the setup screen).</li>
           </ul>
         </div>
 
@@ -157,7 +157,9 @@
         <div class="card" style="border: 2px solid var(--border-white);">
           <div class="card-title">Official MGV 2026 Scripted Crises</div>
           <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
-            One-click triggers for official round-specific scenario broadcasts and rules:
+            In the Great Famine and Armageddon scenarios each round's effects arrive automatically when its turn begins:
+            these buttons only repeat the announcement (nothing is applied twice). In the Open summit they apply the effect
+            (Round 2 rules for the current turn; the Round 3 famine once).
           </p>
           <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
             <button class="btn btn-secondary btn-block" style="text-align: left; padding: 10px;" onclick="adminApp.triggerRoundCrisis(1)">

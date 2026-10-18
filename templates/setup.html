@@ -57,12 +57,12 @@
     <div class="row-between wrap">
       <div>
         <div class="card-title">3 · Nations at the table</div>
-        <p class="section-sub">Untick nations nobody will play. Delegates = seats on phones (and how many secret missions the nation gets).</p>
+        <p class="section-sub">Untick nations nobody will play. Delegates = seats on phones; each delegate brings one secret mission, as far as the nation has them.</p>
       </div>
       <button type="button" class="btn btn-secondary btn-sm" onclick="setup.shufflePins()">Shuffle passcodes</button>
     </div>
     <table class="table-deck setup-nations mt-2">
-      <tr><th>Plays</th><th>Nation</th><th>Delegates</th><th>Passcode</th></tr>
+      <tr><th>Plays</th><th>Nation</th><th>Delegates</th><th>Secret missions</th><th>Passcode</th></tr>
       {% for r in realms %}
       <tr data-realm="{{ r.id }}">
         <td><input type="checkbox" class="realm-active" {% if r.active != false %}checked{% endif %} onchange="setup.toggleRealm('{{ r.id }}', this)"></td>
@@ -74,11 +74,18 @@
             <button type="button" onclick="setup.delegates('{{ r.id }}', 1)">+</button>
           </div>
         </td>
+        <td class="realm-secrets">{{ (r.active_secret_missions or []) | length if r.active != false else '—' }}</td>
         <td><input type="text" class="form-input mono realm-pin" inputmode="numeric" maxlength="8" value="{{ r.pin }}" style="width: 110px;"
                    onchange="setup.setPin('{{ r.id }}', this)"></td>
       </tr>
       {% endfor %}
     </table>
+    <div class="callout neutral mt-2 small">
+      <b>Fewer players?</b> Leave out <b>Umbra</b> (1 delegate) or <b>Aquila</b> (2) first: no other nation's missions depend on them.
+      Without <b>Sylvan</b>, the continent's breadbasket, food is tighter (46 Grain per nation at the start instead of 55).
+      When <b>Aethelgard</b> or <b>Val-Khor</b> sits out, the secret missions about them switch to stand-in versions,
+      and mission targets (Val-Khor's Cores, Solaris' broad support, Aquila's network) scale to the number of nations.
+    </div>
   </section>
 
   <!-- 4. Clocks -->
@@ -160,12 +167,22 @@
     async toggleRealm(id, box) {
       const res = await this.post('/api/admin/realm/toggle', { realm_id: id, active: box.checked });
       if (!res.success) box.checked = !box.checked;
+      this.refreshMissionCounts();
+    },
+    async refreshMissionCounts() {
+      // Missions depend on who plays and how many delegates each nation has.
+      const state = await (await fetch('/api/state')).json();
+      for (const r of state.realms || []) {
+        const cell = document.querySelector(`tr[data-realm="${r.id}"] .realm-secrets`);
+        if (cell) cell.innerText = r.active === false ? '—' : (r.active_secret_missions || []).length;
+      }
     },
     async delegates(id, delta) {
       const input = document.querySelector(`tr[data-realm="${id}"] .realm-delegates`);
       const value = Math.max(1, Math.min(6, parseInt(input.value, 10) + delta));
       const res = await this.post('/api/admin/realm/player_count', { realm_id: id, player_count: value });
       if (res.success) input.value = value;
+      this.refreshMissionCounts();
     },
     async setPin(id, input) {
       const res = await this.post('/api/admin/pin/reset', { realm_id: id, pin: input.value.trim() });

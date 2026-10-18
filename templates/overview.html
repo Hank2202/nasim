@@ -167,7 +167,7 @@
             <span class="badge">ENGINE EXECUTION</span>
           </div>
           <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-            The engine deducts grain consumption (-20 or -15), executes starvation penalties if silos empty, evaluates the Complacency Paradox, awards the Plutocratic bonus vote, recalculates voting weights, and publishes continental news dispatches.
+            The engine deducts grain consumption (20 per turn at Standard difficulty, a quarter less with Technological Efficiency), executes starvation penalties if silos empty, awards the bonus vote to the wealthiest nation, and publishes continental news dispatches.
           </p>
         </div>
 
@@ -195,6 +195,11 @@
       <div class="card-title" style="margin-bottom: 10px;">Sovereign Delegations Roster</div>
       <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 18px;">
         Each nation commands distinct endowments, geographic terrain, and an underlying strategic challenge:
+      </p>
+      <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.55; margin: -8px 0 18px;">
+        <strong>Fewer than six nations?</strong> Mission targets written for six nations scale down (e.g. "4 of 6 nations" becomes
+        "3 of 5"), and a secret mission about a nation that is not playing is replaced by a stand-in version, so every delegate
+        still has one. Phones always show the current wording.
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
@@ -436,8 +441,7 @@
           <div class="rule-title">Technological Efficiency</div>
           <div class="rule-math">
             Threshold: Aether Cores &ge; 75<br>
-            Effect: Permanent -25% Grain Consumption<br>
-            Status: Broadcasted to Continental News Wire
+            Effect: Permanent -25% Grain Consumption
           </div>
           <p class="rule-desc">
             Industrializing with 75+ active aether matrices unlocks automation that permanently cuts food consumption from 20 to 15.
@@ -448,25 +452,13 @@
           <div class="rule-title">Plutocratic Drift</div>
           <div class="rule-math">
             Condition: Highest Tangible Wealth (Grain+Cores+Silk)<br>
-            Reward: +1 Assembly Vote<br>
-            Penalty: -5 Civil Stability per Turn
+            Reward: +1 Assembly Vote (only while it is the single wealthiest)
           </div>
           <p class="rule-desc">
-            The single wealthiest nation gains an extra vote from sheer financial clout, but domestic inequality erodes stability.
+            The single wealthiest nation gains an extra vote from sheer financial clout.
           </p>
         </div>
 
-        <div class="overview-rule-box">
-          <div class="rule-title">The Complacency Paradox</div>
-          <div class="rule-math">
-            Condition: Vitality &ge; 85 AND Stability &ge; 85<br>
-            Effect: -10% Domestic Output Slump<br>
-            Remedy: Expending Echo Silk (Hosting Grand Galas)
-          </div>
-          <p class="rule-desc">
-            When populations grow overly comfortable, productivity slumps unless luxury silk is expended to maintain social energy.
-          </p>
-        </div>
 
         <div class="overview-rule-box">
           <div class="rule-title">Qualitative Fog of War Tiers</div>
@@ -606,10 +598,10 @@
           <span class="badge" style="color: #ec4899; border-color: #ec4899;">BORDER QUARANTINE</span>
           <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Frontier Defense & Quarantine Cordon</h4>
           <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">
-            Militarizes frontier checkpoints to insulate against refugee surges or crisis.
+            Fortifies frontier checkpoints against refugee surges, plague and unrest.
           </p>
           <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
-            Targeted realm borders quarantined (blocks foreign trade) and gains +10 Stability.
+            Target gains +10 Stability; plague, border surges and tsunamis hit it far less hard. Trade is not affected.
           </div>
         </div>
       </div>
