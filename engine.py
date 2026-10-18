@@ -37,7 +37,8 @@ def load_events_catalog() -> List[Dict[str, Any]]:
     config = load_scenario_config()
     return config.get("events_catalog", [])
 
-# Secret missions that only make sense when another nation takes part in the summit.
+# Secret missions that only make sense when another nation takes part in the summit
+# (scenario_config.json marks them with "requires"; this is the fallback for older saves).
 MISSION_REQUIRES = {
     "sylvan_defense": ("aethelgard",),
     "valkhor_contain_military": ("aethelgard",),
@@ -45,6 +46,17 @@ MISSION_REQUIRES = {
     "umbra_challenge": ("solaria",),
     "aethelgard_contain_valkhor": ("val_khor",),
 }
+
+def scaled_targets(n: int) -> Dict[str, int]:
+    """Mission targets written for six nations, scaled to the number of nations playing (same values at six)."""
+    n = max(1, n)
+    return {
+        "modernised": max(2, min(n, round(4 * n / 6))),         # Val-Khor: 4 of 6 nations reach 60 Cores
+        "broad_support": max(2, min(n, round(4 * n / 6))),      # Solaris: resolutions backed by 4 of 6 nations
+        "network": max(1, min(n - 1, round(4 * (n - 1) / 5))),  # Aquila: trade with 4 of the other 5
+        "partners": max(1, min(2, n - 1)),                       # Aquila (public): everyone trades with 2 nations
+    }
+
 
 RESOURCE_FIELDS = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk",
                    "military": "military_power", "standing": "diplomatic_standing", "stability": "civil_stability"}
@@ -197,6 +209,8 @@ class SummitEngine:
         debate_secs = settings.get("debate_session_seconds", 300)
 
         meta = {
+            # A new id for every game: nation logins belong to one game, so a new game logs every phone out.
+            "game_id": uuid.uuid4().hex[:12],
             "current_turn": 1,
             "phase": "working",
             "round_type": "quick",
@@ -236,6 +250,8 @@ class SummitEngine:
         self.db.set_state("trades", [])
         self.db.set_state("trade_partners", {})     # who traded with whom (Aquila's missions)
         self.db.set_state("military_trades", [])    # military sales (Sylvan's independence mission)
+        if hasattr(self, "active_sessions"):
+            self.clear_realm_sessions()                # a new game: every seat is free again
         self.db.set_state("news_archive", [])       # full timeline for the results report
         self.db.set_state("proposals", [])
         self.db.set_state("active_assembly", None)
@@ -245,7 +261,7 @@ class SummitEngine:
             {
                 "type": "system",
                 "headline": "THE SUMMIT CONVENES",
-                "detail": "Delegates have assembled at the Neutral Spire. Turn 1 Working Session (5 Minutes) is officially underway."
+                "detail": "Delegates have assembled at the Neutral Spire. The Turn 1 working session is officially underway."
             }
         ]
 
@@ -257,9 +273,14 @@ class SummitEngine:
                 "time_str": "Turn 1 (T+00:00)",
                 "type": n.get("type", "system"),
                 "headline": n.get("headline", ""),
-                "detail": n.get("detail", "")
+                "detail": n.get("detail", "").replace("{working_minutes}", f"{settings.get('working_session_seconds', 1200) / 60:g}")
             })
         self.db.set_state("news_feed", initial_news)
+
+    @staticmethod
+    def _minutes(seconds: float) -> str:
+        m = seconds / 60
+        return f"{m:g} minute{'' if m == 1 else 's'}" if m >= 1 else f"{int(seconds)} seconds"
 
     def _format_now(self) -> str:
         meta = self.db.get_state("meta")
@@ -307,17 +328,16 @@ class SummitEngine:
         pub_desc = raw_pub.get("description", "Ensure national survival and fulfill sovereign responsibilities.")
 
         r_id = realm.get("id", "")
-        # Dynamically scale public mission description based on N
+        T = scaled_targets(N)
+        # Public mission targets scale with the number of nations playing
         if r_id == "val_khor":
-            target_cores = max(2, min(N, round(4 * N / 6)))
             pub_title = "Continental Modernisation"
-            pub_desc = f"By the end of the summit, at least {target_cores} of {N} nations must reach 60 Cores."
+            pub_desc = f"By the end of the summit, at least {T['modernised']} of {N} nations must reach 60 Cores."
         elif r_id == "solaria":
-            support_req = max(2, min(N - 1, 4))
             pub_title = "Preserve the International Order"
-            pub_desc = f"During the summit, at least 3 international resolutions must pass, each receiving votes from at least {support_req} different nations."
+            pub_desc = f"During the summit, at least 3 international resolutions must pass, each receiving votes from at least {T['broad_support']} different nations."
         elif r_id == "aquila":
-            target_partners = max(1, min(2, N - 1))
+            target_partners = T["partners"]
             pub_title = "Connect the Continent"
             pub_desc = f"Every active nation must successfully trade with at least {target_partners} different nations during the summit."
         elif r_id == "sylvan":
@@ -338,17 +358,22 @@ class SummitEngine:
         pool = realm.get("secret_missions_pool") or []
         player_count = max(1, int(realm.get("player_count", 1)))
         active_ids = {r.get("id") for r in active_realms}
-        # A secret mission about another nation only makes sense if that nation is playing.
-        playable_pool = [sm for sm in pool
-                         if all(dep in active_ids for dep in MISSION_REQUIRES.get(sm.get("id", ""), ()))]
+        # A secret mission about another nation only makes sense if that nation is playing:
+        # otherwise its stand-in version is used (or, without one, the mission is skipped).
+        playable_pool = []
+        for sm in pool:
+            needs = sm.get("requires") or MISSION_REQUIRES.get(sm.get("id", ""), ())
+            if all(dep in active_ids for dep in needs):
+                playable_pool.append(sm)
+            elif sm.get("stand_in"):
+                playable_pool.append(dict(sm["stand_in"], stands_in_for=sm.get("id")))
 
         active_secrets = []
         for sm in playable_pool[:player_count]:
-            sm_copy = dict(sm)
+            sm_copy = {k: v for k, v in sm.items() if k not in ("requires", "stand_in")}
             sm_id = sm_copy.get("id", "")
             if sm_id == "aquila_trade_network":
-                req_target = max(1, min(4, N - 1))
-                sm_copy["objective"] = f"Successfully trade with at least {req_target} of the other {N - 1} nations."
+                sm_copy["objective"] = f"SECRET OBJECTIVE: Successfully trade with at least {T['network']} of the other {N - 1} nations."
             active_secrets.append(sm_copy)
 
         return {
@@ -409,18 +434,12 @@ class SummitEngine:
                 r["tech_efficiency_unlocked"] = True
 
             r["is_starving"] = r.get("alchemical_grain", 0) <= 0
-            r["complacency_warning"] = (
-                r.get("civil_stability", 0) >= 85 and
-                r.get("public_vitality", 0) >= 85 and
-                r.get("echo_silk", 0) < 10
-            )
 
-            # Check if any realm reached Stability 0 during the game
+            # Remember on the nation itself if its Stability ever reached 0 (Aethelgard's mission and the
+            # verdict count it even after a recovery). Stored on the realm, which every caller saves with
+            # its changes, so a caller holding an older copy of meta cannot wipe it out.
             if r.get("civil_stability", 0) <= 0:
-                meta = self.db.get_state("meta", {})
-                if meta and not meta.get("any_stability_zero_reached", False):
-                    meta["any_stability_zero_reached"] = True
-                    self.db.set_state("meta", meta)
+                r["stability_hit_zero"] = True
 
         active_realms = [r for r in realms if r.get("active", True)]
         if active_realms:
@@ -1075,7 +1094,7 @@ class SummitEngine:
 
 
         # Round 2 rule (famine scenario): Military < 50 at end of Round 2 incurs -10 Stability
-        if current_turn == 2 and famine:
+        if self._round2_rules_active(meta, settings, current_turn):
             for r in active_realms:
                 if r.get("military_power", 0) < 50:
                     r["civil_stability"] = max(0, r["civil_stability"] - 10)
@@ -1109,65 +1128,8 @@ class SummitEngine:
                 "BREAKING NEWS — BORDER INCIDENT",
                 "A serious military incident has occurred along the continental borderlands. It is unclear who provoked it. The event has ignited widespread fears that economic stagnation could transform into armed conflict. Citizens demand protection. (Round 2 Rule: Any nation finishing with Military < 50 suffers -10 Stability. All Grain trades lose 5 Grain in transit due to route disruptions.)"
             )
-        elif new_turn == 3 and famine:
-            # Round 3 immediate effect: all active realms receive -15 Grain
-            for r in active_realms:
-                r["alchemical_grain"] = max(0, r.get("alchemical_grain", 0) - 15)
-            self._recalculate_all_realms(realms)
-            self.db.set_state("realms", realms)
-
-            self.trigger_audio_cue("siren", "Round 3: The Great Famine")
-            self.add_news(
-                "crisis",
-                "EMERGENCY BROADCAST — THE GREAT FAMINE",
-                "The agricultural crisis is significantly worse than early projections indicated. A second crop failure has devastated the continent. All realms immediately lose 15 Grain! Standard round-end consumption of -20 Grain awaits. The Spire Council has submitted Continental Emergency Food Acts to the Grand Plenary docket."
-            )
-
-            # Inject mandatory proposals into Plenary docket
-            N = max(1, len(active_realms))
-            quota_b = max(20, (N - 1) * 10)
-            proposals = self.db.get_state("proposals", [])
-            act_a = {
-                "id": f"food_act_a_{uuid.uuid4().hex[:6]}",
-                "proposer_id": "spire_council",
-                "proposer_name": "Neutral Spire Facilitator",
-                "title": "Continental Food Act: Emergency Redistribution (A)",
-                "description": "Every nation holding more than 50 Grain before final consumption transfers the surplus to nations below 20 Grain.",
-                "effect_type": "emergency_food_a",
-                "target_seconder_id": None,
-                "target_seconder_name": None,
-                "support_list": ["facilitator", "spire_council"],
-                "supporters": [{"id": "facilitator", "name": "Facilitator Mandate"}],
-                "is_qualified": True,
-                "status": "draft",
-                "created_turn": 3,
-                "created_at": time.time(),
-                "time_str": "Turn 3 (T+00:00)",
-                "votes": {},
-                "tallies": {"support_weight": 0, "oppose_weight": 0, "abstain_weight": 0, "total_cast": 0}
-            }
-            act_b = {
-                "id": f"food_act_b_{uuid.uuid4().hex[:6]}",
-                "proposer_id": "spire_council",
-                "proposer_name": "Neutral Spire Facilitator",
-                "title": "Continental Food Act: Industrial Agriculture (B)",
-                "description": f"Each active nation contributes 10 Cores. If at least {quota_b} Cores are collected in total, every nation receives +15 Grain.",
-                "effect_type": "emergency_food_b",
-                "target_seconder_id": None,
-                "target_seconder_name": None,
-                "support_list": ["facilitator", "spire_council"],
-                "supporters": [{"id": "facilitator", "name": "Facilitator Mandate"}],
-                "is_qualified": True,
-                "status": "draft",
-                "created_turn": 3,
-                "created_at": time.time(),
-                "time_str": "Turn 3 (T+00:00)",
-                "votes": {},
-                "tallies": {"support_weight": 0, "oppose_weight": 0, "abstain_weight": 0, "total_cast": 0}
-            }
-            proposals.insert(0, act_b)
-            proposals.insert(0, act_a)
-            self.db.set_state("proposals", proposals)
+        elif new_turn == 3 and famine and not meta.get("famine_applied"):
+            self._apply_great_famine(meta, realms, settings)
         else:
             self.trigger_audio_cue("turn", f"Turn {new_turn} Commenced")
 
@@ -1183,6 +1145,62 @@ class SummitEngine:
             "previous_turn": current_turn,
             "new_turn": new_turn
         }
+
+    def _round2_rules_active(self, meta: Dict[str, Any], settings: Dict[str, Any], turn: Optional[int] = None) -> bool:
+        """The border-incident rules (Military < 50 costs Stability; grain trades lose 5 in transit) apply
+        for the whole of Turn 2 in the famine storyline, or for the turn in which the facilitator switched them on."""
+        turn = turn if turn is not None else meta.get("current_turn", 1)
+        return (settings.get("famine_storyline", False) and turn == 2) or meta.get("round2_rules_turn") == turn
+
+    def _apply_great_famine(self, meta: Dict[str, Any], realms: List[Dict[str, Any]], settings: Dict[str, Any]):
+        """Round 3: every nation loses 15 Grain at once and the Continental Food Acts go on the ballot. Once per game."""
+        active_realms = [r for r in realms if r.get("active", True)]
+        for r in active_realms:
+            r["alchemical_grain"] = max(0, r.get("alchemical_grain", 0) - 15)
+        self._recalculate_all_realms(realms)
+        self.db.set_state("realms", realms)
+        meta["famine_applied"] = True
+
+        quota_b = max(20, (max(1, len(active_realms)) - 1) * 10)
+        proposals = self.db.get_state("proposals", [])
+        acts = [
+            ("emergency_food_a", "food_act_a", "Continental Food Act: Emergency Redistribution (A)",
+             "Every nation holding more than 50 Grain before final consumption transfers the surplus to nations below 20 Grain."),
+            ("emergency_food_b", "food_act_b", "Continental Food Act: Industrial Agriculture (B)",
+             f"Each active nation contributes 10 Cores. If at least {quota_b} Cores are collected in total, every nation receives +15 Grain."),
+        ]
+        for effect, prefix, title, terms in reversed(acts):
+            if any(p.get("effect_type") == effect for p in proposals):
+                continue
+            proposals.insert(0, {
+                "id": f"{prefix}_{uuid.uuid4().hex[:6]}",
+                "proposer_id": "spire_council",
+                "proposer_name": "Neutral Spire Facilitator",
+                "title": title,
+                "description": terms,
+                "effect_type": effect,
+                "target_seconder_id": None,
+                "target_seconder_name": None,
+                "support_list": ["facilitator", "spire_council"],
+                "supporters": [{"id": "facilitator", "name": "Facilitator Mandate"}],
+                "is_qualified": True,
+                "status": "draft",
+                "created_turn": meta.get("current_turn", 3),
+                "created_at": time.time(),
+                "time_str": f"Turn {meta.get('current_turn', 3)} (T+00:00)",
+                "votes": {},
+                "tallies": {"support_weight": 0, "oppose_weight": 0, "abstain_weight": 0, "total_cast": 0}
+            })
+        self.db.set_state("proposals", proposals)
+
+        self.trigger_audio_cue("siren", "Round 3: The Great Famine")
+        self.add_news(
+            "crisis",
+            "EMERGENCY BROADCAST — THE GREAT FAMINE",
+            "The agricultural crisis is significantly worse than early projections indicated. A second crop failure has devastated "
+            f"the continent. All realms immediately lose 15 Grain! The usual end-of-turn consumption of {settings.get('grain_consumption', 20)} "
+            "Grain still awaits. The Spire Council has submitted Continental Emergency Food Acts to the Grand Plenary docket."
+        )
 
     def _consume_grain(self, active_realms: List[Dict[str, Any]], settings: Dict[str, Any]):
         """End of a turn: every nation eats; empty silos mean famine."""
@@ -1231,12 +1249,18 @@ class SummitEngine:
     # -------------------------------------------------------------------------
     # Peer-to-Peer Trading
     # -------------------------------------------------------------------------
+    def _summit_over(self) -> bool:
+        """After the summit concludes the results are final: no more trades, quiz answers or motions."""
+        return (self.db.get_state("meta", {}) or {}).get("phase") == "summit_concluded"
+
     def create_trade(self, sender_id: str, receiver_id: str,
                      offer_res: str, offer_amt: int,
                      request_res: str, request_amt: int,
                      note: str = "") -> Tuple[bool, str]:
         if sender_id == receiver_id:
             return False, "Cannot trade with your own delegation."
+        if self._summit_over():
+            return False, "The summit has ended: no more trades."
 
         realms = self.db.get_state("realms", [])
         sender = next((r for r in realms if r["id"] == sender_id), None)
@@ -1253,6 +1277,8 @@ class SummitEngine:
             return False, "Amounts must be between 0 and 500, and the trade cannot be empty."
 
         res_key_map = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk", "military": "military_power"}
+        if request_res not in res_key_map:
+            return False, "Unknown resource requested."
         sender_res_key = res_key_map.get(offer_res)
         if not sender_res_key or sender.get(sender_res_key, 0) < offer_amt:
             return False, f"Insufficient {offer_res} in national reserves."
@@ -1279,12 +1305,7 @@ class SummitEngine:
         trades.insert(0, new_trade)
         self.db.set_state("trades", trades)
 
-        note_txt = f" Dispatch: \"{clean_note}\"" if clean_note else ""
-        self.add_news(
-            "trade",
-            f"TREATY PROPOSED: {sender['name'].upper()} -> {receiver['name'].upper()}",
-            f"Diplomatic courier dispatched offering {offer_amt} {offer_res} for {request_amt} {request_res}.{note_txt}"
-        )
+        # Offers stay between the two nations: nations learn about each other from people, not the screen.
         return True, "Trade proposal transmitted."
 
     def respond_trade(self, trade_id: str, action: str, responder_id: str) -> Tuple[bool, str]:
@@ -1317,6 +1338,12 @@ class SummitEngine:
         if action == "accept":
             if responder_id != trade["receiver_id"]:
                 return False, "Only the receiving delegation can ratify this treaty."
+            if self._summit_over():
+                return False, "The summit has ended: no more trades."
+            if not (sender and receiver and sender.get("active", True) and receiver.get("active", True)):
+                trade["status"] = "cancelled"
+                self.db.set_state("trades", trades)
+                return False, "One of these nations is no longer taking part. The offer was cancelled."
 
             res_key_map = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk", "military": "military_power"}
             sender_res_key = res_key_map.get(trade["offer_resource"])
@@ -1332,7 +1359,7 @@ class SummitEngine:
 
             meta = self.db.get_state("meta", {})
             current_turn = meta.get("current_turn", 1)
-            is_round_2 = (current_turn == 2 or meta.get("active_crisis_round") == 2) and self.settings()["famine_storyline"]
+            is_round_2 = self._round2_rules_active(meta, self.settings(), current_turn)
 
             actual_offer_delivered = trade["offer_amount"]
             transit_offer_loss = 0
@@ -1383,10 +1410,11 @@ class SummitEngine:
             if transit_offer_loss > 0 or transit_request_loss > 0:
                 loss_notice = " (Round 2 Border Crisis: 5 Grain lost in transit)"
 
+            # Public news says who traded, not what or how much (the two nations and the facilitator see the details).
             self.add_news(
                 "trade",
-                f"BILATERAL TREATY RATIFIED: {sender['name'].upper()} & {receiver['name'].upper()}",
-                f"{sender['name']} delivered {actual_offer_delivered} {off_label} to {receiver['name']} in exchange for {actual_request_delivered} {req_label}.{loss_notice}"
+                f"TRADE AGREEMENT: {sender['name'].upper()} & {receiver['name'].upper()}",
+                f"{sender['name']} and {receiver['name']} concluded a trade."
             )
             self.trigger_audio_cue("trade", f"Treaty Ratified: {sender['name']} & {receiver['name']}")
             return True, f"Treaty ratified! Resources transferred.{loss_notice}"
@@ -1415,8 +1443,12 @@ class SummitEngine:
         if not title or not description:
             return False, "Give the motion a title and terms.", None
 
-        # Each nation may table only a few motions per turn (questions to the game masters included).
+        # Motions are tabled during the working session: the Assembly docket is fixed once the vote starts.
         meta = self.db.get_state("meta", {})
+        if meta.get("phase") != "working":
+            return False, "Motions can only be tabled during the working session.", None
+
+        # Each nation may table only a few motions per turn (questions to the game masters included).
         limit = int(self.settings().get("motions_per_turn", 2))
         tabled = sum(1 for p in self.db.get_state("proposals", [])
                      if p.get("proposer_id") == proposer_id and p.get("created_turn") == meta.get("current_turn", 1))
@@ -1485,6 +1517,8 @@ class SummitEngine:
 
         if prop["status"] not in ("draft", "qualified"):
             return False, f"Motion is already {prop['status']}."
+        if (self.db.get_state("meta", {}) or {}).get("phase") != "working":
+            return False, "Motions can only be co-sponsored during the working session."
 
         realms = self.db.get_state("realms", [])
         supporter = next((r for r in realms if r["id"] == supporter_id), None)
@@ -1588,11 +1622,11 @@ class SummitEngine:
             first_prop = qualified[0]
             self.add_news(
                 "assembly",
-                "GRAND PLENARY CONVENED: 5-MINUTE FLOOR DEBATE",
-                f"Highest-ranked resolution '{first_prop['title']}' ({len(first_prop['support_list'])} sponsors) is now open for 5 minutes of discussion before voting."
+                "GRAND PLENARY CONVENED: FLOOR DEBATE",
+                f"Highest-ranked resolution '{first_prop['title']}' is now open for {self._minutes(debate_secs)} of discussion before voting."
             )
             self.trigger_audio_cue("gong", "Grand Plenary Debate Commenced")
-            return True, f"Grand Plenary initiated. 5 minutes allocated for discussion on '{first_prop['title']}'."
+            return True, f"Grand Plenary initiated. {self._minutes(debate_secs)} allocated for discussion on '{first_prop['title']}'."
 
     def start_grand_motion_vote(self) -> Tuple[bool, str]:
         meta = self.db.get_state("meta", {})
@@ -1615,7 +1649,7 @@ class SummitEngine:
         self.add_news(
             "assembly",
             f"FLOOR DISCUSSION CONCLUDED: VOTE CALLED",
-            f"5 minutes of debate on '{title}' elapsed. Sovereign delegates must now cast their weighted ballots."
+            f"The debate on '{title}' is over. Sovereign delegates must now cast their weighted ballots."
         )
         self.trigger_audio_cue("gong", f"Vote Called: {title}")
         return True, f"Floor debate closed. Voting active on '{title}'."
@@ -1659,7 +1693,7 @@ class SummitEngine:
             self.add_news(
                 "assembly",
                 f"GRAND PLENARY PROCEEDS: MOTION {next_idx + 1} OF {len(docket)}",
-                f"'{title}' entered the floor. 5 minutes allocated for sovereign discussion."
+                f"'{title}' entered the floor. {self._minutes(debate_secs)} allocated for sovereign discussion."
             )
             self.trigger_audio_cue("gong", f"Next Motion: {title}")
             return True, f"Advanced to Motion {next_idx + 1}: '{title}'."
@@ -1818,13 +1852,16 @@ class SummitEngine:
             # Continental Emergency Food Act A: Redistribution
             surplus_total = 0
             active_realms = [r for r in realms if r.get("active", True)]
+            starving_realms = [r for r in active_realms if r.get("alchemical_grain", 0) < 20]
+            if not starving_realms:
+                # Nobody is below 20, so there is nobody to transfer to: the surplus stays where it is.
+                return "Continental Emergency Redistribution Act enacted, but no nation is below 20 Grain: nothing is transferred."
             for r in active_realms:
                 if r.get("alchemical_grain", 0) > 50:
                     excess = r["alchemical_grain"] - 50
                     r["alchemical_grain"] = 50
                     surplus_total += excess
-            starving_realms = [r for r in active_realms if r.get("alchemical_grain", 0) < 20]
-            if starving_realms and surplus_total > 0:
+            if surplus_total > 0:
                 share = surplus_total // len(starving_realms)
                 rem = surplus_total % len(starving_realms)
                 for idx, sr in enumerate(starving_realms):
@@ -1937,6 +1974,23 @@ class SummitEngine:
         self.clear_realm_sessions()          # everyone logs in again with the new codes
         return {r["id"]: r["pin"] for r in realms}
 
+    def game_in_progress(self) -> bool:
+        """True once play has begun (clock started, a trade or motion made, or past Turn 1)."""
+        meta = self.db.get_state("meta", {}) or {}
+        return bool(meta.get("current_turn", 1) > 1 or meta.get("is_timer_running")
+                    or meta.get("turn_timer_remaining") != meta.get("turn_timer_total")
+                    or self.db.get_state("trades", []) or self.db.get_state("proposals", []))
+
+    def fresh_start(self) -> None:
+        """Called when the server starts: a brand-new game straight from scenario_config.json (settings,
+        roster, delegates and passcodes included). A game that was under way is kept on the Saves tab."""
+        if self.db.get_state("meta") and self.game_in_progress():
+            meta = self.db.get_state("meta", {})
+            self.autosave(label=f"Before server restart · Turn {meta.get('current_turn', 1)}", force=True)
+        self.db.set_state("settings", {})
+        self.reset_simulation()
+        self.clear_realm_sessions()
+
     def start_new_summit(self) -> Tuple[bool, str]:
         """Fresh game with the current settings, keeping the roster, delegation sizes and passcodes."""
         self.autosave(label="Before new summit", force=True)
@@ -2016,13 +2070,14 @@ class SummitEngine:
         return True, f"Participating countries set to {count} ({', '.join(active_names)})."
 
     def trigger_round_crisis(self, round_num: int) -> Tuple[bool, str]:
-        """Triggers official MGV 2026 round crisis announcements and mechanics."""
+        """The scripted MGV 2026 announcements. In the famine storyline the rounds' effects come automatically
+        with each turn, so these buttons only repeat the announcement; in other scenarios they apply the effect
+        (Round 2 rules for the current turn, the Round 3 famine once)."""
         meta = self.db.get_state("meta", {})
         realms = self.db.get_state("realms", [])
-        active_realms = [r for r in realms if r.get("active", True)]
-
-        meta["active_crisis_round"] = round_num
-        self.db.set_state("meta", meta)
+        settings = self.settings()
+        storyline = settings.get("famine_storyline", False)
+        turn = meta.get("current_turn", 1)
 
         if round_num == 1:
             self.add_news(
@@ -2031,79 +2086,38 @@ class SummitEngine:
                 "This year's harvest is the poorest in decades. Analysts do not predict immediate starvation, but warn states against rapid depletion of grain reserves. The Summit commences."
             )
             self.trigger_audio_cue("alert", "Round 1: The Failed Harvest")
-            return True, "Round 1 crisis announced."
+            return True, "Round 1 announcement broadcast."
 
         elif round_num == 2:
+            # In the storyline the rules belong to Turn 2 and switch on by themselves; elsewhere the button
+            # switches them on for the current turn.
+            applied_now = not storyline and not self._round2_rules_active(meta, settings, turn)
+            if applied_now:
+                meta["round2_rules_turn"] = turn
+                self.db.set_state("meta", meta)
             self.add_news(
                 "crisis",
                 "BREAKING NEWS — BORDER INCIDENT",
-                "A serious military incident has occurred along continental borderlands. It is unclear who provoked it. The event has ignited widespread fears that economic stagnation could transform into armed conflict. Citizens demand protection. (Round 2 Rule: Any nation finishing with Military < 50 suffers -10 Stability. All Grain trades lose 5 Grain in transit.)"
+                "A serious military incident has occurred along continental borderlands. It is unclear who provoked it. The event has ignited widespread fears that economic stagnation could transform into armed conflict. Citizens demand protection. (Round 2 Rule: Any nation finishing this turn with Military < 50 suffers -10 Stability. All Grain trades lose 5 Grain in transit.)"
             )
             self.trigger_audio_cue("alert", "Round 2: Border Incident")
-            return True, "Round 2 Security Crisis activated."
+            if applied_now:
+                return True, f"Round 2 rules switched on for Turn {turn}."
+            if storyline and turn != 2:
+                return True, "Announcement broadcast. In this scenario the Round 2 rules apply automatically during Turn 2."
+            return True, "Round 2 announcement repeated (its rules are already in force this turn)."
 
         elif round_num == 3:
-            # Immediate -15 grain
-            for r in active_realms:
-                r["alchemical_grain"] = max(0, r.get("alchemical_grain", 0) - 15)
-            self._recalculate_all_realms(realms)
-            self.db.set_state("realms", realms)
-
-            # Inject Emergency Food Acts into proposals if not present
-            N = max(1, len(active_realms))
-            quota_b = max(20, (N - 1) * 10)
-            proposals = self.db.get_state("proposals", [])
-            has_food_a = any(p.get("effect_type") == "emergency_food_a" for p in proposals)
-            has_food_b = any(p.get("effect_type") == "emergency_food_b" for p in proposals)
-            if not has_food_a:
-                proposals.append({
-                    "id": f"food_act_a_{uuid.uuid4().hex[:6]}",
-                    "proposer_id": "spire_council",
-                    "proposer_name": "Neutral Spire Facilitator",
-                    "title": "Continental Food Act: Emergency Redistribution (A)",
-                    "description": "Every nation holding more than 50 Grain before final consumption transfers the surplus to nations below 20 Grain.",
-                    "effect_type": "emergency_food_a",
-                    "target_seconder_id": None,
-                    "target_seconder_name": None,
-                    "support_list": ["facilitator", "spire_council"],
-                    "supporters": [{"id": "facilitator", "name": "Facilitator Mandate"}],
-                    "is_qualified": True,
-                    "status": "draft",
-                    "created_turn": 3,
-                    "created_at": time.time(),
-                    "time_str": "Turn 3 (T+00:00)",
-                    "votes": {},
-                    "tallies": {"support_weight": 0, "oppose_weight": 0, "abstain_weight": 0, "total_cast": 0}
-                })
-            if not has_food_b:
-                proposals.append({
-                    "id": f"food_act_b_{uuid.uuid4().hex[:6]}",
-                    "proposer_id": "spire_council",
-                    "proposer_name": "Neutral Spire Facilitator",
-                    "title": "Continental Food Act: Industrial Agriculture (B)",
-                    "description": f"Each active nation contributes 10 Cores. If at least {quota_b} Cores are collected in total, every nation receives +15 Grain.",
-                    "effect_type": "emergency_food_b",
-                    "target_seconder_id": None,
-                    "target_seconder_name": None,
-                    "support_list": ["facilitator", "spire_council"],
-                    "supporters": [{"id": "facilitator", "name": "Facilitator Mandate"}],
-                    "is_qualified": True,
-                    "status": "draft",
-                    "created_turn": 3,
-                    "created_at": time.time(),
-                    "time_str": "Turn 3 (T+00:00)",
-                    "votes": {},
-                    "tallies": {"support_weight": 0, "oppose_weight": 0, "abstain_weight": 0, "total_cast": 0}
-                })
-            self.db.set_state("proposals", proposals)
-
-            self.add_news(
-                "crisis",
-                "EMERGENCY BROADCAST — THE GREAT FAMINE",
-                "The agricultural crisis is significantly worse than early projections indicated. A second crop failure has devastated the continent. Food reserves are plummeting! All nations immediately lose 15 Grain. Standard round-end consumption of -20 Grain awaits."
-            )
-            self.trigger_audio_cue("siren", "Round 3: The Great Famine (-15 Grain)")
-            return True, "Round 3 Great Famine applied (-15 Grain to all states)."
+            if meta.get("famine_applied"):
+                self.add_news("crisis", "EMERGENCY BROADCAST — THE GREAT FAMINE",
+                              "The Great Famine grips the continent. The Continental Emergency Food Acts are on the Grand Plenary docket.")
+                self.trigger_audio_cue("siren", "Round 3: The Great Famine")
+                return True, "Announcement repeated. The famine (-15 Grain) was already applied this game, so nothing was deducted again."
+            if storyline and turn < 3:
+                return False, "In this scenario the Great Famine strikes automatically when Turn 3 begins."
+            self._apply_great_famine(meta, realms, settings)
+            self.db.set_state("meta", meta)
+            return True, "Round 3 Great Famine applied (-15 Grain to all nations, Food Acts on the ballot)."
 
         return False, f"Unknown round: {round_num}"
 
@@ -2187,7 +2201,8 @@ class SummitEngine:
 
         starving_count = sum(1 for r in active_realms if r.get("is_starving") or r.get("alchemical_grain", 0) <= 0)
         low_stability_count = sum(1 for r in active_realms if r.get("civil_stability", 0) < 50)
-        zero_stability_count = sum(1 for r in active_realms if r.get("civil_stability", 0) <= 0) or meta.get("any_stability_zero_reached", False)
+        zero_stability_count = sum(1 for r in active_realms if r.get("civil_stability", 0) <= 0 or r.get("stability_hit_zero")) \
+            or meta.get("any_stability_zero_reached", False)
         avg_vitality = sum(r.get("public_vitality", 0) for r in active_realms) / max(1, len(active_realms))
         avg_stability = sum(r.get("civil_stability", 0) for r in active_realms) / max(1, len(active_realms))
         avg_standing = sum(r.get("diplomatic_standing", 0) for r in active_realms) / max(1, len(active_realms))
@@ -2233,15 +2248,14 @@ class SummitEngine:
                 pub_explanation = "No nation ended with 0 Grain." if pub_achieved else f"Nations suffering famine: {starving_count}."
 
             elif r_id == "val_khor":
-                # Dynamically scaled target based on N
-                target_req = max(2, min(N, round(4 * N / 6)))
+                target_req = scaled_targets(N)["modernised"]
                 reached_cores = sum(1 for o in active_realms if o.get("aether_cores", 0) >= 60)
                 pub_achieved = (reached_cores >= target_req)
                 pub_explanation = f"{reached_cores} of {N} nations reached ≥60 Cores (Target: ≥{target_req})."
 
             elif r_id == "solaria":
                 # Broadly supported international resolutions passed
-                support_threshold = max(2, min(N - 1, 4))
+                support_threshold = scaled_targets(N)["broad_support"]
                 passed_with_broad_support = 0
                 for p in passed_proposals:
                     supporter_count = sum(1 for v in p.get("votes", {}).values() if v.get("choice") == "support")
@@ -2258,7 +2272,7 @@ class SummitEngine:
 
             elif r_id == "aquila":
                 # Every active nation must trade with at least target_partners different nations
-                target_partners = max(1, min(2, N - 1))
+                target_partners = scaled_targets(N)["partners"]
                 all_traded = all(len(trade_partners.get(o["id"], [])) >= target_partners for o in active_realms)
                 pub_achieved = all_traded
                 min_partners = min((len(trade_partners.get(o["id"], [])) for o in active_realms), default=0)
@@ -2353,7 +2367,7 @@ class SummitEngine:
                     achieved = (lead >= 25)
                     explanation = f"Aquila Total Wealth: {r.get('total_wealth')}, second wealthiest: {other_max_wealth} (Lead: {lead}, Target: ≥25)."
                 elif sm_id == "aquila_trade_network":
-                    req_target = max(1, min(4, N - 1))
+                    req_target = scaled_targets(N)["network"]
                     partners_count = len(trade_partners.get("aquila", []))
                     achieved = (partners_count >= req_target)
                     explanation = f"Aquila traded with {partners_count} nations (Target: ≥{req_target} of {N - 1})."
@@ -2369,6 +2383,29 @@ class SummitEngine:
                     vk_mil = vk.get("military_power", 0) if vk else 0
                     achieved = (vk_mil <= 75)
                     explanation = f"Val-Khor Military: {vk_mil} (Target: ≤75)."
+                # Stand-ins used when the nation a mission is about is not playing
+                elif sm_id == "sylvan_defense_home":
+                    mil = r.get("military_power", 0)
+                    bought = [mt.get("seller") for mt in military_trades if mt.get("buyer") == r_id]
+                    achieved = (mil >= 40 and not bought)
+                    explanation = f"Military: {mil} (Target: ≥40). Bought Military from another nation: {'Yes (Violated)' if bought else 'No (Honored)'}."
+                elif sm_id == "valkhor_parity":
+                    other_max = max((o.get("military_power", 0) for o in active_realms if o["id"] != r_id), default=0)
+                    diff = other_max - r.get("military_power", 0)
+                    achieved = (diff <= 10)
+                    explanation = f"Strongest other Military: {other_max}, Val-Khor: {r.get('military_power', 0)} (Difference: {diff}, Target: ≤10 ahead)."
+                elif sm_id == "solaris_contain_rivals":
+                    max_c = max(o.get("aether_cores", 0) for o in active_realms)
+                    max_m = max(o.get("military_power", 0) for o in active_realms)
+                    dominant = [o["name"] for o in active_realms if o["id"] != r_id
+                                and o.get("aether_cores", 0) >= max_c and o.get("military_power", 0) >= max_m]
+                    achieved = not dominant
+                    explanation = "No rival leads in both Cores and Military." if achieved else f"{', '.join(dominant)} leads in both Cores and Military!"
+                elif sm_id == "aethelgard_contain_rivals":
+                    other_max = max((o.get("military_power", 0) for o in active_realms if o["id"] != r_id), default=0)
+                    achieved = (other_max <= 60)
+                    explanation = f"Strongest other Military: {other_max} (Target: ≤60)."
+
                 elif sm_id == "aethelgard_reserves":
                     g = r.get("alchemical_grain", 0)
                     c = r.get("aether_cores", 0)
@@ -2391,17 +2428,9 @@ class SummitEngine:
             achieved_missions = (1 if pub_achieved else 0) + sum(1 for sm in secret_evals if sm["achieved"])
             all_achieved = (achieved_missions == total_missions)
 
-            # Score: equal weights for each mission (e.g. 100 points each achieved) + baseline resource points
-            score = (
-                (achieved_missions * 100) +
-                int(r.get("alchemical_grain", 0)) +
-                int(r.get("aether_cores", 0)) +
-                int(r.get("echo_silk", 0)) +
-                int(r.get("military_power", 0)) +
-                int(r.get("public_vitality", 0)) +
-                int(r.get("diplomatic_standing", 0)) +
-                int(r.get("civil_stability", 0))
-            )
+            # Score: the share of the nation's missions met (every mission counts the same, public or secret).
+            # A share, not a sum, so a big delegation with more secret missions is not ranked higher for its size.
+            score = round(100 * achieved_missions / max(1, total_missions))
 
             if all_achieved:
                 epilogue = f"The delegation of {r['name']} fulfilled all assigned mandates ({achieved_missions}/{total_missions})! They return home heralded as sovereign champions."
@@ -2442,7 +2471,7 @@ class SummitEngine:
                 }
             })
 
-        realm_evaluations.sort(key=lambda x: x["score"], reverse=True)
+        realm_evaluations.sort(key=lambda x: (x["score"], x["public_mission_eval"]["achieved"], x["achieved_missions"]), reverse=True)
 
         arch_diplomat = max(active_realms, key=lambda r: r.get("diplomatic_standing", 0))
         industrial_hegemon = max(active_realms, key=lambda r: r.get("aether_cores", 0))
@@ -2566,6 +2595,8 @@ class SummitEngine:
         return True, "Showing the results." if step is None else f"Reflection question {step + 1} of {total}."
 
     def submit_lore_quiz(self, realm_id: str, question_id: str, selected_option_index: int) -> Tuple[bool, str, Dict[str, Any]]:
+        if self._summit_over():
+            return False, "The summit has ended: the quiz is closed.", {}
         realms = self.db.get_state("realms", [])
         realm = next((r for r in realms if r["id"] == realm_id), None)
         if not realm:

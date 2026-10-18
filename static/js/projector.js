@@ -201,7 +201,7 @@ class ProjectorApp {
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-family:var(--font-mono); font-weight:900; font-size:1rem; color:var(--text-muted);">#${idx + 1}</span>
               <strong style="font-size:0.95rem; text-transform:uppercase;">${r.name}</strong>
-              <span class="badge" style="font-size:0.72rem; background:rgba(120, 90, 40, 0.12);">${r.success_ratio || ''} MANDATES (${r.score} PTS)</span>
+              <span class="badge" style="font-size:0.72rem; background:rgba(120, 90, 40, 0.12);">${r.success_ratio || ''} MANDATES (${r.score}%)</span>
             </div>
             ${r.directive_achieved ? 
               '<span class="badge" style="background:#10b981; color:#fff; font-weight:800; padding:2px 8px;">ALL MANDATES MET</span>' : 
@@ -270,7 +270,7 @@ class ProjectorApp {
     const flags = [];
     if (r.is_starving) flags.push('<span class="flag bad">🥀 Famine</span>');
     if (r.is_plutocrat) flags.push('<span class="flag good">👑 Richest realm · +1 vote</span>');
-    if (r.is_quarantined) flags.push('<span class="flag bad">🚧 Borders sealed</span>');
+    if (r.is_quarantined) flags.push('<span class="flag good">🛡️ Cordoned</span>');
     const box = document.getElementById('spotlight');
     if (box) box.innerHTML = `
       <div class="spot-head" style="--nc:${esc(r.theme_color || '#8c7a5e')}">
@@ -355,7 +355,7 @@ class ProjectorApp {
     } else if (q.context === 'winners') {
       html = `<div class="rc-verdict small"><span>The continent:</span> <b>${esc(outcome.continental_verdict || '')}</b></div>` +
         evals.slice().sort((a, b) => b.score - a.score).map((e, i) =>
-          row(e.realm_id, `${i + 1}. ${e.name}`, `<span class="rc-cell">${esc(e.success_ratio || '')} missions</span><span class="rc-cell">${e.score} pts</span>`)).join('');
+          row(e.realm_id, `${i + 1}. ${e.name}`, `<span class="rc-cell">${esc(e.success_ratio || '')} missions</span><span class="rc-cell">${e.score}%</span>`)).join('');
     } else if (step === 0) {
       html = '<p class="rc-hint">Put the phones away and sit together in one circle.</p>';
     }

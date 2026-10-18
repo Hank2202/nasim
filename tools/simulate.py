@@ -4,6 +4,7 @@ to check that the game is playable and winnable.
 
     venv/bin/python tools/simulate.py                 # default sweep, ~5 minutes
     venv/bin/python tools/simulate.py --games 200     # more games per scenario
+    venv/bin/python tools/simulate.py --rosters       # every 5-nation roster (one nation left out)
 
 Two kinds of delegations:
   cooperative  - share grain so nobody starves, trade widely, table and back broad motions,
@@ -136,6 +137,10 @@ class Game:
             for a, b in [("val_khor", "solaria"), ("umbra", "sylvan"), ("aethelgard", "solaria"), ("sylvan", "val_khor")]:
                 if a in R and b in R:
                     self.trade(a, b, "cores" if R[a]["aether_cores"] > 40 else "silk", 5, "silk", 5)
+            if "aquila" not in R:
+                # without the trading nation, a ring of small swaps gives everyone two partners
+                for i, a in enumerate(ids):
+                    self.trade(a, ids[(i + 1) % len(ids)], "silk", 5, "cores", 5)
 
     def motions(self, turn):
         R = self.realms()
@@ -147,15 +152,17 @@ class Game:
                 if ok and self.rng.random() < 0.6:
                     self.e.support_proposal(pid, b)
             return
-        plan = {1: [("solaria", "aid")], 2: [("solaria", "custom"), ("solaria", "embargo")], 3: []}[turn]
+        first = lambda *pref: next((x for x in pref if x in R), ids[0])
+        leader = first("solaria", "aquila", "sylvan", "aethelgard", "val_khor", "umbra")
+        plan = {1: [(leader, "aid")], 2: [(leader, "custom")] + ([("solaria", "embargo")] if "solaria" in R else []), 3: []}[turn]
         # the grain tax creates food when more nations are short (<25, +15) than rich (>50, −10)
         if 15 * sum(r["alchemical_grain"] < 25 for r in R.values()) > 10 * sum(r["alchemical_grain"] > 50 for r in R.values()):
-            plan.append(("aquila", "tax"))
+            plan.append((first("aquila", "sylvan", "umbra", "val_khor"), "tax"))
         for proposer, kind in plan:
-            if proposer in R:
-                ok, _, pid = self.e.draft_proposal(proposer, f"{kind} motion", "x", kind)
-                if ok:
-                    self.e.support_proposal(pid, "aquila" if proposer != "aquila" else "sylvan")
+            ok, _, pid = self.e.draft_proposal(proposer, f"{kind} motion", "x", kind)
+            if ok:
+                self.e.support_proposal(pid, next(x for x in ("aquila", "sylvan", "umbra", "val_khor", "aethelgard", "solaria")
+                                                  if x in R and x != proposer))
 
     def vote(self, prop):
         R = self.realms()
@@ -206,7 +213,7 @@ class Game:
         return outcome
 
 
-def run(engine, policy, skill, games, settings, seed=1):
+def run(engine, policy, skill, games, settings, seed=1, drop=None):
     rng = random.Random(seed)
     verdicts = collections.Counter()
     mission_hits = collections.Counter()
@@ -217,6 +224,8 @@ def run(engine, policy, skill, games, settings, seed=1):
         random.seed(rng.random())
         engine.db.set_state("settings", settings)
         engine.reset_simulation()
+        if drop:
+            engine.admin_toggle_realm(drop, False)
         out = Game(engine, policy, skill, rng).play()
         verdicts[out["continental_verdict"]] += 1
         starving += out["starving_count"] / games
@@ -239,8 +248,11 @@ def run(engine, policy, skill, games, settings, seed=1):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--games", type=int, default=40)
+    ap.add_argument("--rosters", action="store_true", help="play every 5-nation roster instead of the default sweep")
     args = ap.parse_args()
     engine = SummitEngine(models.Database(models.DB_PATH))
+    if args.rosters:
+        return roster_sweep(engine, args.games)
 
     scenarios = [
         ("cooperative, good quiz (80%)", "cooperative", 0.8, {"difficulty": "standard"}),
@@ -270,6 +282,22 @@ def main():
     print(f"\nHow often each mission was met ({label}):")
     for key in sorted(totals):
         print(f"  {key:34} {hits[key] / totals[key]:5.0%}")
+
+
+def roster_sweep(engine, games):
+    print(f"{games} games per row · famine storyline · standard difficulty · cooperative delegations\n")
+    print(f"{'Left out':12} {'Quiz':>5} {'Stable':>7} {'Fragile':>8} {'Crisis':>7} {'Missions met':>13} {'Starving':>9}  Missions met least often")
+    for drop in (None, "sylvan", "val_khor", "solaria", "umbra", "aquila", "aethelgard"):
+        for skill in (0.8, 0.4):
+            if sys.stdout.isatty():
+                print(drop or "nobody", end="\r", flush=True)
+            v, hits, totals, best, total, ratio, starving, unstable = run(
+                engine, "cooperative", skill, games, {"difficulty": "standard"}, drop=drop)
+            n = sum(v.values())
+            hardest = sorted(totals, key=lambda k: hits[k] / totals[k])[:3]
+            hard = ", ".join(f"{k.replace('public:', 'public ').replace('secret:', '')} {hits[k] / totals[k]:.0%}" for k in hardest)
+            print(f"{drop or 'nobody':12} {skill:5.0%} {v['STABLE CONTINENT'] / n:7.0%} {v['FRAGILE PEACE'] / n:8.0%} "
+                  f"{v['CONTINENTAL CRISIS'] / n:7.0%} {ratio:13.0%} {starving:9.1f}  {hard}")
 
 
 if __name__ == "__main__":
