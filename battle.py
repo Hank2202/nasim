@@ -28,6 +28,11 @@ DEFAULTS: Dict[str, Any] = {
     "intel": {"wealth_per_line": 28, "max_lines": 9, "accuracy_at": 80, "accuracy_cap": 0.9, "own_bonus": 0.30, "noise_pp": 14,
               "odds_blur_base": 0.08, "odds_blur_scale": 0.30},
     "attack_cost": {"grain": 10},
+    # Two ways to attack. A siege is announced to everyone and arrives after `seconds` of working-session time, so the
+    # defender can prepare. A surprise attack is immediate and unannounced, but the attacker pays for it.
+    "modes": {"siege": {"seconds": 120, "cost_multiplier": 1},
+              "surprise": {"cost_multiplier": 2, "attacker_bonus": 0.08,
+                           "attacker_penalty": {"standing": -15, "stability": -8}, "defender_win_standing": 5}},
     "min_military": 10,
     "max_attacks_received_per_turn": 2,
     "stalemate_below": 0.04,            # |margin| = |A-D|/(A+D) under this: nobody wins
@@ -116,10 +121,10 @@ def terrain_for(realm: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def side_power(realm: Dict[str, Any], side: str, terrain: Dict[str, Any], weather: Dict[str, Any],
-               cfg: Dict[str, Any], rng: Optional[random.Random]) -> Dict[str, Any]:
+               cfg: Dict[str, Any], rng: Optional[random.Random], extra_env: float = 0.0) -> Dict[str, Any]:
     ready, factors = readiness(realm, cfg)
     if side == "attacker":
-        env = weather.get("attacker", 0.0)
+        env = weather.get("attacker", 0.0) + extra_env
     else:
         env = terrain.get("defence", 0.0) + weather.get("defender", 0.0)
         if realm.get("is_quarantined"):
@@ -210,11 +215,11 @@ def odds_label(ratio: float) -> str:
 
 
 def scouting(attacker: Dict[str, Any], defender: Dict[str, Any], weather: Dict[str, Any], cfg: Dict[str, Any],
-             seed: str) -> Dict[str, Any]:
+             seed: str, attacker_bonus: float = 0.0) -> Dict[str, Any]:
     """The attacker's scouting report: the balance without luck, blurred (less so with good scouts), and the modifiers that
     the attacker's wealth and spies reveal. The same seed always gives the same blur, so asking again learns nothing new."""
     terrain = terrain_for(defender, cfg)
-    a = side_power(attacker, "attacker", terrain, weather, cfg, None)
+    a = side_power(attacker, "attacker", terrain, weather, cfg, None, attacker_bonus)
     d = side_power(defender, "defender", terrain, weather, cfg, None)
     scout = intel(attacker, cfg)
     ic = cfg["intel"]
@@ -230,10 +235,10 @@ def scouting(attacker: Dict[str, Any], defender: Dict[str, Any], weather: Dict[s
 
 
 def resolve(attacker: Dict[str, Any], defender: Dict[str, Any], weather: Dict[str, Any], cfg: Dict[str, Any],
-            rng: random.Random) -> Dict[str, Any]:
+            rng: random.Random, attacker_bonus: float = 0.0) -> Dict[str, Any]:
     """Fight the battle. Returns the outcome and every change to carry out, without touching the realms."""
     terrain = terrain_for(defender, cfg)
-    a = side_power(attacker, "attacker", terrain, weather, cfg, rng)
+    a = side_power(attacker, "attacker", terrain, weather, cfg, rng, attacker_bonus)
     d = side_power(defender, "defender", terrain, weather, cfg, rng)
     total = a["power"] + d["power"]
     margin = (a["power"] - d["power"]) / total if total > 0 else 0.0

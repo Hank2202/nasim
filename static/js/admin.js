@@ -285,6 +285,7 @@ class AdminApp {
     }
 
     this.renderWarLog(state.battles || [], settings);
+    this.renderSieges(state.sieges || []);
 
     // News Audit Log
     const newsBox = document.getElementById('admin-news-feed');
@@ -1204,6 +1205,29 @@ class AdminApp {
   // ---------------------------------------------------------------------------
   // War log: both sides of every battle
   // ---------------------------------------------------------------------------
+  renderSieges(sieges) {
+    const box = document.getElementById('admin-sieges');
+    if (!box) return;
+    const esc = escapeHtml;
+    const html = sieges.map(s => `<div class="inset">
+      <div class="row-between"><b>🏰 ${esc(s.attacker_name)} marches on ${esc(s.defender_name)}</b>
+        <span class="siege-eta">${Math.floor(s.eta / 60)}:${String(s.eta % 60).padStart(2, '0')}</span></div>
+      <div class="mt-1"><button class="btn btn-secondary btn-sm" onclick="adminApp.siegeAction('${esc(s.id)}', 'arrive')">Arrive now</button>
+        <button class="btn btn-secondary btn-sm" onclick="adminApp.siegeAction('${esc(s.id)}', 'cancel')">Call back (return supplies)</button></div></div>`).join('');
+    if (html !== this._siegeHtml) { this._siegeHtml = html; box.innerHTML = html; }
+  }
+
+  async siegeAction(id, action) {
+    const arrive = action === 'arrive';
+    if (!(await confirmAction({ title: arrive ? 'Bring this army in now?' : 'Call this army back?',
+      message: arrive ? 'The battle is fought immediately.' : 'The march is cancelled and the attacker gets its supplies back.', confirmLabel: arrive ? 'Fight now' : 'Call back', tone: 'danger' }))) return;
+    const res = await (await fetch('/api/admin/siege', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action })
+    })).json();
+    showToast(res.message, res.success ? 'success' : 'danger');
+    this.pollState();
+  }
+
   renderWarLog(battles, settings) {
     const box = document.getElementById('admin-war-log');
     if (!box) return;
@@ -1216,7 +1240,7 @@ class AdminApp {
     const changes = d => Object.entries((d && d.changes) || {}).map(([r, n]) => `${n > 0 ? '+' : '−'}${Math.abs(n)} ${RESOURCE_SHORT[r] || r}`).join(', ');
     box.innerHTML = battles.length ? battles.map(b => `<div class="inset">
       <div class="row-between"><b>${esc(b.attacker_name)} ⚔️ ${esc(b.defender_name)}</b><span class="section-sub" style="margin:0;">Turn ${esc(b.turn)} · ${esc(b.time_str)}</span></div>
-      <div class="small"><b>${esc(BattleScene.outcome(b).text)}</b> · ${esc(b.weather.name)} · ${esc(b.terrain.name)}</div>
+      <div class="small"><b>${esc(BattleScene.outcome(b).text)}</b> · ${b.mode === 'surprise' ? 'surprise attack' : 'siege'} · ${esc(b.weather.name)} · ${esc(b.terrain.name)}</div>
       <div class="small" style="margin-top:4px;">${side(b.attacker_name, b.private && b.private.attacker)}${side(b.defender_name, b.private && b.private.defender)}</div>
       <div class="small muted" style="margin-top:4px;">${esc(b.attacker_name)}: ${esc(changes(b.private && b.private.attacker))}<br>${esc(b.defender_name)}: ${esc(changes(b.private && b.private.defender))}</div>
       <div class="small muted" style="margin-top:4px;">Entered something wrong? Reverse the resource changes in Resource Overrides → Action log.</div>

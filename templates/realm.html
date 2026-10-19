@@ -128,12 +128,16 @@
     <section id="war-section" style="display: none;">
       <h2 class="section-heading">War room</h2>
       <div class="card war-card">
+        <div id="war-sieges" class="siege-list"></div>
         <div id="war-weather" class="weather-line"></div>
         <p id="war-status" class="section-sub mt-1"></p>
         <div class="form-label mt-2">Choose a target</div>
         <div id="war-targets" class="partner-chips"></div>
         <div id="war-scout"></div>
-        <button id="war-attack-btn" type="button" class="btn btn-danger btn-block mt-2" disabled onclick="realmApp.attackTarget()">Choose a target</button>
+        <div class="war-buttons mt-2">
+          <button id="war-siege-btn" type="button" class="btn btn-danger" disabled onclick="realmApp.attackTarget('siege')">Choose a target</button>
+          <button id="war-surprise-btn" type="button" class="btn btn-secondary" disabled onclick="realmApp.attackTarget('surprise')">Surprise attack</button>
+        </div>
         <p class="section-sub mt-1">An attack costs supplies, loses Standing and is never free. The result depends mostly on the armies, but also on how fed, stable and supplied each nation is, on the ground and the weather, and a little on luck.</p>
       </div>
       <div id="war-log" class="stack mt-2"></div>

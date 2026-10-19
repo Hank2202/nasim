@@ -48,6 +48,7 @@ class ProjectorApp {
 
     if (this.map) this.map.update(state);
     this.watchBattles(state.battles || []);
+    this.renderSieges(state.sieges || []);
     this.renderTicker(news_feed || []);
     this.resolutionTypes = state.resolution_types || this.resolutionTypes;
     this.renderTimeline(meta);
@@ -139,7 +140,18 @@ class ProjectorApp {
     return inner ? `<div class="motion-effect">${inner}</div>` : '';
   }
 
-  // Battles pop up at the side of the projector, one after another, for about eleven seconds each.
+  // Armies on the road: a banner above the focused nation, counting down to the arrival.
+  renderSieges(sieges) {
+    const box = document.getElementById('siege-banner');
+    if (!box) return;
+    const esc = escapeHtml;
+    const html = sieges.map(s => `<div class="siege-row" style="--nc:${esc(s.attacker_color || '#8c7a5e')}">
+      <span>🏰 <b>${esc(s.attacker_emoji)} ${esc(s.attacker_name)}</b> marches on <b>${esc(s.defender_emoji)} ${esc(s.defender_name)}</b></span>
+      <b class="siege-eta">${Math.floor(s.eta / 60)}:${String(s.eta % 60).padStart(2, '0')}</b></div>`).join('');
+    if (html !== this._siegeHtml) { this._siegeHtml = html; box.innerHTML = html; }
+  }
+
+  // Battles take over the "Realm in Focus" panel, one after another, for about eleven seconds each.
   watchBattles(battles) {
     if (this._seenBattles === undefined) {                 // first poll: older battles are not replayed
       this._seenBattles = new Set(battles.map(b => b.id));
@@ -156,18 +168,31 @@ class ProjectorApp {
   }
 
   nextBattle() {
-    const pop = document.getElementById('battle-pop');
+    const stage = document.getElementById('battle-stage');
+    const panel = document.querySelector('.atlas-side');
     const b = this._battleQueue.shift();
-    if (!pop || !b) { this._battleShowing = false; return; }
+    if (!stage || !panel || !b) {
+      this._battleShowing = false;
+      if (panel) panel.classList.remove('battling');
+      return;
+    }
     this._battleShowing = true;
-    pop.innerHTML = '<div class="battle-pop-inner"></div>';
-    pop.classList.add('show');
+    stage.innerHTML = '<div class="battle-pop-inner"></div>';
+    panel.classList.add('battling');
+    const heading = panel.querySelector('.atlas-heading');
+    if (heading) heading.dataset.normal = heading.dataset.normal || heading.innerHTML;
+    if (heading) heading.innerHTML = '<span class="flourish">&#9876;</span> Battle <span class="flourish">&#9876;</span>';
     if (this._battleScene) this._battleScene.stop();
-    this._battleScene = BattleScene.play(pop.firstElementChild, b, {
-      duration: 11000,
+    this._battleScene = BattleScene.play(stage.firstElementChild, b, {
+      tall: true,
+      duration: 15000,
       onDone: () => {
-        pop.classList.remove('show');
-        setTimeout(() => this.nextBattle(), 700);
+        if (!this._battleQueue.length) {
+          panel.classList.remove('battling');
+          if (heading && heading.dataset.normal) heading.innerHTML = heading.dataset.normal;
+          stage.innerHTML = '';
+        }
+        setTimeout(() => this.nextBattle(), 400);
       },
     });
   }

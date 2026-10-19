@@ -2112,11 +2112,12 @@ class TestBulkResources(unittest.TestCase):
 class TestDifficulty(unittest.TestCase):
     def test_every_nation_is_rated_and_explained(self):
         for r in load_scenario_config()["realms"]:
-            self.assertIn(r["difficulty"], (1, 2, 3, 4, 5), r["id"])
+            self.assertIn(r["difficulty"], (1, 2, 3), r["id"])
+            self.assertNotIn("secret", r["difficulty_note"].lower(), r["id"])           # the lobby is public
             self.assertGreater(len(r["difficulty_note"]), 30, r["id"])
         levels = {r["id"]: r["difficulty"] for r in load_scenario_config()["realms"]}
         self.assertLess(levels["solaria"], levels["val_khor"])
-        self.assertEqual({"easy", "medium", "hard"}, {("easy" if v <= 2 else "medium" if v == 3 else "hard") for v in levels.values()})
+        self.assertEqual({1, 2, 3}, set(levels.values()))
 
     def test_the_lobby_setup_and_guide_say_which_is_which(self):
         app.config["TESTING"] = True
@@ -2392,7 +2393,9 @@ class TestBattlesInTheGame(unittest.TestCase):
         self.engine.update_settings({"attacks_per_turn": 2})
         self.assertTrue(self.engine.declare_attack("aethelgard", "umbra")[0])
         self.engine.process_end_of_turn()                                # a new turn, new allowances
-        self.assertTrue(self.engine.declare_attack("aethelgard", "sylvan")[0])
+        self._set("aethelgard", alchemical_grain=100, military_power=60)
+        ok, msg, _ = self.engine.declare_attack("aethelgard", "sylvan")
+        self.assertTrue(ok, msg)
 
     def test_the_march_costs_supplies_and_the_outcome_is_recorded_and_announced(self):
         grain = self._realm("aethelgard")["alchemical_grain"]
@@ -2405,7 +2408,7 @@ class TestBattlesInTheGame(unittest.TestCase):
         self.assertEqual(self.engine.get_full_state()["meta"]["audio_cue"]["type"], "battle")
         won = battle["winner_id"] == "aethelgard"
         gained = battle["plunder"].get("grain", 0) if won else -battle["plunder"].get("grain", 0)
-        self.assertEqual(self._realm("aethelgard")["alchemical_grain"], max(0, grain - 10 + gained))
+        self.assertEqual(self._realm("aethelgard")["alchemical_grain"], max(0, grain - 20 + gained))      # a surprise attack costs double supplies
 
     def test_spoils_are_never_more_than_the_loser_lost(self):
         total = lambda: sum(r["alchemical_grain"] + r["aether_cores"] + r["echo_silk"] for r in self.engine.db.get_state("realms"))
@@ -2465,9 +2468,10 @@ class TestBattlesInTheGame(unittest.TestCase):
             self.assertTrue(preview["success"])
             self.assertIn(preview["preview"]["label"], ("Very unfavourable", "Unfavourable", "Evenly matched", "Favourable", "Very favourable"))
             self.assertNotIn("alchemical_grain", json.dumps(preview))
-            attack = c.post("/api/war/attack", json={"realm_id": "aethelgard", "target_id": "umbra"}).json
+            attack = c.post("/api/war/attack", json={"realm_id": "aethelgard", "target_id": "umbra", "mode": "surprise"}).json
             self.assertTrue(attack["success"])
             self.assertEqual(attack["battle"]["private"]["side"], "attacker")
+            self.assertEqual(set(preview["preview"]["modes"]), {"siege", "surprise"})
             self.assertEqual(c.post("/api/war/attack", json={"realm_id": "aethelgard", "target_id": "sylvan"}).status_code, 400)
             other = app.test_client()
             other.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
@@ -2617,3 +2621,142 @@ class TestActionJournal(unittest.TestCase):
         self.client.post("/api/admin/resources/bulk", json={"realm_ids": ["sylvan"], "changes": [{"resource": "grain", "mode": "add", "amount": 1}]})
         self.engine.reset_simulation()
         self.assertEqual(self._entries(), [])
+
+
+class TestSiegeAndSurprise(unittest.TestCase):
+    def setUp(self):
+        app.config["TESTING"] = True
+        from app import engine
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.reset_simulation()
+        meta = engine.db.get_state("meta")
+        meta["current_turn"] = 2
+        meta["turn_timer_remaining"] = 600
+        meta["turn_timer_total"] = 600
+        engine.db.set_state("meta", meta)
+
+    def _realm(self, rid):
+        return next(r for r in self.engine.db.get_state("realms") if r["id"] == rid)
+
+    def _clock(self, remaining):
+        meta = self.engine.db.get_state("meta")
+        meta["turn_timer_remaining"] = remaining
+        meta["is_timer_running"] = False
+        self.engine.db.set_state("meta", meta)
+
+    def test_a_siege_is_announced_and_arrives_after_two_minutes_of_working_time(self):
+        grain = self._realm("aethelgard")["alchemical_grain"]
+        ok, msg, siege = self.engine.declare_attack("aethelgard", "sylvan", "siege")
+        self.assertTrue(ok, msg)
+        self.assertEqual(self._realm("aethelgard")["alchemical_grain"], grain - 10)        # supplies are paid at once
+        self.assertEqual(self.engine.db.get_state("battles"), [])                          # nothing is fought yet
+        news = self.engine.db.get_state("news_feed")[0]
+        self.assertEqual(news["type"], "war")
+        self.assertIn("SIEGE", news["headline"])
+        public = self.engine.get_full_state()["sieges"]
+        self.assertEqual(len(public), 1)
+        self.assertEqual(public[0]["eta"], 120)
+        self.assertNotIn("paid", public[0])
+        self._clock(500)
+        self.assertEqual(self.engine.resolve_sieges(), [])                                 # 100 s have passed
+        self.assertEqual(self.engine.get_full_state()["sieges"][0]["eta"], 20)
+        self._clock(479)
+        fought = self.engine.resolve_sieges()
+        self.assertEqual(len(fought), 1)
+        self.assertEqual(fought[0]["mode"], "siege")
+        self.assertEqual(self.engine.get_full_state()["sieges"], [])
+        self.assertEqual(len(self.engine.db.get_state("battles")), 1)
+
+    def test_a_siege_on_the_road_counts_as_a_march_and_as_an_attack_received(self):
+        self.engine.declare_attack("aethelgard", "sylvan", "siege")
+        ok, msg, _ = self.engine.declare_attack("aethelgard", "umbra", "siege")
+        self.assertFalse(ok)
+        self.assertIn("already marched", msg)
+        self.engine.declare_attack("val_khor", "sylvan", "siege")
+        ok, msg, _ = self.engine.declare_attack("solaria", "sylvan", "siege")
+        self.assertIn("already been attacked", msg)
+
+    def test_the_clock_decides_when_the_army_arrives_so_a_pause_pauses_the_march(self):
+        self.engine.declare_attack("aethelgard", "sylvan", "siege")
+        self.engine.db.set_state("meta", dict(self.engine.db.get_state("meta"), is_timer_running=False))
+        self.assertEqual(self.engine.resolve_sieges(), [])
+        self.assertEqual(self.engine.get_full_state()["sieges"][0]["eta"], 120)
+
+    def test_a_siege_that_is_still_on_the_road_when_the_turn_ends_arrives_first(self):
+        self.engine.declare_attack("aethelgard", "sylvan", "siege")
+        self.engine.process_end_of_turn()
+        self.assertEqual(self.engine.get_full_state()["sieges"], [])
+        self.assertEqual(len(self.engine.db.get_state("battles")), 1)
+
+    def test_a_siege_is_lifted_if_a_nation_leaves(self):
+        self.engine.declare_attack("aethelgard", "sylvan", "siege")
+        self.engine.admin_override_realm("sylvan", {"active": False})
+        self.assertEqual(self.engine.resolve_sieges(force=True), [])
+        self.assertEqual(self.engine.db.get_state("battles"), [])
+        self.assertIn("SIEGE LIFTED", self.engine.db.get_state("news_feed")[0]["headline"])
+
+    def test_the_facilitator_can_bring_in_or_call_back_an_army(self):
+        grain = self._realm("aethelgard")["alchemical_grain"]
+        siege = self.engine.declare_attack("aethelgard", "sylvan", "siege")[2]
+        self.assertTrue(self.engine.admin_siege(siege["id"], "cancel")[0])
+        self.assertEqual(self._realm("aethelgard")["alchemical_grain"], grain)             # supplies returned
+        self.assertEqual(self.engine.get_full_state()["sieges"], [])
+        siege = self.engine.declare_attack("aethelgard", "sylvan", "siege")[2]
+        self.assertTrue(self.engine.admin_siege(siege["id"], "arrive")[0])
+        self.assertEqual(len(self.engine.db.get_state("battles")), 1)
+        self.assertFalse(self.engine.admin_siege(siege["id"], "arrive")[0])
+
+    def test_a_surprise_attack_is_immediate_but_costs_the_attacker_dearly(self):
+        before = self._realm("aethelgard")
+        ok, msg, battle = self.engine.declare_attack("aethelgard", "sylvan", "surprise")
+        self.assertTrue(ok, msg)
+        self.assertEqual(battle["mode"], "surprise")
+        after = self._realm("aethelgard")
+        changes = battle["private"]["attacker"]["changes"]
+        self.assertLessEqual(changes["standing"], -15 - 6)                 # the extra price on top of the usual loss
+        self.assertLessEqual(changes["stability"], -8)
+        self.assertEqual(before["alchemical_grain"] - after["alchemical_grain"] + changes.get("grain", 0), 20)   # double supplies
+        self.assertEqual(self.engine.get_full_state()["sieges"], [])
+
+    def test_a_surprise_costs_more_than_a_siege_in_standing_for_the_same_result(self):
+        import random
+        losses = {}
+        for mode in ("siege", "surprise"):
+            self.setUp()
+            random.seed(5)
+            _, _, b = self.engine.declare_attack("aethelgard", "sylvan", mode) if mode == "surprise" else (None, None, None)
+            if mode == "siege":
+                s = self.engine.declare_attack("aethelgard", "sylvan", "siege")[2]
+                random.seed(5)
+                b = self.engine.admin_siege(s["id"], "arrive") and self.engine.db.get_state("battles")[0]
+            losses[mode] = b["private"]["attacker"]["changes"].get("standing", 0)
+        self.assertLess(losses["surprise"], losses["siege"])
+
+    def test_the_preview_describes_both_ways_and_the_api_defaults_to_a_siege(self):
+        ok, _, info = self.engine.battle_preview("aethelgard", "sylvan")
+        self.assertTrue(info["modes"]["siege"]["can_attack"] and info["modes"]["surprise"]["can_attack"])
+        self.assertEqual(info["modes"]["siege"]["seconds"], 120)
+        self.assertEqual(info["modes"]["surprise"]["cost"], {"grain": 20})
+        client = app.test_client()
+        r = client.post("/api/war/attack", json={"realm_id": "aethelgard", "target_id": "sylvan"}).json
+        self.assertTrue(r["success"])
+        self.assertIn("siege", r)
+        self.assertNotIn("battle", r)
+
+    def test_a_poor_nation_can_afford_a_siege_but_not_a_surprise_attack(self):
+        realms = self.engine.db.get_state("realms")
+        next(r for r in realms if r["id"] == "aethelgard")["alchemical_grain"] = 15
+        self.engine.db.set_state("realms", realms)
+        _, _, info = self.engine.battle_preview("aethelgard", "sylvan")
+        self.assertTrue(info["modes"]["siege"]["can_attack"])
+        self.assertFalse(info["modes"]["surprise"]["can_attack"])
+        self.assertIn("20 Grain", info["modes"]["surprise"]["reason"])
+
+    def test_the_timer_loop_resolves_arriving_armies(self):
+        self.engine.declare_attack("aethelgard", "sylvan", "siege")
+        meta = self.engine.db.get_state("meta")
+        meta.update(is_timer_running=True, turn_timer_end=time.time() + 400, turn_timer_remaining=400)
+        self.engine.db.set_state("meta", meta)
+        self.engine._tick()
+        self.assertEqual(len(self.engine.db.get_state("battles")), 1)

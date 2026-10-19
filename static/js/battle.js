@@ -22,8 +22,10 @@ const BATTLE_OUTCOMES = {
 const BATTLE_RES_ICONS = { grain: '🌾', cores: '⚙️', silk: '🧵', military: '⚔️' };
 
 // The field is drawn in these units and scaled to the real size of the canvas.
-const BS_W = 380, BS_H = 170, BS_HORIZON = 76;
-const BS_ROWS = 4, BS_COLS = 5, BS_ROW_GAP = 18, BS_COL_GAP = 13, BS_FIRST_ROW_Y = 96;
+// (the height and spacing change with the layout: a wide strip on phones, a tall field in the projector's panel)
+const BS_W = 380;
+let BS_H = 170, BS_HORIZON = 76, BS_ROW_GAP = 18, BS_COL_GAP = 13, BS_FIRST_ROW_Y = 96, BS_SC = 1.2;
+const BS_ROWS = 4, BS_COLS = 5;
 // Timeline (milliseconds): march in, fight, rout, then the result.
 const BS_T_MARCH = 1700, BS_T_ROUT = 5600, BS_T_RESULT = 7400;
 
@@ -93,6 +95,13 @@ class BattleScene {
 
   static play(container, b, opts = {}) {
     const esc = escapeHtml;
+    if (opts.tall) {                                   // fill the panel: the field takes the height left after the tags and the result
+      const w = container.clientWidth || 230, h = container.clientHeight || 420;
+      BS_H = bsClamp(Math.round(BS_W * (h - 150) / w), 170, 420);
+      const f = BS_H / 290;
+      BS_HORIZON = Math.round(112 * f); BS_ROW_GAP = Math.round(33 * f); BS_COL_GAP = 15; BS_FIRST_ROW_Y = Math.round(160 * f); BS_SC = 1.2 + (BS_H - 170) * 0.0046;
+    }
+    else { BS_H = 170; BS_HORIZON = 76; BS_ROW_GAP = 18; BS_COL_GAP = 13; BS_FIRST_ROW_Y = 96; BS_SC = 1.2; }
     const info = BattleScene.outcome(b);
     const winnerId = b.winner_id;
     const spoils = Object.entries(b.plunder || {}).map(([res, n]) =>
@@ -105,20 +114,21 @@ class BattleScene {
         <span class="bs-tag"><b>${esc(b[`${kind}_name`])}</b><em>${kind === 'attacker' ? 'attacks' : 'defends'}</em></span>
       </div>`;
     };
-    container.innerHTML = `<div class="bs">
-      <div class="bs-head">⚔️ <b>Battle</b> · turn ${esc(b.turn)} · ${esc((b.weather || {}).name || '')} · ${esc((b.terrain || {}).name || '')}</div>
-      <div class="bs-arena">
-        <canvas class="bs-field"></canvas>
-        ${tag('attacker')}
-        ${tag('defender')}
-      </div>
-      <div class="bs-bar"><div class="bs-bar-a" style="background:${esc(b.attacker_color || '#a87412')}"></div><div class="bs-bar-d" style="background:${esc(b.defender_color || '#7a6142')}"></div></div>
-      <div class="bs-result">
+    const resultHtml = `<div class="bs-result">
         <div class="bs-outcome">${esc(info.text)}</div>
         <div class="bs-headline">${esc(b.verdict || b.headline)}</div>
         <div class="bs-spoils">${spoils || '<span class="bs-chip none">No spoils</span>'}</div>
         <div class="bs-losses">Soldiers lost: ${esc(b.attacker_name)} ${esc(lost[b.attacker_id] ?? 0)} · ${esc(b.defender_name)} ${esc(lost[b.defender_id] ?? 0)} Military</div>
+      </div>`;
+    container.innerHTML = `<div class="bs">
+      <div class="bs-tags">${tag('attacker')}${tag('defender')}</div>
+      <div class="bs-head">Turn ${esc(b.turn)} · ${esc((b.weather || {}).name || '')} · ${esc((b.terrain || {}).name || '')}${b.mode === 'siege' ? ' · siege' : (b.mode === 'surprise' ? ' · surprise attack' : '')}</div>
+      <div class="bs-arena">
+        <canvas class="bs-field" style="aspect-ratio: ${BS_W} / ${BS_H};"></canvas>
+        ${opts.tall ? resultHtml : ''}
       </div>
+      <div class="bs-bar"><div class="bs-bar-a" style="background:${esc(b.attacker_color || '#a87412')}"></div><div class="bs-bar-d" style="background:${esc(b.defender_color || '#7a6142')}"></div></div>
+      ${opts.tall ? '' : resultHtml}
     </div>`;
     const root = container.firstElementChild;
     const canvas = root.querySelector('canvas');
@@ -200,7 +210,7 @@ class BattleScene {
       ctx.fillStyle = bsShade(ridge, -0.04);
       ctx.beginPath(); ctx.moveTo(0, BS_HORIZON);
       if (terrainId === 'volcanic_mountains') {
-        for (let x = 0; x <= BS_W; x += 38) { ctx.lineTo(x + 14, BS_HORIZON - 34 - ((x / 38) % 2) * 18); ctx.lineTo(x + 38, BS_HORIZON); }
+        for (let x = 0; x <= BS_W; x += 38) { ctx.lineTo(x + 14, BS_HORIZON - (34 + ((x / 38) % 2) * 18) * (BS_HORIZON / 76)); ctx.lineTo(x + 38, BS_HORIZON); }
       } else if (terrainId === 'solar_plateau') {
         ctx.lineTo(0, BS_HORIZON - 22); ctx.lineTo(130, BS_HORIZON - 22); ctx.lineTo(150, BS_HORIZON - 4); ctx.lineTo(240, BS_HORIZON - 4);
         ctx.lineTo(262, BS_HORIZON - 24); ctx.lineTo(BS_W, BS_HORIZON - 24);
@@ -232,7 +242,7 @@ class BattleScene {
       let x = pos.x, y = pos.y;
       ctx.save();
       ctx.translate(x, y);
-      ctx.scale(1.2, 1.2);
+      ctx.scale(BS_SC, BS_SC);
       if (pos.state === 'down') {                                      // fallen: lying on the ground, a little faded
         const fall = bsClamp((t - pos.t0) / 260, 0, 1);
         ctx.globalAlpha = 0.9 - 0.3 * fall;
@@ -274,13 +284,13 @@ class BattleScene {
       const pos = place(s, t);
       if (pos.state === 'down') return;
       const dir = side === 'attacker' ? 1 : -1;
-      const x = pos.x - dir * 8, y = pos.y;
-      ctx.strokeStyle = '#5b4126'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 36); ctx.stroke();
+      const k = BS_SC / 1.2, x = pos.x - dir * 8 * k, y = pos.y;
+      ctx.strokeStyle = '#5b4126'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 36 * k); ctx.stroke();
       const wave = Math.sin(flightT / 140 + (dir > 0 ? 0 : 2)) * 2;
       ctx.fillStyle = colours[side];
-      ctx.beginPath(); ctx.moveTo(x, y - 36); ctx.lineTo(x - dir * 17, y - 34 + wave); ctx.lineTo(x - dir * 16, y - 24 + wave); ctx.lineTo(x, y - 24); ctx.closePath(); ctx.fill();
-      ctx.font = '9px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
-      ctx.fillText(b[`${side}_emoji`] || '🏛️', x - dir * 8.5, y - 29.5 + wave * 0.6);
+      ctx.beginPath(); ctx.moveTo(x, y - 36 * k); ctx.lineTo(x - dir * 17 * k, y - 34 * k + wave); ctx.lineTo(x - dir * 16 * k, y - 24 * k + wave); ctx.lineTo(x, y - 24 * k); ctx.closePath(); ctx.fill();
+      ctx.font = `${9 * k}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+      ctx.fillText(b[`${side}_emoji`] || '🏛️', x - dir * 8.5 * k, y - 29.5 * k + wave * 0.6);
     };
 
     const drawWeather = (t) => {
@@ -310,7 +320,7 @@ class BattleScene {
     const fell = new Set();
     const frame = (now) => {
       if (stopped) return;
-      if (!start) start = now;
+      if (!start) start = now - (opts.startAt || 0);          // startAt skips ahead (used to check the last frames)
       const t = now - start;
       if (ctx) {
         ctx.setTransform(canvas.width / BS_W, 0, 0, canvas.width / BS_W, 0, 0);

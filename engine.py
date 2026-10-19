@@ -261,6 +261,7 @@ class SummitEngine:
         self._recalculate_all_realms(realms)
         self.db.set_state("realms", realms)
         self.db.set_state("battles", [])
+        self.db.set_state("sieges", [])
 
         self.db.set_state("trades", [])
         self.db.set_state("trade_partners", {})     # who traded with whom (Aquila's missions)
@@ -614,6 +615,7 @@ class SummitEngine:
             "catastrophes_catalog": cfg.get("catastrophes_catalog", []),
             "summit_outcome": self.db.get_state("summit_outcome", None),
             "battles": self.db.get_state("battles", [])[:12],
+            "sieges": self.public_sieges(),
             "game_settings": self.settings(),
             "reflection_questions": cfg.get("reflection_questions", [])
         }
@@ -660,6 +662,10 @@ class SummitEngine:
             meta["turn_timer_end"] = end
             rem = max(0, int(round(end - now)))
             meta["turn_timer_remaining"] = rem
+            if phase == "working":                         # armies that have marched long enough arrive
+                self.db.set_state("meta", meta)
+                if self.resolve_sieges():                  # a battle writes news and sounds: carry on with the fresh meta
+                    meta = self.db.get_state("meta", {}) or meta
             if rem == 0 and phase == "working":
                 meta["is_timer_running"] = False
                 meta["turn_timer_end"] = None
@@ -1417,6 +1423,7 @@ class SummitEngine:
     # Socioeconomic Calculations (End of Turn)
     # -------------------------------------------------------------------------
     def process_end_of_turn(self) -> Dict[str, Any]:
+        self.resolve_sieges(force=True)                    # an army on the road arrives before the turn ends
         meta = self.db.get_state("meta", {})
         realms = self.db.get_state("realms", [])
         current_turn = meta.get("current_turn", 1)
@@ -2657,9 +2664,15 @@ class SummitEngine:
             return weather
         return {"id": weather.get("id", ""), "name": weather.get("name", ""), "text": weather.get("text", "")}
 
+    def _march_cost(self, cfg: Dict[str, Any], mode: str) -> Dict[str, int]:
+        mult = cfg["modes"][mode].get("cost_multiplier", 1)
+        return {res: int(round(amount * mult)) for res, amount in cfg["attack_cost"].items()}
+
     def _attack_blocker(self, attacker: Optional[Dict[str, Any]], defender: Optional[Dict[str, Any]],
-                        meta: Dict[str, Any], settings: Dict[str, Any], cfg: Dict[str, Any]) -> str:
+                        meta: Dict[str, Any], settings: Dict[str, Any], cfg: Dict[str, Any], mode: str = "siege") -> str:
         """Why this attack cannot happen right now ('' if it can)."""
+        if mode not in cfg["modes"]:
+            return "Choose a siege or a surprise attack."
         if not attacker or not defender or not attacker.get("active", True) or not defender.get("active", True):
             return "That nation is not taking part in this summit."
         if attacker["id"] == defender["id"]:
@@ -2671,19 +2684,45 @@ class SummitEngine:
         if meta.get("current_turn", 1) < int(settings.get("attacks_from_turn", 2)):
             return f"Attacks are allowed from Turn {settings.get('attacks_from_turn', 2)}."
         battles = self.db.get_state("battles", [])
+        sieges = self.db.get_state("sieges", [])           # armies already on the road count as this turn's attacks
         turn = meta.get("current_turn", 1)
-        mine = sum(1 for b in battles if b["turn"] == turn and b["attacker_id"] == attacker["id"])
+        mine = sum(1 for b in battles if b["turn"] == turn and b["attacker_id"] == attacker["id"]) \
+            + sum(1 for s in sieges if s["attacker_id"] == attacker["id"])
         if mine >= int(settings.get("attacks_per_turn", 1)):
             return "Your army has already marched this turn."
-        hit = sum(1 for b in battles if b["turn"] == turn and b["defender_id"] == defender["id"])
+        hit = sum(1 for b in battles if b["turn"] == turn and b["defender_id"] == defender["id"]) \
+            + sum(1 for s in sieges if s["defender_id"] == defender["id"])
         if hit >= cfg["max_attacks_received_per_turn"]:
             return f"{defender['name']} has already been attacked {hit} times this turn."
         if attacker.get("military_power", 0) < cfg["min_military"]:
             return f"You need at least {cfg['min_military']} Military to march."
-        for res, amount in cfg["attack_cost"].items():
+        for res, amount in self._march_cost(cfg, mode).items():
             if attacker.get(motion_rules.FIELDS[res], 0) < amount:
                 return f"You need {amount} {motion_rules.LABELS[res]} to supply the march."
         return ""
+
+    def _mode_text(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """The two ways to attack, in words, for the phones and the Guide."""
+        s, x = cfg["modes"]["siege"], cfg["modes"]["surprise"]
+        label = lambda cost: ", ".join(f"{n} {motion_rules.LABELS[r]}" for r, n in cost.items())
+        pen = ", ".join(f"{abs(v)} {motion_rules.LABELS[r]}" for r, v in x.get("attacker_penalty", {}).items())
+        return {
+            "siege": {"seconds": int(s.get("seconds", 120)), "cost": self._march_cost(cfg, "siege"),
+                      "summary": f"Announced to everyone at once. The army arrives after {int(s.get('seconds', 120)) // 60}:{int(s.get('seconds', 120)) % 60:02d} "
+                                 f"of working time, so the defender can prepare. Supplies: {label(self._march_cost(cfg, 'siege'))}."},
+            "surprise": {"cost": self._march_cost(cfg, "surprise"), "penalty": x.get("attacker_penalty", {}),
+                         "summary": f"Immediate and unannounced (+{round(x.get('attacker_bonus', 0) * 100)}% strength: the defender is caught unprepared), "
+                                    f"but the attacker pays: supplies {label(self._march_cost(cfg, 'surprise'))} and an extra loss of {pen} "
+                                    f"on top of the usual loss of Standing."},
+        }
+
+    def public_sieges(self) -> List[Dict[str, Any]]:
+        """Armies on the road, with the seconds left (counted on the working-session clock, so a paused clock pauses the march)."""
+        meta = self.db.get_state("meta", {}) or {}
+        rem = int(meta.get("turn_timer_remaining", 0) or 0)
+        return [{**{k: s[k] for k in ("id", "attacker_id", "attacker_name", "attacker_emoji", "attacker_color",
+                                      "defender_id", "defender_name", "defender_emoji", "defender_color", "seconds", "turn", "time_str")},
+                 "eta": max(0, rem - s["arrive_remaining"])} for s in self.db.get_state("sieges", [])]
 
     def get_war_status(self, realm_id: str) -> Optional[Dict[str, Any]]:
         """What the phone's war card shows: the weather, the rules and who can be attacked."""
@@ -2694,51 +2733,66 @@ class SummitEngine:
         meta, settings, cfg = self.db.get_state("meta", {}) or {}, self.settings(), self._battle_config()
         turn = meta.get("current_turn", 1)
         battles = self.db.get_state("battles", [])
-        mine = sum(1 for b in battles if b["turn"] == turn and b["attacker_id"] == realm_id)
+        mine = sum(1 for b in battles if b["turn"] == turn and b["attacker_id"] == realm_id) \
+            + sum(1 for s in self.db.get_state("sieges", []) if s["attacker_id"] == realm_id)
         targets = []
         for r in realms:
             if r["id"] == realm_id or not r.get("active", True):
                 continue
-            why = self._attack_blocker(me, r, meta, settings, cfg)
+            reasons = {m: self._attack_blocker(me, r, meta, settings, cfg, m) for m in cfg["modes"]}
+            why = "" if not all(reasons.values()) else reasons["siege"]
             targets.append({"id": r["id"], "name": r["name"], "can_attack": not why, "reason": why})
         return {"success": True, "enabled": bool(settings.get("attacks_enabled", True)), "from_turn": int(settings.get("attacks_from_turn", 2)),
                 "attacks_left": max(0, int(settings.get("attacks_per_turn", 1)) - mine), "weather": self._public_weather(self._turn_weather(meta)),
-                "cost": cfg["attack_cost"], "min_military": cfg["min_military"], "targets": targets}
+                "cost": self._march_cost(cfg, "siege"), "min_military": cfg["min_military"], "targets": targets,
+                "modes": self._mode_text(cfg), "sieges": self.public_sieges()}
 
     def battle_preview(self, attacker_id: str, defender_id: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
-        """What the attacker's scouts and own staff can tell before the order is given."""
+        """What the attacker's scouts and own staff can tell before the order is given (for both ways to attack)."""
         realms = self.db.get_state("realms", [])
         att = next((r for r in realms if r["id"] == attacker_id), None)
         dfn = next((r for r in realms if r["id"] == defender_id), None)
         meta, settings, cfg = self.db.get_state("meta", {}) or {}, self.settings(), self._battle_config()
-        why = self._attack_blocker(att, dfn, meta, settings, cfg)
+        reasons = {m: self._attack_blocker(att, dfn, meta, settings, cfg, m) for m in cfg["modes"]}
         if not att or not dfn:
-            return False, why, None
+            return False, reasons["siege"], None
         weather = self._turn_weather(meta)
-        marching = dict(att)                                    # the cost of the march is paid before the fight
-        for res, amount in cfg["attack_cost"].items():
-            marching[motion_rules.FIELDS[res]] = max(0, marching.get(motion_rules.FIELDS[res], 0) - amount)
         seed = f"{meta.get('game_id')}:{meta.get('current_turn')}:{attacker_id}:{defender_id}"
-        info = battle_rules.scouting(marching, dfn, weather, cfg, seed)
-        info.update(can_attack=not why, reason=why, cost=cfg["attack_cost"], defender_name=dfn["name"],
-                    attacker_name=att["name"], defender_military_tier=dfn.get("military_tier"),
-                    own_military=att.get("military_power", 0))
-        return True, why, info
 
-    def declare_attack(self, attacker_id: str, defender_id: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        def scout(mode: str) -> Dict[str, Any]:
+            marching = dict(att)                                # the cost of the march is paid before the fight
+            for res, amount in self._march_cost(cfg, mode).items():
+                marching[motion_rules.FIELDS[res]] = max(0, marching.get(motion_rules.FIELDS[res], 0) - amount)
+            return battle_rules.scouting(marching, dfn, weather, cfg, seed, cfg["modes"][mode].get("attacker_bonus", 0.0))
+
+        info = scout("siege")
+        quick = scout("surprise")
+        text = self._mode_text(cfg)
+        info.update(
+            can_attack=not all(reasons.values()), reason="" if not all(reasons.values()) else reasons["siege"],
+            cost=text["siege"]["cost"], defender_name=dfn["name"], attacker_name=att["name"],
+            defender_military_tier=dfn.get("military_tier"), own_military=att.get("military_power", 0),
+            modes={"siege": {**text["siege"], "label": info["label"], "can_attack": not reasons["siege"], "reason": reasons["siege"]},
+                   "surprise": {**text["surprise"], "label": quick["label"], "can_attack": not reasons["surprise"], "reason": reasons["surprise"]}})
+        return True, info["reason"], info
+
+    # -- fighting ---------------------------------------------------------------------------------------------------
+    def _fight(self, attacker_id: str, defender_id: str, mode: str) -> Dict[str, Any]:
+        """Fight the battle now (supplies of a siege were paid when it was declared) and record it."""
         realms = self.db.get_state("realms", [])
-        att = next((r for r in realms if r["id"] == attacker_id), None)
-        dfn = next((r for r in realms if r["id"] == defender_id), None)
-        meta, settings, cfg = self.db.get_state("meta", {}) or {}, self.settings(), self._battle_config()
-        why = self._attack_blocker(att, dfn, meta, settings, cfg)
-        if why:
-            return False, why, None
+        meta, cfg = self.db.get_state("meta", {}) or {}, self._battle_config()
+        att = next(r for r in realms if r["id"] == attacker_id)
+        dfn = next(r for r in realms if r["id"] == defender_id)
         weather = self._turn_weather(meta)
-
-        for res, amount in cfg["attack_cost"].items():          # supplying the march
-            att[motion_rules.FIELDS[res]] -= amount
+        mcfg = cfg["modes"][mode]
         self._recalculate_all_realms(realms)
-        result = battle_rules.resolve(att, dfn, weather, cfg, random.Random())
+        result = battle_rules.resolve(att, dfn, weather, cfg, random.Random(), mcfg.get("attacker_bonus", 0.0))
+
+        # the extra price of attacking without warning
+        for res, delta in mcfg.get("attacker_penalty", {}).items():
+            result["changes"][attacker_id][res] = result["changes"][attacker_id].get(res, 0) + delta
+        if result["winner_id"] == defender_id and mcfg.get("defender_win_standing"):
+            result["changes"][defender_id]["standing"] = result["changes"][defender_id].get("standing", 0) + mcfg["defender_win_standing"]
 
         by_id = {r["id"]: r for r in realms}
         for rid, deltas in result["changes"].items():
@@ -2760,7 +2814,8 @@ class SummitEngine:
             "defender_victory": (f"{d_name.upper()} REPELS {a_name.upper()}", f"{d_name} repelled {a_name}"),
             "defender_crushing": (f"{a_name.upper()}'S ARMY ROUTED BY {d_name.upper()}", f"{d_name} routed the army of {a_name}"),
         }[result["outcome"]]
-        detail = f"{verb} ({weather['name'].lower()}, {result['terrain']['name'].lower()}). Spoils: {spoils}."
+        way = "after a siege" if mode == "siege" else "in a surprise attack"
+        detail = f"{verb} {way} ({weather['name'].lower()}, {result['terrain']['name'].lower()}). Spoils: {spoils}."
 
         def own(side: str, rid: str) -> Dict[str, Any]:
             """Exact figures, for the facilitators only (luck included)."""
@@ -2778,6 +2833,7 @@ class SummitEngine:
 
         battle = {
             "id": battle_id, "turn": meta.get("current_turn", 1), "time_str": self._format_now(), "timestamp": time.time(),
+            "mode": mode,
             "attacker_id": attacker_id, "attacker_name": a_name, "attacker_emoji": att.get("emoji", ""), "attacker_color": att.get("theme_color", ""),
             "defender_id": defender_id, "defender_name": d_name, "defender_emoji": dfn.get("emoji", ""), "defender_color": dfn.get("theme_color", ""),
             "outcome": result["outcome"], "winner_id": result["winner_id"], "scale": round(result["scale"], 3), "share": round(result["share"], 3),
@@ -2795,7 +2851,90 @@ class SummitEngine:
         self.db.set_state("battles", battles[:40])
         self.add_news("war", headline, detail)
         self.trigger_audio_cue("battle", headline)
-        return True, headline, battle
+        return battle
+
+    def declare_attack(self, attacker_id: str, defender_id: str, mode: str = "surprise") -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        """A siege is announced and arrives later; a surprise attack is fought at once and costs the attacker dearly."""
+        realms = self.db.get_state("realms", [])
+        att = next((r for r in realms if r["id"] == attacker_id), None)
+        dfn = next((r for r in realms if r["id"] == defender_id), None)
+        meta, settings, cfg = self.db.get_state("meta", {}) or {}, self.settings(), self._battle_config()
+        why = self._attack_blocker(att, dfn, meta, settings, cfg, mode)
+        if why:
+            return False, why, None
+
+        cost = self._march_cost(cfg, mode)
+        for res, amount in cost.items():                         # supplying the march
+            att[motion_rules.FIELDS[res]] -= amount
+        self._recalculate_all_realms(realms)
+        self.db.set_state("realms", realms)
+
+        if mode == "surprise":
+            battle = self._fight(attacker_id, defender_id, "surprise")
+            return True, battle["headline"], battle
+
+        seconds = int(cfg["modes"]["siege"].get("seconds", 120))
+        remaining = int(meta.get("turn_timer_remaining", 0) or 0)
+        siege = {"id": uuid.uuid4().hex[:8], "mode": "siege", "turn": meta.get("current_turn", 1), "time_str": self._format_now(),
+                 "attacker_id": attacker_id, "attacker_name": att["name"], "attacker_emoji": att.get("emoji", ""), "attacker_color": att.get("theme_color", ""),
+                 "defender_id": defender_id, "defender_name": dfn["name"], "defender_emoji": dfn.get("emoji", ""), "defender_color": dfn.get("theme_color", ""),
+                 "seconds": seconds, "arrive_remaining": max(0, remaining - seconds), "paid": cost}
+        sieges = self.db.get_state("sieges", [])
+        sieges.append(siege)
+        self.db.set_state("sieges", sieges)
+        headline = f"SIEGE: {att['name'].upper()} MARCHES ON {dfn['name'].upper()}"
+        self.add_news("war", headline, f"The army of {att['name']} will reach {dfn['name']} in {seconds // 60}:{seconds % 60:02d} of working time. "
+                                      f"{dfn['name']} has until then to prepare.")
+        self.trigger_audio_cue("alert", headline)
+        return True, headline, {**siege, "eta": min(seconds, remaining)}
+
+    def resolve_sieges(self, force: bool = False) -> List[Dict[str, Any]]:
+        """Fight the sieges whose army has arrived (all of them with force, for example when the turn ends)."""
+        sieges = self.db.get_state("sieges", [])
+        if not sieges:
+            return []
+        meta = self.db.get_state("meta", {}) or {}
+        rem = int(meta.get("turn_timer_remaining", 0) or 0)
+        due = [s for s in sieges if force or rem <= s["arrive_remaining"]]
+        if not due:
+            return []
+        self.db.set_state("sieges", [s for s in sieges if s not in due])
+        fought = []
+        cfg = self._battle_config()
+        for s in due:
+            realms = self.db.get_state("realms", [])
+            att = next((r for r in realms if r["id"] == s["attacker_id"] and r.get("active", True)), None)
+            dfn = next((r for r in realms if r["id"] == s["defender_id"] and r.get("active", True)), None)
+            if not att or not dfn:
+                self.add_news("war", f"SIEGE LIFTED: {s['attacker_name'].upper()} AND {s['defender_name'].upper()}",
+                              "One of the two nations has left the summit, so the army turned back.")
+                continue
+            fought.append(self._fight(s["attacker_id"], s["defender_id"], "siege"))
+        return fought
+
+    def admin_siege(self, siege_id: str, action: str) -> Tuple[bool, str]:
+        """The facilitator can bring an army in at once ('arrive') or call it back and return its supplies ('cancel')."""
+        sieges = self.db.get_state("sieges", [])
+        s = next((x for x in sieges if x["id"] == siege_id), None)
+        if not s:
+            return False, "That army is no longer on the road."
+        if action == "arrive":
+            s["arrive_remaining"] = 10 ** 6
+            self.db.set_state("sieges", sieges)
+            self.resolve_sieges()
+            return True, "The army arrived."
+        if action == "cancel":
+            realms = self.db.get_state("realms", [])
+            att = next((r for r in realms if r["id"] == s["attacker_id"]), None)
+            if att:
+                for res, amount in (s.get("paid") or {}).items():
+                    att[motion_rules.FIELDS[res]] = att.get(motion_rules.FIELDS[res], 0) + amount
+                self._recalculate_all_realms(realms)
+                self.db.set_state("realms", realms)
+            self.db.set_state("sieges", [x for x in sieges if x["id"] != siege_id])
+            self.add_news("war", f"SIEGE CALLED OFF: {s['attacker_name'].upper()}", f"The army of {s['attacker_name']} turned back before reaching {s['defender_name']}.")
+            return True, "The army was called back and its supplies returned."
+        return False, "Unknown action."
 
     def verify_admin_passcode(self, passcode: str) -> bool:
         config = load_scenario_config()
@@ -2803,6 +2942,7 @@ class SummitEngine:
         return str(passcode).strip() == str(expected).strip()
 
     def conclude_summit(self) -> Tuple[bool, str, Dict[str, Any]]:
+        self.resolve_sieges(force=True)
         self._post_quiz_digest(force=True)
         meta = self.db.get_state("meta", {})
         realms = self.db.get_state("realms", [])

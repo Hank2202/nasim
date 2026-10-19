@@ -235,7 +235,8 @@ class Game:
                 if rank and (best is None or rank > best[0]):
                     best = (rank, t["id"])
             if best:
-                self.e.declare_attack(rid, best[1])
+                self.e.declare_attack(rid, best[1], "siege")
+        self.e.resolve_sieges(force=True)          # the armies arrive (the simulation has no wall clock)
 
     def assembly(self, turn):
         ok, _ = self.e.start_plenary_session()

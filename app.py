@@ -381,13 +381,13 @@ def admin_view():
 app.jinja_env.globals["realm_article"] = wiki.realm_article
 
 def difficulty_info(level) -> Dict[str, Any]:
-    """1 (easiest) to 5 (hardest) as a label, a style name and stars, for the lobby, setup, Guide and phones."""
+    """1 (easy), 2 (medium) or 3 (hard) as a label, a style name and stars, for the lobby, setup, Guide and phones."""
     try:
-        level = max(1, min(5, int(level)))
+        level = max(1, min(3, int(level)))
     except (TypeError, ValueError):
-        level = 3
-    label, css = ("Easy", "easy") if level <= 2 else (("Medium", "medium") if level == 3 else ("Hard", "hard"))
-    return {"level": level, "label": label, "css": css, "stars": "★" * level + "☆" * (5 - level)}
+        level = 2
+    label, css = {1: ("Easy", "easy"), 2: ("Medium", "medium"), 3: ("Hard", "hard")}[level]
+    return {"level": level, "label": label, "css": css, "stars": "★" * level + "☆" * (3 - level)}
 
 app.jinja_env.globals["difficulty_info"] = difficulty_info
 
@@ -694,8 +694,17 @@ def api_war_preview():
 @app.route("/api/war/attack", methods=["POST"])
 def api_war_attack():
     data = request.get_json(silent=True) or {}
-    ok, msg, battle = engine.declare_attack(data.get("realm_id"), data.get("target_id"))
-    return jsonify({"success": ok, "message": msg, "battle": _battle_view(battle, {data.get("realm_id")}) if battle else None}), (200 if ok else 400)
+    mode = data.get("mode") or "siege"
+    ok, msg, result = engine.declare_attack(data.get("realm_id"), data.get("target_id"), mode)
+    if ok and mode == "siege":
+        return jsonify({"success": True, "message": msg, "siege": result})
+    return jsonify({"success": ok, "message": msg, "battle": _battle_view(result, {data.get("realm_id")}) if result else None}), (200 if ok else 400)
+
+@app.route("/api/admin/siege", methods=["POST"])
+def api_admin_siege():
+    data = request.get_json(silent=True) or {}
+    ok, msg = engine.admin_siege(data.get("id"), data.get("action"))
+    return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
 
 @app.route("/api/proposal/<prop_id>/support", methods=["POST"])
 def api_proposal_support(prop_id: str):

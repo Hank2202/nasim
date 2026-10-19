@@ -369,15 +369,17 @@ def test_attack_with_animation_on_the_projector(server, browser):
     api(admin, "/api/admin/turn/next")
     expect(aethelgard.locator("#war-status")).to_contain_text("1 more time", timeout=8000)
     expect(aethelgard.locator("#war-weather")).to_contain_text("this turn")
-    assert aethelgard.locator("#war-attack-btn").is_disabled()
+    assert aethelgard.locator("#war-siege-btn").is_disabled() and aethelgard.locator("#war-surprise-btn").is_disabled()
     aethelgard.locator(".war-chip", has_text="Sylvan Concordat").click()
-    expect(aethelgard.locator(".scout-odds")).to_be_visible(timeout=5000)
+    expect(aethelgard.locator(".scout-odds").first).to_be_visible(timeout=5000)
     expect(aethelgard.locator("#war-scout")).to_contain_text("Their Military:")
     expect(aethelgard.locator("#war-scout")).to_contain_text("What your scouts could find out")
     assert "luck" not in aethelgard.locator("#war-scout").inner_text().lower()
-    assert not aethelgard.locator("#war-attack-btn").is_disabled()
-    aethelgard.locator("#war-attack-btn").click()
-    expect(aethelgard.locator(".confirm-card")).to_contain_text("Attack Sylvan Concordat?")
+    expect(aethelgard.locator("#war-scout")).to_contain_text("Siege")
+    expect(aethelgard.locator("#war-scout")).to_contain_text("Surprise attack")
+    assert not aethelgard.locator("#war-surprise-btn").is_disabled()
+    aethelgard.locator("#war-surprise-btn").click()
+    expect(aethelgard.locator(".confirm-card")).to_contain_text("by surprise")
     confirm(aethelgard)
 
     # the attacker's phone, the defender's phone and the projector all show the battle
@@ -385,10 +387,11 @@ def test_attack_with_animation_on_the_projector(server, browser):
     expect(aethelgard.locator(".bs-modal .bs.bs-done")).to_be_visible(timeout=14000)
     expect(aethelgard.locator(".bs-modal-extra")).to_contain_text("How it went for you (attacking)")
     expect(sylvan.locator(".bs-modal-extra")).to_contain_text("How it went for you (defending)", timeout=6000)
-    expect(projector.locator("#battle-pop.show .bs")).to_be_visible(timeout=6000)
-    expect(projector.locator("#battle-pop")).to_contain_text("Aethelgard Dominion")
-    expect(projector.locator("#battle-pop .bs-done")).to_be_visible(timeout=14000)
-    expect(projector.locator("#battle-pop .bs-spoils")).to_be_visible()
+    expect(projector.locator(".atlas-side.battling #battle-stage .bs")).to_be_visible(timeout=6000)
+    expect(projector.locator("#spotlight")).to_be_hidden()
+    expect(projector.locator("#battle-stage")).to_contain_text("Aethelgard Dominion")
+    expect(projector.locator("#battle-stage .bs-done")).to_be_visible(timeout=14000)
+    expect(projector.locator("#battle-stage .bs-spoils")).to_be_visible()
 
     # one march per turn; the facilitator sees both sides' numbers
     aethelgard.locator(".bs-modal #bs-close").click()
@@ -397,6 +400,39 @@ def test_attack_with_animation_on_the_projector(server, browser):
     expect(admin.locator("#admin-war-log")).to_contain_text("Aethelgard Dominion")
     expect(admin.locator("#admin-war-log")).to_contain_text("readiness")
     expect(admin.locator("#admin-war-log")).to_contain_text("luck")                 # only the facilitator sees the luck
+    assert errors == [] and sylvan_errors == [] and projector_errors == []
+    admin.close()
+
+
+def test_a_siege_is_announced_and_arrives_later(server, browser):
+    admin = admin_page(browser, server)
+    reset_game(admin)
+    projector = browser.new_page(viewport={"width": 1280, "height": 720})
+    projector_errors = watch_errors(projector)
+    projector.goto(server + "/projector")
+    aethelgard, errors = join(browser, server, "Aethelgard Dominion", "1006")
+    sylvan, sylvan_errors = join(browser, server, "Sylvan Concordat", "1001")
+    api(admin, "/api/admin/turn/next")
+    expect(aethelgard.locator("#war-status")).to_contain_text("1 more time", timeout=8000)
+    aethelgard.locator(".war-chip", has_text="Sylvan Concordat").click()
+    expect(aethelgard.locator("#war-siege-btn")).to_be_enabled(timeout=5000)
+    aethelgard.locator("#war-siege-btn").click()
+    expect(aethelgard.locator(".confirm-card")).to_contain_text("is warned at once")
+    confirm(aethelgard)
+
+    # everyone is told: the target's phone raises the alarm, the projector shows the countdown
+    expect(sylvan.locator("#war-sieges .siege-row.danger")).to_contain_text("Aethelgard Dominion marches on", timeout=8000)
+    expect(sylvan.locator("#war-sieges .siege-eta")).to_contain_text(":")
+    expect(aethelgard.locator("#war-sieges")).to_contain_text("Your army")
+    expect(projector.locator("#siege-banner")).to_contain_text("Aethelgard Dominion", timeout=8000)
+    assert state(admin)["battles"] == []                                      # nothing is fought yet
+
+    # the facilitator can bring the army in at once
+    admin.locator(".admin-tab-btn", has_text="Events").click()
+    admin.locator("#admin-sieges button", has_text="Arrive now").click()
+    confirm(admin)
+    expect(projector.locator(".atlas-side.battling #battle-stage .bs")).to_be_visible(timeout=8000)
+    expect(sylvan.locator("#war-sieges .siege-row")).to_have_count(0, timeout=8000)
     assert errors == [] and sylvan_errors == [] and projector_errors == []
     admin.close()
 
