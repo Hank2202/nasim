@@ -209,6 +209,8 @@
     <!-- One nation at a time, large enough to read from the back of the room -->
     <aside class="atlas-side">
       <div class="atlas-heading"><span class="flourish">&#10086;</span> Realm in Focus <span class="flourish">&#10086;</span></div>
+      <div id="siege-banner" class="siege-banner" aria-live="polite"></div>
+      <div id="battle-stage" class="battle-stage" aria-live="polite"></div>
       <div id="spotlight" class="spotlight"></div>
       <div id="projector-realms-list" class="spot-chips" aria-label="Choose a nation"></div>
     </aside>
@@ -315,7 +317,6 @@
   </div>
 
   <!-- Battle pop-up (battle.js plays the animation here whenever nations fight) -->
-  <div id="battle-pop" aria-live="polite"></div>
 
   <script src="{{ url_for('static', filename='js/common.js') }}"></script>
   <script src="{{ url_for('static', filename='js/battle.js') }}"></script>

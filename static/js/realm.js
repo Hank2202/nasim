@@ -976,7 +976,7 @@ class RealmApp {
       const icons = { clear: '☀️', rain: '🌧️', fog: '🌫️', storm: '⛈️', heat: '🔥', tailwind: '💨', night: '🌑' };
       box.innerHTML = `<span class="w-icon">${icons[w.id] || '🌤️'}</span><span><b>${escapeHtml(w.name)}</b> this turn. ${escapeHtml(w.text || '')}</span>`;
     }
-    const sig = `${meta.current_turn}|${meta.phase}|${meta.intermission_end ? 1 : 0}|${(state.battles || []).length}|${realm.military_power}|${realm.alchemical_grain}`;
+    const sig = `${meta.current_turn}|${meta.phase}|${meta.intermission_end ? 1 : 0}|${(state.battles || []).length}|${realm.military_power}|${realm.alchemical_grain}|${(state.sieges || []).length}`;
     const now = Date.now();
     if (sig !== this._warSig || now - (this._warAt || 0) > 5000) {
       this._warSig = sig;
@@ -984,6 +984,7 @@ class RealmApp {
       this.loadWar();
     }
     this.renderWarLog(state.battles || []);
+    this.renderSieges(state.sieges || []);
   }
 
   async loadWar() {
@@ -1044,60 +1045,113 @@ class RealmApp {
 
   renderWarScout() {
     const box = document.getElementById('war-scout');
-    const btn = document.getElementById('war-attack-btn');
-    if (!box || !btn) return;
+    if (!box) return;
     const p = this.warPreview, esc = escapeHtml;
     if (!this.warTarget || !p) {
       box.innerHTML = '';
-      btn.disabled = true;
-      btn.innerText = this.warTarget ? 'The scouts are riding…' : 'Choose a target';
+      this._setWarButtons(null);
       return;
     }
-    const cls = /favourable/i.test(p.label) && !/un/i.test(p.label) ? 'good' : (/Unfavourable|Very unfavourable/.test(p.label) ? 'bad' : 'even');
-    const cost = Object.entries(p.cost || {}).map(([r, n]) => `−${n} ${RESOURCE_SHORT[r] || r}`).join(', ');
+    const m = p.modes || {};
+    const oddsClass = l => (/favourable/i.test(l) && !/un/i.test(l) ? 'good' : (/Unfavourable|Very unfavourable/.test(l) ? 'bad' : 'even'));
+    const way = (key, title) => m[key] ? `<div class="way-card ${m[key].can_attack ? '' : 'off'}">
+        <div class="way-title">${title}</div>
+        <div class="scout-odds ${oddsClass(m[key].label)}">${esc(m[key].label)}</div>
+        <p class="small">${esc(m[key].summary)}</p>${m[key].can_attack ? '' : `<p class="small warn">${esc(m[key].reason)}</p>`}</div>` : '';
     box.innerHTML = `<div class="scout-box">
-      <div class="scout-odds ${cls}">${esc(p.label)}</div>
       <div class="scout-note">Your scouts' guess against ${esc(p.defender_name)}. It can be wrong, and chance still decides part of the fight.</div>
+      <div class="way-grid mt-1">${way('siege', '🏰 Siege')}${way('surprise', '🗡️ Surprise attack')}</div>
       <div class="mt-1">Your army: <b>${esc(p.own_military)} Military</b>. Their Military: <b>${esc(p.defender_military_tier || '?')}</b>.</div>
       <div class="mt-1"><b>What your scouts could find out</b> <span class="muted">(${esc(p.quality)}; ${p.modifiers.length} of ${esc(p.total)} modifiers revealed)</span>
         ${this._modifierRows(p.modifiers, p.attacker_name, p.defender_name)}
         <div class="section-sub" style="margin:4px 0 0;">More wealth reveals more modifiers; more Silk and Cores make them more accurate.</div></div>
       <div class="mt-1">Ground: <b>${esc((p.terrain || {}).name || '')}</b>. ${esc((p.terrain || {}).note || '')}</div>
       <div>Weather: <b>${esc((p.weather || {}).name || '')}</b>. ${esc((p.weather || {}).text || '')}</div>
-      <div>Cost of the march: <b>${esc(cost)}</b></div>
     </div>`;
-    btn.disabled = !p.can_attack;
-    btn.innerText = p.can_attack ? `Attack ${p.defender_name}` : (p.reason || 'You cannot attack now');
+    this._setWarButtons(p);
   }
 
-  async attackTarget() {
+  _setWarButtons(p) {
+    const siege = document.getElementById('war-siege-btn'), quick = document.getElementById('war-surprise-btn');
+    if (!siege || !quick) return;
+    if (!p) {
+      siege.disabled = quick.disabled = true;
+      siege.innerText = this.warTarget ? 'The scouts are riding…' : 'Choose a target';
+      quick.innerText = 'Surprise attack';
+      return;
+    }
+    const m = p.modes || {};
+    siege.disabled = !(m.siege && m.siege.can_attack);
+    quick.disabled = !(m.surprise && m.surprise.can_attack);
+    siege.innerText = m.siege && m.siege.can_attack ? `Lay siege to ${p.defender_name}` : (p.reason || 'You cannot attack now');
+    quick.innerText = m.surprise && m.surprise.can_attack ? 'Surprise attack now' : 'Surprise attack (not possible)';
+  }
+
+  async attackTarget(mode) {
     const p = this.warPreview, id = this.warTarget;
-    if (!p || !id || !p.can_attack) return;
+    const info = p && p.modes && p.modes[mode];
+    if (!p || !id || !info || !info.can_attack) return;
+    const cost = Object.entries(info.cost || {}).map(([r, n]) => `${n} ${RESOURCE_SHORT[r] || r}`).join(', ');
+    const siege = mode === 'siege';
     const ok = await confirmAction({
-      title: `Attack ${p.defender_name}?`,
-      message: `Odds, as your scouts see them: ${p.label}. Nothing can be undone once the armies meet.`,
-      details: [
-        `Supplies for the march: ${Object.entries(p.cost || {}).map(([r, n]) => `${n} ${RESOURCE_SHORT[r] || r}`).join(', ')}`,
+      title: siege ? `Lay siege to ${p.defender_name}?` : `Attack ${p.defender_name} by surprise?`,
+      message: `Odds, as your scouts see them: ${info.label}.`,
+      details: siege ? [
+        `The march is announced to everyone, and ${p.defender_name} is warned at once`,
+        `Your army arrives after ${Math.floor(info.seconds / 60)}:${String(info.seconds % 60).padStart(2, '0')} of working time; the battle is fought then, with the numbers of that moment`,
+        `Supplies for the march, paid now: ${cost}`,
         'You lose Standing for starting a war, win or lose',
+      ] : [
+        'The battle is fought at once and nobody is warned',
+        `Supplies for the march: ${cost}`,
+        `Heavy price for the attacker: ${Object.entries(info.penalty || {}).map(([r, n]) => `${Math.abs(n)} ${RESOURCE_SHORT[r] || r}`).join(' and ')} extra, on top of the usual loss of Standing`,
         'Both armies lose soldiers; the loser also loses Stability and Vitality, and the winner takes part of its Grain, Cores and Silk',
       ],
-      confirmLabel: 'Sound the war horn', tone: 'danger',
+      confirmLabel: siege ? 'Send the army' : 'Strike now', tone: 'danger',
     });
     if (!ok) return;
     try {
       const res = await (await fetch('/api/war/attack', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ realm_id: this.realmId, target_id: id })
+        body: JSON.stringify({ realm_id: this.realmId, target_id: id, mode })
       })).json();
       if (!res.success) { showToast(res.message, 'danger'); this.loadWar(); return; }
       this.warTarget = null;
       this.warPreview = null;
-      (this._seenBattles = this._seenBattles || new Set()).add(res.battle.id);
-      this.showBattleModal(res.battle);
+      if (res.siege) {
+        (this._seenSieges = this._seenSieges || new Set()).add(res.siege.id);
+        showToast(`Your army is on the road to ${res.siege.defender_name}. It arrives in ${Math.floor(res.siege.eta / 60)}:${String(res.siege.eta % 60).padStart(2, '0')}.`, 'success');
+      } else {
+        (this._seenBattles = this._seenBattles || new Set()).add(res.battle.id);
+        this.showBattleModal(res.battle);
+      }
       this.pollState();
       this.loadWar();
     } catch (err) {
       showToast('The order did not reach the army. Check your connection.', 'danger');
+    }
+  }
+
+  // Armies on the road are announced to everyone; the nation under siege gets an alarm.
+  renderSieges(sieges) {
+    const box = document.getElementById('war-sieges');
+    const esc = escapeHtml;
+    const clock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (box) {
+      box.innerHTML = (sieges || []).map(s => {
+        const mineUnder = s.defender_id === this.realmId, mineMarching = s.attacker_id === this.realmId;
+        return `<div class="siege-row ${mineUnder ? 'danger' : ''}" style="--nc:${esc(s.attacker_color || '#8c7a5e')}">
+          <span>${mineUnder ? '⚠️' : '🏰'} <b>${esc(s.attacker_emoji)} ${esc(s.attacker_name)}</b> marches on <b>${esc(s.defender_emoji)} ${esc(s.defender_name)}</b></span>
+          <b class="siege-eta">${clock(s.eta)}</b>
+          ${mineUnder ? '<em>Prepare: trade for Grain, steady your people, raise your army.</em>' : (mineMarching ? '<em>Your army</em>' : '')}</div>`;
+      }).join('');
+    }
+    if (this._seenSieges === undefined) { this._seenSieges = new Set((sieges || []).map(s => s.id)); return; }
+    for (const s of sieges || []) {
+      if (this._seenSieges.has(s.id)) continue;
+      this._seenSieges.add(s.id);
+      if (s.defender_id === this.realmId) { showToast(`⚠️ ${s.attacker_name} is marching on you! They arrive in ${clock(s.eta)}.`, 'danger'); synth.playAlert(); }
+      else if (s.attacker_id !== this.realmId) showToast(`🏰 ${s.attacker_name} marches on ${s.defender_name} (${clock(s.eta)})`, 'info');
     }
   }
 

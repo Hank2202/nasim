@@ -1821,18 +1821,18 @@ body.console .bottom-nav-item.active::after { display: none; }
   font-family: var(--font-display); color: var(--text-primary);
 }
 .bs-head { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; }
-.bs-arena { position: relative; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-strong); background: #cdbf86; }
-.bs-field { display: block; width: 100%; aspect-ratio: 380 / 170; }
-.bs-side {
-  position: absolute; top: 5px; display: flex; align-items: center; gap: 5px; padding: 2px 8px 2px 3px; border-radius: 99px;
-  background: rgba(255, 250, 240, 0.82); border: 1px solid var(--nc, var(--border-strong)); opacity: 0; max-width: 46%;
-}
-.bs-left { left: 5px; } .bs-right { right: 5px; flex-direction: row-reverse; padding: 2px 3px 2px 8px; }
-.bs-enter .bs-side { opacity: 1; transition: opacity 0.6s 0.3s; }
-.bs-tag { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
-.bs-tag b { font-size: 0.74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bs-tags { display: flex; justify-content: space-between; align-items: stretch; gap: 8px; margin-bottom: 6px; }
+.bs-side { display: flex; align-items: center; gap: 7px; min-width: 0; flex: 1 1 0; opacity: 0; padding: 3px 8px 3px 4px; border-radius: 99px;
+  background: rgba(255, 250, 240, 0.7); border: 1px solid var(--nc, var(--border-strong)); }
+.bs-right { flex-direction: row-reverse; text-align: right; padding: 3px 4px 3px 8px; }
+.bs-enter .bs-side { opacity: 1; transition: opacity 0.6s 0.2s; }
+.bs-tag { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.bs-tag b { font-size: 0.78rem; overflow-wrap: anywhere; }
 .bs-tag em { font-size: 0.6rem; color: var(--text-muted); font-style: normal; text-transform: uppercase; letter-spacing: 0.08em; }
-.bs-crest { width: 22px; height: 22px; font-size: 0.8rem; flex: 0 0 auto; }
+.bs-crest { width: 26px; height: 26px; font-size: 0.9rem; flex: 0 0 auto; }
+.bs-head { text-align: center; margin: 0 0 6px; }
+.bs-arena { position: relative; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-strong); background: #cdbf86; }
+.bs-field { display: block; width: 100%; }
 .bs-win-attacker .bs-right, .bs-win-defender .bs-left { opacity: 0.55; filter: grayscale(0.7); }
 .bs-winner { animation: bs-win 1s ease-out forwards; }
 .bs-winner .bs-crest { box-shadow: 0 0 0 2px rgba(255, 250, 240, 0.8), 0 0 14px 3px rgba(255, 196, 80, 0.85); }
@@ -1848,11 +1848,15 @@ body.console .bottom-nav-item.active::after { display: none; }
 .bs-chip.none { border-color: var(--border-strong); color: var(--text-muted); background: transparent; }
 .bs-losses { margin-top: 8px; font-size: 0.7rem; color: var(--text-muted); }
 
-#battle-pop {
-  position: fixed; right: 18px; top: 112px; width: 380px; max-width: calc(100vw - 36px); z-index: 900;
-  display: none; transform: translateX(110%); transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-#battle-pop.show { display: block; transform: none; }
+/* On the projector a battle takes over the Realm in Focus panel. */
+.battle-stage { display: none; flex: 1; min-height: 0; overflow: hidden; }
+.atlas-side.battling .battle-stage { display: block; animation: spot-in 0.45s ease; }
+.atlas-side.battling .spotlight { display: none; }
+.battle-stage .bs { box-shadow: none; border: 0; background: none; padding: 0; display: flex; flex-direction: column; min-height: 100%; }
+.battle-stage .bs-arena .bs-result { position: absolute; left: 0; right: 0; bottom: 0; padding: 44px 10px 10px; margin: 0;
+  background: linear-gradient(180deg, rgba(251, 241, 216, 0) 0%, rgba(251, 241, 216, 0.97) 34%); }
+.battle-stage .bs-outcome { font-size: 1.35rem; }
+.battle-stage .bs-losses { color: var(--text-secondary); }
 .bs-modal {
   position: fixed; inset: 0; z-index: 99990; display: flex; align-items: center; justify-content: center; padding: 14px;
   background: rgba(43, 32, 22, 0.6); backdrop-filter: blur(3px); overflow-y: auto;
@@ -1943,3 +1947,23 @@ body.console .bottom-nav-item.active::after { display: none; }
 .mod-flag { display: inline-flex; align-items: center; gap: 6px; }
 .journal-entry.reverted { opacity: 0.55; }
 .journal-lines { margin: 4px 0 6px 18px; }
+
+/* Sieges: armies on the road, and the two ways to attack */
+.siege-list:empty, .siege-banner:empty { display: none; }
+.siege-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.siege-banner { display: flex; flex-direction: column; gap: 6px; }
+.siege-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; padding: 6px 10px; border-radius: var(--radius-md);
+  border: 1px solid var(--nc, var(--border-strong)); border-left-width: 5px; background: rgba(255, 244, 214, 0.85); font-size: 0.82rem; }
+.siege-row.danger { background: rgba(239, 68, 68, 0.12); border-color: var(--danger); animation: siege-pulse 1.2s ease-in-out infinite alternate; }
+.siege-row em { flex-basis: 100%; font-size: 0.74rem; color: var(--text-secondary); font-style: normal; }
+.siege-eta { font-variant-numeric: tabular-nums; font-size: 1rem; color: var(--danger, #a1322a); }
+@keyframes siege-pulse { from { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.0); } to { box-shadow: 0 0 10px 2px rgba(239, 68, 68, 0.45); } }
+.war-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.way-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.way-card { border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px; background: var(--bg-surface); }
+.way-card.off { opacity: 0.6; }
+.way-title { font-weight: 800; font-size: 0.82rem; margin-bottom: 4px; }
+.way-card .scout-odds { font-size: 0.9rem; }
+.way-card .small { font-size: 0.72rem; line-height: 1.35; margin-top: 4px; }
+.way-card .warn { color: var(--danger); }
+@media (max-width: 420px) { .way-grid, .war-buttons { grid-template-columns: 1fr; } }

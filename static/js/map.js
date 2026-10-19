@@ -146,6 +146,7 @@
       this.tourStep = 0;
       this.events = [];
       this.wars = [];                       // real battles between nations: an arc of fire between their capitals
+      this.sieges = [];                     // armies on the road: a marching banner along an arc, with the time left
       this.eventClock = 0;
       this.nextEvent = 5;
       // Weather appears roughly once per cycle of ten events, i.e. every few minutes.
@@ -597,6 +598,7 @@
       const realms = (state && state.realms) || [];
       this.realms = Object.fromEntries(realms.map(r => [r.id, r]));
       this.trades = (state && state.trades) || [];
+      this.sieges = (state && state.sieges) || [];
       const key = realms.map(r => `${r.id}:${r.active !== false}:${r.theme_color}`).join(',');
       if (key !== this.rosterKey) {
         this.rosterKey = key;
@@ -694,6 +696,7 @@
       this.drawShips(ctx, s);
       this.drawCarts(ctx, s);
       this.drawTrades(ctx, s);
+      this.drawSieges(ctx, s);
       this.drawWars(ctx, s);
       this.hits = [];
 
@@ -759,6 +762,30 @@
       if (!CAPITALS[attackerId] || !CAPITALS[defenderId]) return;
       this.wars.push({ a: attackerId, d: defenderId, age: 0, dur: 30, outcome });
       if (this.wars.length > 4) this.wars.shift();
+    }
+
+    drawSieges(ctx, s) {
+      for (const w of this.sieges) {
+        const A = CAPITALS[w.attacker_id], D = CAPITALS[w.defender_id];
+        if (!A || !D) continue;
+        const pa = this.project(A[0], A[1], 6), pb = this.project(D[0], D[1], 6);
+        const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2 - 60 * s;
+        const u = Math.max(0.02, Math.min(0.98, 1 - w.eta / Math.max(1, w.seconds)));
+        const qx = (1 - u) * (1 - u) * pa.x + 2 * (1 - u) * u * mx + u * u * pb.x;
+        const qy = (1 - u) * (1 - u) * pa.y + 2 * (1 - u) * u * my + u * u * pb.y;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(214,150,30,0.85)'; ctx.lineWidth = 3; ctx.setLineDash([4, 8]);
+        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.quadraticCurveTo(mx, my, pb.x, pb.y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = w.attacker_color || '#a83232'; ctx.strokeStyle = '#fff8e6'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(qx, qy, 11 * s, 0, 6.283); ctx.fill(); ctx.stroke();
+        ctx.font = `${13 * s}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+        ctx.fillText('⚔', qx, qy + 1);
+        const t = `${Math.floor(w.eta / 60)}:${String(w.eta % 60).padStart(2, '0')}`;
+        ctx.font = `bold ${12 * s}px sans-serif`; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(40,24,8,0.85)'; ctx.fillStyle = '#ffe7a8';
+        ctx.strokeText(t, qx, qy - 18 * s); ctx.fillText(t, qx, qy - 18 * s);
+        ctx.restore();
+      }
     }
 
     drawWars(ctx, s) {

@@ -302,8 +302,8 @@
           "famine_border_surge"
         ]
       },
-      "difficulty": 4,
-      "difficulty_note": "Everyone needs its grain, yet its secret mission wants 70 Grain kept at home. A weak army and a tempting target."
+      "difficulty": 3,
+      "difficulty_note": "Everyone needs its grain, yet it has a weak army and is a tempting target for its neighbours."
     },
     {
       "id": "val_khor",
@@ -373,8 +373,8 @@
           "plutocratic_labor_revolt"
         ]
       },
-      "difficulty": 5,
-      "difficulty_note": "Starts with 30 Grain, a sixth of what the game demands, and its three secret missions pull against each other and against Aethelgard."
+      "difficulty": 3,
+      "difficulty_note": "Starts with only 30 Grain, a sixth of what the game demands, and has to juggle competing goals against its neighbours."
     },
     {
       "id": "solaria",
@@ -452,7 +452,7 @@
         ]
       },
       "difficulty": 1,
-      "difficulty_note": "Rich and respected (Standing 90, 3 votes): its missions fit a cooperative game. The challenge is coordinating 4 delegates."
+      "difficulty_note": "Rich and respected (Standing 90, 3 votes). The challenge is coordinating 4 delegates."
     },
     {
       "id": "umbra",
@@ -510,7 +510,7 @@
           "virulent_pestilence"
         ]
       },
-      "difficulty": 4,
+      "difficulty": 3,
       "difficulty_note": "One delegate, one vote, the lowest Standing (40). Its public mission needs the strong nations to hold their armies back."
     },
     {
@@ -566,7 +566,7 @@
           "plutocratic_labor_revolt"
         ]
       },
-      "difficulty": 3,
+      "difficulty": 2,
       "difficulty_note": "Its public mission is easy, but being the wealthiest by 25 points means hoarding while trading with everyone. Short on grain and military."
     },
     {
@@ -637,8 +637,8 @@
           "famine_border_surge"
         ]
       },
-      "difficulty": 2,
-      "difficulty_note": "The strongest army and a calm people, and its missions are within reach. Careful: its secret missions pull against Umbra's and Val-Khor's."
+      "difficulty": 1,
+      "difficulty_note": "The strongest army and a calm people. Careful: a strong army makes its neighbours nervous."
     }
   ],
   "initial_news": [
@@ -1882,6 +1882,21 @@
       "odds_blur_base": 0.08,
       "odds_blur_scale": 0.3,
       "accuracy_cap": 0.9
+    },
+    "modes": {
+      "siege": {
+        "seconds": 120,
+        "cost_multiplier": 1
+      },
+      "surprise": {
+        "cost_multiplier": 2,
+        "attacker_bonus": 0.08,
+        "attacker_penalty": {
+          "standing": -15,
+          "stability": -8
+        },
+        "defender_win_standing": 5
+      }
     }
   },
   "quiz": {
