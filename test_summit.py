@@ -196,7 +196,8 @@ class TestSummitEngine(unittest.TestCase):
 
         prop = next(p for p in self.engine.get_full_state()["proposals"] if p["id"] == pid)
         result_str = self.engine._apply_proposal_effect(prop)
-        self.assertIn("Borders fortified against unrest", result_str)
+        self.assertIn("Sylvan Concordat +10 Stability", result_str)
+        self.assertIn("Sylvan Concordat is cordoned", result_str)
 
         sylvan = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
         self.assertTrue(sylvan["is_quarantined"])
@@ -329,66 +330,99 @@ class TestSummitEngine(unittest.TestCase):
         from engine import load_quiz
         return next(q for q in load_quiz()["questions"] if q["id"] == qid)
 
+    def _take(self, realm_id, qid=None):
+        """The nation takes its next question; returns the bank entry with this draw's stake added as `stake`."""
+        ok, msg, active = self.engine.quiz_start(realm_id)
+        self.assertTrue(ok, msg)
+        if qid:
+            self.assertEqual(active["question_id"], qid)
+        return dict(self._q(active["question_id"]), stake=active["stake_amount"])
+
+    def _field(self, q):
+        return {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk"}[q["reward_resource"]]
+
+    def _stock(self, realm_id, field):
+        return next(r for r in self.engine.get_full_state()["realms"] if r["id"] == realm_id)[field]
+
     def test_lore_quiz_correct_answer_awards_resource(self):
         """A correct answer credits the question's resource and records the claim."""
-        q = self._q("q01")
-        field = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk"}[q["reward_resource"]]
-        before = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")[field]
+        q = self._take("sylvan")
+        field = self._field(q)
+        before = self._stock("sylvan", field)
 
-        ok, msg, data = self.engine.submit_lore_quiz("sylvan", "q01", q["correct_index"])
+        ok, msg, data = self.engine.submit_lore_quiz("sylvan", q["id"], q["correct_index"])
         self.assertTrue(ok)
         self.assertEqual(data["explanation"], q["explanation"])
+        self.assertEqual(self._stock("sylvan", field), before + q["stake"])
+        realm = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
+        self.assertIn(q["id"], realm["claimed_lore"])
+        self.assertIsNone(realm["quiz_active"])
 
-        after = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
-        self.assertEqual(after[field], before + q["reward_amount"])
-        self.assertIn("q01", after["claimed_lore"])
-
-        ok_dup, msg_dup, _ = self.engine.submit_lore_quiz("sylvan", "q01", q["correct_index"])
+        ok_dup, msg_dup, _ = self.engine.submit_lore_quiz("sylvan", q["id"], q["correct_index"])
         self.assertFalse(ok_dup)
         self.assertIn("already answered", msg_dup)
 
     def test_lore_quiz_incorrect_answer_applies_penalty_and_lockout(self):
         """A wrong answer costs the reward's resource and amount, and locks the question for that realm only."""
-        q = self._q("q02")
+        q = self._take("sylvan")
         wrong = (q["correct_index"] + 1) % 4
-        field = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk"}[q["reward_resource"]]
-        before = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")[field]
+        field = self._field(q)
+        before = self._stock("sylvan", field)
 
-        ok, msg, data = self.engine.submit_lore_quiz("sylvan", "q02", wrong)
+        ok, msg, data = self.engine.submit_lore_quiz("sylvan", q["id"], wrong)
         self.assertFalse(ok)
-        self.assertIn(f"-{q['reward_amount']}", msg)
-        after = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
-        self.assertEqual(after[field], before - q["reward_amount"])   # same resource, same amount as the reward
-        self.assertIn("q02", after["failed_lore"])
+        self.assertIn(f"-{q['stake']}", msg)
+        self.assertEqual(self._stock("sylvan", field), before - q["stake"])   # same resource, same amount
+        realm = next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")
+        self.assertIn(q["id"], realm["failed_lore"])
 
-        ok_lock, msg_lock, _ = self.engine.submit_lore_quiz("sylvan", "q02", q["correct_index"])
+        ok_lock, msg_lock, _ = self.engine.submit_lore_quiz("sylvan", q["id"], q["correct_index"])
         self.assertFalse(ok_lock)
         self.assertIn("Locked", msg_lock)
 
-        # Same question is still open for every other nation (shared bank, per-realm attempts)
-        ok_other, _, _ = self.engine.submit_lore_quiz("val_khor", "q02", q["correct_index"])
+        # The question stays open for every other nation (shared bank, one lock per nation)
+        realms = self.engine.db.get_state("realms")
+        next(r for r in realms if r["id"] == "val_khor")["quiz_next"] = {"question_id": q["id"], "stake": 4}
+        self.engine.db.set_state("realms", realms)
+        other = self._take("val_khor", q["id"])
+        ok_other, _, _ = self.engine.submit_lore_quiz("val_khor", other["id"], other["correct_index"])
         self.assertTrue(ok_other)
 
     def test_quiz_turn_gating_and_no_answer_leak(self):
-        quiz = self.engine.get_quiz_for_realm("aquila")
-        self.assertEqual(quiz["current_turn"], 1)
-        for item in quiz["questions"]:
-            self.assertNotIn("correct_index", item)
-            self.assertNotIn("explanation", item)
-            if item["turn"] > 1:
-                self.assertEqual(item["status"], "sealed")
-                self.assertEqual(item["question"], "")
-        later = next(i for i in quiz["questions"] if i["turn"] == 2)
-        ok, msg, _ = self.engine.submit_lore_quiz("aquila", later["id"], 0)
+        status = self.engine.get_quiz_status("aquila")
+        self.assertEqual(status["current_turn"], 1)
+        self.assertIsNone(status["active"])
+        self.assertNotIn("question", json.dumps(status["next"]))          # nothing about the question until it is taken
+        self.assertEqual(status["history"], [])
+        # Only Turn 1 questions come up; Turn 2's stay sealed
+        seen = []
+        for _ in range(status["stats"]["left"]):
+            q = self._take("aquila")
+            seen.append(q)
+            self.assertEqual(q["turn"], 1)
+            self.engine.submit_lore_quiz("aquila", q["id"], q["correct_index"])
+        self.assertEqual(len({q["id"] for q in seen}), len(seen))
+        ok, msg, _ = self.engine.quiz_start("aquila")
         self.assertFalse(ok)
-        self.assertIn("unlocks in Turn 2", msg)
+        self.assertIn("More unlock next turn", msg)
+        self.assertEqual(self.engine.get_quiz_status("aquila")["unlocks_turn"], 2)
+        # The open question shows its text and shuffled options, never the answer
+        meta = self.engine.db.get_state("meta")
+        meta["current_turn"] = 2
+        self.engine.db.set_state("meta", meta)
+        ok, msg, active = self.engine.quiz_start("aquila")
+        self.assertTrue(ok)
+        self.assertNotIn("correct_index", active)
+        self.assertNotIn("explanation", active)
+        self.assertEqual(sorted(o["i"] for o in active["options"]), [0, 1, 2, 3])
 
     def test_quiz_bank_is_well_formed(self):
         import wiki
         from engine import load_quiz
         slugs = set(wiki.load_wiki()["by_slug"])
         qs = load_quiz()["questions"]
-        self.assertGreaterEqual(len(qs), 30)
+        self.assertGreaterEqual(len(qs), 60)
+        self.assertGreaterEqual(sum(1 for q in qs if q.get("tier") == "hard"), 30)
         self.assertEqual(len({q["id"] for q in qs}), len(qs))
         for q in qs:
             self.assertIn(q["article"], slugs)
@@ -506,7 +540,7 @@ class TestFlaskEndpoints(unittest.TestCase):
         self.assertIn(b"mobile-concluded-callout", resp_realm.data)
         self.assertIn(b"trade-note", resp_realm.data)
         self.assertIn(b"nav-motions-badge", resp_realm.data)
-        self.assertIn(b"quiz-container", resp_realm.data)
+        self.assertIn(b"quiz-stage", resp_realm.data)
         self.assertIn(b"wiki-body", resp_realm.data)
         self.assertIn(b"trade-partner-chips", resp_realm.data)
 
@@ -577,26 +611,30 @@ class TestFlaskEndpoints(unittest.TestCase):
 
     def test_api_lore_quiz(self):
         from engine import load_quiz
-        q = load_quiz()["questions"][0]
+        from app import engine
+        engine.reset_simulation()
         listing = self.client.get("/api/quiz/sylvan").json
         self.assertTrue(listing["success"])
-        self.assertNotIn("correct_index", listing["questions"][0])
-        resp = self.client.post("/api/lore/quiz", json={
-            "realm_id": "sylvan",
-            "question_id": q["id"],
-            "answer_index": q["correct_index"]
-        })
+        self.assertIsNone(listing["active"])
+        started = self.client.post("/api/quiz/start", json={"realm_id": "sylvan"}).json
+        self.assertTrue(started["success"])
+        qid = started["question"]["question_id"]
+        self.assertNotIn("correct_index", started["question"])
+        bank = {x["id"]: x for x in load_quiz()["questions"]}
+        resp = self.client.post("/api/lore/quiz", json={"realm_id": "sylvan", "question_id": qid, "answer_index": bank[qid]["correct_index"]})
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.data)
         self.assertTrue(data["success"])
         self.assertIn("reward_label", data["data"])
+        again = self.client.post("/api/lore/quiz", json={"realm_id": "sylvan", "question_id": qid, "answer_index": 0})
+        self.assertEqual(again.status_code, 400)
 
     def test_js_syntax_integrity(self):
         """Ensure the scripts in static/js/ are free of JavaScript syntax errors using macOS JavaScriptCore evaluator."""
         import subprocess
         cmd = [
             "osascript", "-l", "JavaScript", "-e",
-            'var window = this; var document = { getElementById: function() { return null; }, querySelectorAll: function() { return []; }, addEventListener: function() {} }; eval($.NSString.stringWithContentsOfFileEncodingError("static/js/common.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/map.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/realm.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/projector.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/admin.js", $.NSUTF8StringEncoding, null).js); "OK"'
+            'var window = this; var document = { getElementById: function() { return null; }, querySelectorAll: function() { return []; }, addEventListener: function() {} }; eval($.NSString.stringWithContentsOfFileEncodingError("static/js/common.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/battle.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/map.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/realm.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/projector.js", $.NSUTF8StringEncoding, null).js); eval($.NSString.stringWithContentsOfFileEncodingError("static/js/admin.js", $.NSUTF8StringEncoding, null).js); "OK"'
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, f"JS Syntax Error detected: {result.stderr}")
@@ -1369,19 +1407,10 @@ class TestMotionPrivacy(unittest.TestCase):
         out = self.engine.conclude_summit()[2]
         self.assertEqual(out["passed_proposals_count"], 0)
 
-    def test_motion_limit_per_turn(self):
+    def test_there_is_no_limit_on_motions_per_turn(self):
         app.config["TESTING"] = True
-        for i in range(2):
+        for i in range(8):
             self.assertTrue(self.engine.draft_proposal("sylvan", f"M{i}", "x", "aid")[0])
-        ok, msg, _ = self.engine.draft_proposal("sylvan", "M3", "x", "gm_question")
-        self.assertFalse(ok)
-        self.assertIn("limit is 2", msg)
-        self.assertTrue(self.engine.draft_proposal("aquila", "Other nation", "x", "aid")[0])
-        self.engine.update_settings({"motions_per_turn": 3})
-        self.assertTrue(self.engine.draft_proposal("sylvan", "M3", "x", "aid")[0])
-        self.engine.db.set_state("settings", {})
-        self.engine.process_end_of_turn()                                  # a new turn, a new allowance
-        self.assertTrue(self.engine.draft_proposal("sylvan", "Turn 2", "x", "aid")[0])
 
 
 class TestFewerNations(unittest.TestCase):
@@ -1586,3 +1615,1005 @@ class TestFreshStart(unittest.TestCase):
         self.assertEqual(app.test_client().get("/static/js/realm.js").headers["Cache-Control"], "no-cache")
         self.assertEqual(app.test_client().get("/").headers["Cache-Control"], "no-cache")
         self.assertEqual(app.test_client().get("/api/state").headers["Cache-Control"], "no-store")
+
+
+class TestMotionBuilder(unittest.TestCase):
+    """Motions carry structured effects that the game applies itself, exactly as the players read them."""
+
+    def setUp(self):
+        app.config["TESTING"] = True
+        from app import engine
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.reset_simulation()
+
+    def _stock(self, field):
+        return {r["id"]: r[field] for r in self.engine.db.get_state("realms")}
+
+    def _pass(self, pid):
+        prop = next(p for p in self.engine.db.get_state("proposals") if p["id"] == pid)
+        return self.engine._apply_proposal_effect(prop)
+
+    def _pact(self, lines, proposer="sylvan"):
+        ok, msg, pid = self.engine.draft_proposal(proposer, "Pact", "terms", "pact", None, None, {"lines": lines})
+        self.assertTrue(ok, msg)
+        return pid
+
+    def test_a_transfer_takes_at_most_what_the_payer_has_and_the_receiver_gets_only_that(self):
+        before = self._stock("alchemical_grain")
+        pid = self._pact([{"kind": "transfer", "resource": "grain", "amount": 500, "payers": ["sylvan"], "receivers": ["umbra"]}])
+        self._pass(pid)
+        after = self._stock("alchemical_grain")
+        self.assertEqual(after["sylvan"], 0)
+        self.assertEqual(after["umbra"], before["umbra"] + before["sylvan"])
+        self.assertEqual(sum(after.values()), sum(before.values()))
+
+    def test_an_open_motion_has_no_effect_until_the_game_masters_carry_it_out(self):
+        ok, msg, pid = self.engine.draft_proposal("sylvan", "Anything", "Let everyone dance", "open")
+        self.assertTrue(ok, msg)
+        before = self._stock("alchemical_grain")
+        proposals = self.engine.db.get_state("proposals")
+        prop = next(p for p in proposals if p["id"] == pid)
+        prop["status"] = "passed"
+        self.assertIn("carry", self.engine._apply_proposal_effect(prop).lower())   # the caller saves the proposals
+        self.engine.db.set_state("proposals", proposals)
+        self.assertEqual(self._stock("alchemical_grain"), before)
+        self.assertTrue(next(p for p in self.engine.db.get_state("proposals") if p["id"] == pid)["awaiting_gm"])
+        self.assertTrue(self.engine.complete_open_motion(pid, "Dancing arranged")[0])
+        prop = next(p for p in self.engine.db.get_state("proposals") if p["id"] == pid)
+        self.assertFalse(prop["awaiting_gm"])
+        self.assertEqual(prop["result_text"], "Dancing arranged")
+
+    def test_every_player_template_writes_its_effect_in_words(self):
+        for t in load_scenario_config()["resolution_types"]:
+            if not t.get("player_selectable"):
+                continue
+            params = {"lines": [{"kind": "transfer", "resource": "grain", "amount": 5, "payers": ["sylvan"], "receivers": ["umbra"]}]} if t["id"] == "pact" else {}
+            ok, msg, text = self.engine.preview_proposal("sylvan", t["id"], params, "umbra" if t.get("needs_target") else None)
+            self.assertTrue(ok, f"{t['id']}: {msg}")
+            self.assertTrue(text and all(isinstance(x, str) and x for x in text))
+
+    def test_pact_transfer_moves_resources_and_creates_none(self):
+        pid = self._pact([{"kind": "transfer", "resource": "grain", "amount": 10, "payers": ["sylvan"], "receivers": ["val_khor", "umbra"]}])
+        before = self._stock("alchemical_grain")
+        self._pass(pid)
+        after = self._stock("alchemical_grain")
+        self.assertEqual(after["sylvan"], before["sylvan"] - 10)
+        self.assertEqual(after["val_khor"], before["val_khor"] + 5)
+        self.assertEqual(after["umbra"], before["umbra"] + 5)
+        self.assertEqual(sum(after.values()), sum(before.values()))
+
+    def test_pact_remainder_goes_to_the_first_receivers_and_payers_without_stock_pay_less(self):
+        realms = self.engine.db.get_state("realms")
+        next(r for r in realms if r["id"] == "umbra")["echo_silk"] = 4          # can only give 4 of the 10
+        self.engine.db.set_state("realms", realms)
+        pid = self._pact([{"kind": "transfer", "resource": "silk", "amount": 10, "payers": ["umbra", "aquila"],
+                           "receivers": ["sylvan", "val_khor", "solaria"]}], proposer="aquila")
+        before = self._stock("echo_silk")
+        self._pass(pid)
+        after = self._stock("echo_silk")
+        self.assertEqual(before["umbra"] - after["umbra"], 4)
+        self.assertEqual(before["aquila"] - after["aquila"], 10)
+        gains = [after[i] - before[i] for i in ("sylvan", "val_khor", "solaria")]
+        self.assertEqual(sum(gains), 14)
+        self.assertEqual(gains, [5, 5, 4])
+        self.assertEqual(sum(after.values()), sum(before.values()))
+
+    def test_levy_and_dynamic_targets(self):
+        ok, msg, pid = self.engine.draft_proposal("umbra", "Sanction", "terms", "embargo", None, None,
+                                                  {"target": "@richest", "resource": "silk", "amount": 12})
+        self.assertTrue(ok, msg)
+        richest = max(self.engine.db.get_state("realms"), key=lambda r: r["alchemical_grain"] + r["aether_cores"] + r["echo_silk"])
+        before = self._stock("echo_silk")
+        self._pass(pid)
+        after = self._stock("echo_silk")
+        self.assertEqual(before[richest["id"]] - after[richest["id"]], 12)
+        self.assertEqual(sum(before.values()) - sum(after.values()), 12)
+
+    def test_redistribute_only_hands_out_what_is_collected(self):
+        realms = self.engine.db.get_state("realms")
+        for r in realms:
+            r["alchemical_grain"] = {"sylvan": 100, "val_khor": 10, "umbra": 20}.get(r["id"], 40)
+        self.engine.db.set_state("realms", realms)
+        ok, msg, pid = self.engine.draft_proposal("aquila", "Share", "terms", "tax", None, None,
+                                                  {"resource": "grain", "above": 50, "give": 10, "below": 25, "receive": 15})
+        self.assertTrue(ok, msg)
+        before = self._stock("alchemical_grain")
+        self._pass(pid)
+        after = self._stock("alchemical_grain")
+        self.assertEqual(before["sylvan"] - after["sylvan"], 10)          # the only nation above 50 gives its 10
+        self.assertEqual((after["val_khor"] - before["val_khor"]) + (after["umbra"] - before["umbra"]), 10)
+        self.assertEqual(sum(after.values()), sum(before.values()))       # nothing created
+
+    def test_cordon_is_automatic_and_defends_in_battle(self):
+        ok, msg, pid = self.engine.draft_proposal("aethelgard", "Watch", "terms", "cordon", None, "umbra")
+        self.assertTrue(ok, msg)
+        before = self._stock("civil_stability")
+        self._pass(pid)
+        umbra = next(r for r in self.engine.db.get_state("realms") if r["id"] == "umbra")
+        self.assertTrue(umbra["is_quarantined"])
+        self.assertEqual(umbra["civil_stability"], before["umbra"] + 10)
+
+    def test_players_cannot_make_value_out_of_nothing_or_break_the_limits(self):
+        bad = [
+            ([{"kind": "boost", "resource": "grain", "amount": 10, "targets": ["sylvan"]}], "unknown kind"),
+            ([{"kind": "transfer", "resource": "grain", "amount": 1000, "payers": ["sylvan"], "receivers": ["umbra"]}], "between"),
+            ([{"kind": "transfer", "resource": "grain", "amount": 5, "payers": ["sylvan"], "receivers": ["sylvan"]}], "different"),
+            ([{"kind": "transfer", "resource": "grain", "amount": 5, "payers": [], "receivers": ["umbra"]}], "at least one"),
+            ([{"kind": "transfer", "resource": "vitality", "amount": 5, "payers": ["sylvan"], "receivers": ["umbra"]}], "resource"),
+            ([{"kind": "transfer", "resource": "grain", "amount": 5, "payers": ["nobody"], "receivers": ["umbra"]}], "not a nation"),
+            ([{"kind": "levy", "resource": "grain", "amount": 5, "targets": ["sylvan"]}] * 4, "1 to 3"),
+        ]
+        for lines, fragment in bad:
+            ok, msg, _ = self.engine.draft_proposal("sylvan", "Bad", "terms", "pact", None, None, {"lines": lines})
+            self.assertFalse(ok)
+            self.assertIn(fragment, msg.lower() if fragment.islower() else msg)
+
+    def test_inactive_nations_are_skipped_when_a_motion_passes(self):
+        pid = self._pact([{"kind": "transfer", "resource": "grain", "amount": 10, "payers": ["sylvan"], "receivers": ["aquila", "umbra"]}])
+        self.engine.admin_toggle_realm("aquila", False)
+        before = self._stock("alchemical_grain")
+        self._pass(pid)
+        after = self._stock("alchemical_grain")
+        self.assertEqual(after["aquila"], before["aquila"])
+        self.assertEqual(after["umbra"], before["umbra"] + 10)
+
+    def test_passed_motion_reports_what_it_did_and_the_news_says_so(self):
+        pid = self._pact([{"kind": "transfer", "resource": "grain", "amount": 10, "payers": ["sylvan"], "receivers": ["umbra"]}])
+        self.engine.support_proposal(pid, "umbra")
+        self.engine.start_plenary_session()
+        for rid in ("sylvan", "umbra", "solaria"):
+            self.engine.cast_plenary_vote(rid, pid, "support")
+        self.engine.conclude_quick_plenary()
+        prop = next(p for p in self.engine.db.get_state("proposals") if p["id"] == pid)
+        self.assertEqual(prop["status"], "passed")
+        self.assertIn("Sylvan Concordat -10 Grain", prop["result_text"])
+        news = json.dumps(self.engine.db.get_state("news_feed")[:4])
+        self.assertIn("MOTION PASSED", news)
+        self.assertIn("Umbral Enclave +10 Grain", news)
+
+    def test_preview_and_create_endpoints(self):
+        app.config["TESTING"] = False
+        try:
+            c = app.test_client()
+            c.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+            body = {"proposer_id": "sylvan", "effect_type": "pact", "params": {"lines": [
+                {"kind": "levy", "resource": "silk", "amount": 5, "targets": ["umbra"]}]}}
+            prev = c.post("/api/proposal/preview", json=body).json
+            self.assertTrue(prev["success"])
+            self.assertIn("Umbral Enclave loses 5 Silk", prev["effect_text"][0])
+            made = c.post("/api/proposal/create", json=dict(body, title="Fine", description="terms")).json
+            self.assertTrue(made["success"])
+            mine = next(p for p in c.get("/api/state").json["proposals"] if p["id"] == made["proposal_id"])
+            self.assertEqual(mine["effect_text"], prev["effect_text"])
+            nobody = app.test_client().post("/api/proposal/preview", json=body)
+            self.assertEqual(nobody.status_code, 401)
+        finally:
+            app.config["TESTING"] = True
+
+
+class TestQuizRun(unittest.TestCase):
+    """One question at a time, against the clock; the news carries a digest, never one line per answer."""
+
+    def setUp(self):
+        app.config["TESTING"] = True
+        from app import engine
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.reset_simulation()
+        self.bank = {q["id"]: q for q in load_quiz()["questions"]}
+
+    def _expire(self, realm_id, seconds=30):
+        realms = self.engine.db.get_state("realms")
+        next(r for r in realms if r["id"] == realm_id)["quiz_active"]["deadline"] -= seconds
+        self.engine.db.set_state("realms", realms)
+
+    def test_one_question_at_a_time_and_it_comes_back_after_a_refresh(self):
+        ok, _, first = self.engine.quiz_start("sylvan")
+        self.assertTrue(ok)
+        again_ok, msg, again = self.engine.quiz_start("sylvan")             # a refresh or a teammate's phone
+        self.assertTrue(again_ok)
+        self.assertEqual(again["question_id"], first["question_id"])
+        self.assertEqual(again["options"], first["options"])               # same shuffle, same clock
+        self.assertLessEqual(again["seconds_left"], first["seconds_left"])
+        self.assertEqual(self.engine.get_quiz_status("sylvan")["active"]["question_id"], first["question_id"])
+
+    def test_the_order_is_random_and_a_nation_never_gets_the_same_question_twice(self):
+        firsts = set()
+        for _ in range(12):
+            self.engine.reset_simulation()
+            ok, _, q = self.engine.quiz_start("sylvan")
+            firsts.add(q["question_id"])
+        self.assertGreater(len(firsts), 5)                                   # not a fixed list
+        seen = []
+        for _ in range(20):
+            ok, _, q = self.engine.quiz_start("sylvan")
+            self.assertTrue(ok)
+            seen.append(q["question_id"])
+            self.engine.submit_lore_quiz("sylvan", q["question_id"], self.bank[q["question_id"]]["correct_index"])
+        self.assertEqual(len(set(seen)), 20)
+        self.assertTrue(all(self.bank[i]["turn"] == 1 for i in seen))        # still only the unlocked turn
+
+    def test_a_refresh_shows_the_same_next_question_and_stake_until_it_is_taken(self):
+        first = self.engine.get_quiz_status("sylvan")["next"]
+        for _ in range(5):
+            self.assertEqual(self.engine.get_quiz_status("sylvan")["next"], first)
+        ok, _, q = self.engine.quiz_start("sylvan")
+        self.assertEqual(q["stake_amount"], first["stake_amount"])           # the stake that was shown is the stake that counts
+
+    def test_stakes_are_random_with_an_average_of_five_and_a_win_equals_a_loss(self):
+        stakes = []
+        for _ in range(300):
+            self.engine.reset_simulation()
+            stakes.append(self.engine.get_quiz_status("sylvan")["next"]["stake_amount"])
+        self.assertEqual(min(stakes), 1)
+        self.assertEqual(max(stakes), 9)
+        self.assertGreater(len(set(stakes)), 6)
+        self.assertAlmostEqual(sum(stakes) / len(stakes), 5.0, delta=0.4)
+        for correct in (True, False):                                        # whichever way it goes, exactly the stake moves
+            self.engine.reset_simulation()
+            ok, _, q = self.engine.quiz_start("sylvan")
+            bank = self.bank[q["question_id"]]
+            field = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk"}[bank["reward_resource"]]
+            before = next(r for r in self.engine.db.get_state("realms") if r["id"] == "sylvan")[field]
+            answer = bank["correct_index"] if correct else (bank["correct_index"] + 1) % 4
+            self.engine.submit_lore_quiz("sylvan", q["question_id"], answer)
+            after = next(r for r in self.engine.db.get_state("realms") if r["id"] == "sylvan")[field]
+            self.assertEqual(after - before, q["stake_amount"] if correct else -q["stake_amount"])
+
+    def test_running_out_of_time_counts_as_wrong_and_costs_the_stake(self):
+        ok, _, q = self.engine.quiz_start("val_khor")
+        bank = self.bank[q["question_id"]]
+        field = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk"}[bank["reward_resource"]]
+        before = next(r for r in self.engine.db.get_state("realms") if r["id"] == "val_khor")[field]
+        stake = q["stake_amount"]
+        self._expire("val_khor")
+        status = self.engine.get_quiz_status("val_khor")                    # the next poll settles it
+        self.assertIsNone(status["active"])
+        self.assertEqual(status["history"][0]["status"], "timeout")
+        after = next(r for r in self.engine.db.get_state("realms") if r["id"] == "val_khor")[field]
+        self.assertEqual(after, before - stake)
+        ok, msg, _ = self.engine.submit_lore_quiz("val_khor", q["question_id"], bank["correct_index"])
+        self.assertFalse(ok)                                                # too late, and locked
+
+    def test_a_late_answer_is_a_wrong_answer(self):
+        ok, _, q = self.engine.quiz_start("aquila")
+        self._expire("aquila")
+        ok, msg, payload = self.engine.submit_lore_quiz("aquila", q["question_id"], self.bank[q["question_id"]]["correct_index"])
+        self.assertFalse(ok)
+        self.assertEqual(payload["status"], "timeout")
+
+    def test_the_time_limit_is_a_setting(self):
+        self.engine.update_settings({"quiz_seconds": 40})
+        ok, _, q = self.engine.quiz_start("sylvan")
+        self.assertEqual(q["seconds_total"], 40)
+        self.engine.update_settings({"quiz_seconds": 1})
+        self.assertEqual(self.engine.settings()["quiz_seconds"], 5)          # clamped to the lowest allowed
+
+    def test_other_nations_cannot_see_an_open_question(self):
+        app.config["TESTING"] = False
+        try:
+            sylvan = app.test_client()
+            sylvan.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+            umbra = app.test_client()
+            umbra.post("/api/auth/realm", json={"realm_id": "umbra", "pin": "1004"})
+            self.assertTrue(sylvan.post("/api/quiz/start", json={"realm_id": "sylvan"}).json["success"])
+            mine = next(r for r in sylvan.get("/api/state").json["realms"] if r["id"] == "sylvan")
+            theirs = next(r for r in umbra.get("/api/state").json["realms"] if r["id"] == "sylvan")
+            self.assertIsNotNone(mine["quiz_active"])
+            self.assertNotIn("quiz_active", theirs)
+            self.assertEqual(umbra.post("/api/quiz/start", json={"realm_id": "sylvan"}).status_code, 401)   # not their delegation
+        finally:
+            app.config["TESTING"] = True
+
+    def test_news_gets_a_digest_every_five_minutes_not_a_line_per_answer(self):
+        for rid in ("sylvan", "umbra", "aquila"):
+            ok, _, q = self.engine.quiz_start(rid)
+            self.engine.submit_lore_quiz(rid, q["question_id"], self.bank[q["question_id"]]["correct_index"])
+        ok, _, q = self.engine.quiz_start("sylvan")
+        self.engine.submit_lore_quiz("sylvan", q["question_id"], (self.bank[q["question_id"]]["correct_index"] + 1) % 4)
+        text = json.dumps(self.engine.db.get_state("news_feed"))
+        self.assertNotIn("SCHOLARLY", text)
+        self.assertNotIn("SPIREOPEDIA QUIZ", text)                           # nothing yet: the window is still open
+        meta = self.engine.db.get_state("meta")
+        meta["quiz_digest"]["since"] -= 301
+        self.engine.db.set_state("meta", meta)
+        self.engine.get_full_state()
+        latest = self.engine.db.get_state("news_feed")[0]
+        self.assertEqual(latest["type"], "lore")
+        self.assertIn("3 of 6 nations answered 4 questions", latest["detail"])
+        self.assertIn("3 correct, 1 wrong", latest["detail"])
+        self.assertNotIn("Sylvan", latest["detail"])                         # no names, no resources
+        self.engine.get_full_state()
+        self.assertEqual(sum(1 for n in self.engine.db.get_state("news_feed") if "SPIREOPEDIA" in n["headline"]), 1)
+
+    def test_digest_is_flushed_at_the_end_of_a_turn_and_the_summit(self):
+        ok, _, q = self.engine.quiz_start("sylvan")
+        self.engine.submit_lore_quiz("sylvan", q["question_id"], self.bank[q["question_id"]]["correct_index"])
+        self.engine.process_end_of_turn()
+        self.assertTrue(any("SPIREOPEDIA" in n["headline"] for n in self.engine.db.get_state("news_feed")))
+
+    def test_an_open_question_is_closed_without_penalty_when_the_summit_ends(self):
+        ok, _, q = self.engine.quiz_start("sylvan")
+        before = next(r for r in self.engine.db.get_state("realms") if r["id"] == "sylvan")["failed_lore"][:]
+        self.engine.conclude_summit()
+        realm = next(r for r in self.engine.db.get_state("realms") if r["id"] == "sylvan")
+        self.assertIsNone(realm["quiz_active"])
+        self.assertEqual(realm["failed_lore"], before)
+
+    def test_the_open_question_gives_no_article_hint(self):
+        ok, _, q = self.engine.quiz_start("sylvan")
+        self.assertNotIn("article", q)                                       # the open question gives no pointer to the article
+
+
+class TestClockConsole(unittest.TestCase):
+    """The clock console works in every phase of the game."""
+
+    def setUp(self):
+        app.config["TESTING"] = True
+        from app import engine
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.reset_simulation()
+
+    def _meta(self, **changes):
+        meta = self.engine.db.get_state("meta")
+        meta.update(changes)
+        self.engine.db.set_state("meta", meta)
+
+    def _clock(self):
+        return self.engine.get_full_state()["meta"]["display_timer"]
+
+    def test_working_session(self):
+        self.assertEqual(self._clock()["kind"], "working")
+        self.assertTrue(self.engine.admin_clock("set", 90)[0])
+        self.assertEqual(self._clock()["seconds"], 90)
+        self.engine.admin_clock("resume")
+        self.assertTrue(self._clock()["running"])
+        self.engine.admin_clock("adjust", 30)
+        self.assertGreaterEqual(self._clock()["seconds"], 118)
+        self.engine.admin_clock("pause")
+        self.assertFalse(self._clock()["running"])
+        self.engine.admin_clock("reset")
+        self.assertEqual(self._clock()["seconds"], self.engine.settings()["working_session_seconds"])
+
+    def test_pause_before_the_next_turn(self):
+        self._meta(intermission_end=time.time() + 40)
+        self.assertEqual(self._clock()["kind"], "intermission")
+        self.engine.admin_clock("adjust", 20)
+        self.assertGreaterEqual(self._clock()["seconds"], 58)
+        self.engine.admin_clock("set", 5)
+        self.assertLessEqual(self._clock()["seconds"], 5)
+        self.engine.admin_clock("resume")                                   # skip the pause: the working clock starts now
+        state = self.engine.get_full_state()["meta"]
+        self.assertIsNone(state["intermission_end"])
+        self.assertTrue(state["is_timer_running"])
+
+    def test_debate(self):
+        self._meta(phase="grand_plenary_discussion", discussion_timer_remaining=300, discussion_timer_total=300,
+                   is_discussion_timer_running=True, discussion_timer_end=time.time() + 300, plenary_docket=[], current_motion_index=0)
+        self.assertEqual(self._clock()["kind"], "debate")
+        self.engine.admin_clock("set", 45)
+        self.assertEqual(self._clock()["seconds"], 45)
+        self.engine.admin_clock("pause")
+        self.assertFalse(self._clock()["running"])
+        self.engine.admin_clock("adjust", 15)
+        self.assertEqual(self._clock()["seconds"], 60)
+
+    def test_voting_can_be_paused_extended_and_resumed(self):
+        self._meta(phase="plenary_quick", vote_timer_end=time.time() + 100, vote_timer_total=100, plenary_docket=[])
+        self.assertEqual(self._clock()["kind"], "vote")
+        self.engine.admin_clock("pause")
+        clock = self._clock()
+        self.assertFalse(clock["running"])
+        paused_at = clock["seconds"]
+        self.assertGreater(paused_at, 90)
+        time.sleep(0.05)
+        self.assertEqual(self._clock()["seconds"], paused_at)               # a paused clock does not run
+        self.engine.admin_clock("adjust", 30)
+        self.assertEqual(self._clock()["seconds"], paused_at + 30)
+        self.engine.admin_clock("resume")
+        self.assertTrue(self._clock()["running"])
+
+    def test_between_turns_and_after_the_summit_there_is_a_free_countdown(self):
+        for phase in ("turn_summary", "summit_concluded"):
+            self._meta(phase=phase, free_timer_remaining=0, free_timer_running=False, free_timer_end=None)
+            self.assertEqual(self._clock()["kind"], "free")
+            self.assertFalse(self.engine.admin_clock("resume")[0])           # nothing to run yet
+            self.engine.admin_clock("set", 120)
+            self.engine.admin_clock("resume")
+            self.assertTrue(self._clock()["running"])
+            self.assertLessEqual(self._clock()["seconds"], 120)
+            self.engine.admin_clock("pause")
+            self.assertIn(self._clock()["seconds"] // 10, (11, 12))
+
+    def test_free_countdown_sounds_the_alert_when_it_ends(self):
+        self._meta(phase="turn_summary", free_timer_running=True, free_timer_end=time.time() - 1, free_timer_remaining=30)
+        seq = self.engine.get_full_state()["meta"]["audio_cue"]["seq"]
+        state = self.engine.get_full_state()["meta"]
+        self.assertFalse(state["free_timer_running"])
+        self.assertEqual(state["audio_cue"]["type"], "alert")
+        self.assertGreaterEqual(state["audio_cue"]["seq"], seq)
+
+    def test_input_is_validated_and_the_endpoint_needs_the_facilitator(self):
+        self.assertFalse(self.engine.admin_clock("explode")[0])
+        self.assertFalse(self.engine.admin_clock("set", "soon")[0])
+        self.assertFalse(self.engine.admin_clock("set", 10 ** 7)[0])
+        client = app.test_client()
+        self.assertEqual(client.post("/api/admin/clock", json={"action": "set", "value": 60}).json["clock"]["seconds"], 60)
+        app.config["TESTING"] = False
+        try:
+            self.assertEqual(app.test_client().post("/api/admin/clock", json={"action": "set", "value": 60}).status_code, 401)
+        finally:
+            app.config["TESTING"] = True
+
+
+class TestBulkResources(unittest.TestCase):
+    def setUp(self):
+        app.config["TESTING"] = True
+        from app import engine
+        self.engine = engine
+        engine.reset_simulation()
+
+    def _realm(self, rid):
+        return next(r for r in self.engine.db.get_state("realms") if r["id"] == rid)
+
+    def test_add_take_and_set_for_several_nations_and_resources(self):
+        ok, msg, report = self.engine.admin_bulk_adjust(["sylvan", "umbra"], [
+            {"resource": "grain", "mode": "add", "amount": 25}, {"resource": "cores", "mode": "take", "amount": 10},
+            {"resource": "military", "mode": "set", "amount": 33}])
+        self.assertTrue(ok, msg)
+        self.assertEqual(self._realm("sylvan")["alchemical_grain"], 125)
+        self.assertEqual(self._realm("sylvan")["aether_cores"], 15)
+        self.assertEqual(self._realm("umbra")["military_power"], 33)
+        self.assertEqual(self._realm("val_khor")["alchemical_grain"], 30)           # untouched
+        self.assertEqual(len(report), 2)
+
+    def test_values_stay_in_range(self):
+        self.engine.admin_bulk_adjust(["sylvan"], [{"resource": "stability", "mode": "add", "amount": 500},
+                                                   {"resource": "grain", "mode": "take", "amount": 900}])
+        sylvan = self._realm("sylvan")
+        self.assertEqual(sylvan["civil_stability"], 100)
+        self.assertEqual(sylvan["alchemical_grain"], 0)
+
+    def test_it_is_quiet_unless_told_to_announce(self):
+        before = len(self.engine.db.get_state("news_feed"))
+        self.engine.admin_bulk_adjust(["sylvan"], [{"resource": "silk", "mode": "add", "amount": 5}])
+        self.assertEqual(len(self.engine.db.get_state("news_feed")), before)
+        self.assertTrue(any(n["type"] == "admin" and "Silk 30 → 35" in n["detail"] for n in self.engine.db.get_state("news_archive")))
+        self.engine.admin_bulk_adjust(["sylvan"], [{"resource": "silk", "mode": "add", "amount": 5}], announce=True, reason="Convoys arrive")
+        latest = self.engine.db.get_state("news_feed")[0]
+        self.assertEqual(latest["headline"], "DECREE FROM THE SPIRE")
+        self.assertIn("Convoys arrive", latest["detail"])
+
+    def test_bad_requests_are_refused(self):
+        self.assertFalse(self.engine.admin_bulk_adjust([], [{"resource": "grain", "mode": "add", "amount": 1}])[0])
+        self.assertFalse(self.engine.admin_bulk_adjust(["sylvan"], [])[0])
+        self.assertFalse(self.engine.admin_bulk_adjust(["sylvan"], [{"resource": "gold", "mode": "add", "amount": 1}])[0])
+        self.assertFalse(self.engine.admin_bulk_adjust(["sylvan"], [{"resource": "grain", "mode": "add", "amount": "lots"}])[0])
+        self.assertFalse(self.engine.admin_bulk_adjust(["nobody"], [{"resource": "grain", "mode": "add", "amount": 1}])[0])
+
+    def test_typed_overrides_are_clamped(self):
+        self.engine.admin_override_realm("sylvan", {"civil_stability": 500, "alchemical_grain": -9})
+        sylvan = self._realm("sylvan")
+        self.assertEqual(sylvan["civil_stability"], 100)
+        self.assertEqual(sylvan["alchemical_grain"], 0)
+
+    def test_the_endpoint_needs_the_facilitator(self):
+        app.config["TESTING"] = False
+        try:
+            body = {"realm_ids": ["sylvan"], "changes": [{"resource": "grain", "mode": "add", "amount": 5}]}
+            self.assertEqual(app.test_client().post("/api/admin/resources/bulk", json=body).status_code, 401)
+        finally:
+            app.config["TESTING"] = True
+        self.assertTrue(app.test_client().post("/api/admin/resources/bulk", json=body).json["success"])
+
+
+class TestDifficulty(unittest.TestCase):
+    def test_every_nation_is_rated_and_explained(self):
+        for r in load_scenario_config()["realms"]:
+            self.assertIn(r["difficulty"], (1, 2, 3, 4, 5), r["id"])
+            self.assertGreater(len(r["difficulty_note"]), 30, r["id"])
+        levels = {r["id"]: r["difficulty"] for r in load_scenario_config()["realms"]}
+        self.assertLess(levels["solaria"], levels["val_khor"])
+        self.assertEqual({"easy", "medium", "hard"}, {("easy" if v <= 2 else "medium" if v == 3 else "hard") for v in levels.values()})
+
+    def test_the_lobby_setup_and_guide_say_which_is_which(self):
+        app.config["TESTING"] = True
+        client = app.test_client()
+        for path in ("/", "/overview", "/admin/setup"):
+            html = client.get(path).get_data(as_text=True)
+            self.assertIn("diff-badge", html, path)
+            self.assertIn("★", html, path)
+        lobby = client.get("/").get_data(as_text=True)
+        self.assertIn("Easy", lobby)
+        self.assertIn("Hard", lobby)
+
+
+class TestBattleRules(unittest.TestCase):
+    """The shape of a fight: the army counts most, readiness counts a lot, luck only a little."""
+
+    def setUp(self):
+        import battle
+        self.battle = battle
+        self.cfg = battle.config(load_scenario_config().get("battle"))
+
+    def _nation(self, rid="a", military=50, **values):
+        base = {"id": rid, "name": rid.upper(), "military_power": military, "civil_stability": 50, "alchemical_grain": 50,
+                "aether_cores": 50, "public_vitality": 50, "diplomatic_standing": 50, "echo_silk": 50,
+                "geography": {"terrain": "solar_plateau"}}
+        base.update(values)
+        return base
+
+    def _outcomes(self, attacker, defender, n=800, weather_id=None):
+        """Share of battles the attacker wins, the defender wins, and nobody wins."""
+        import random
+        rng = random.Random(7)
+        wins = losses = 0
+        for _ in range(n):
+            weather = dict(next(w for w in self.cfg["weather"] if w["id"] == weather_id)) if weather_id else self.battle.roll_weather(self.cfg, rng)
+            res = self.battle.resolve(attacker, defender, weather, self.cfg, rng)
+            wins += res["winner_id"] == attacker["id"]
+            losses += res["winner_id"] == defender["id"]
+        return wins / n, losses / n, 1 - (wins + losses) / n
+
+    def _win_rate(self, attacker, defender, n=800, weather_id=None):
+        return self._outcomes(attacker, defender, n, weather_id)[0]
+
+    def test_readiness_is_neutral_at_fifty_and_drags_or_lifts_away_from_it(self):
+        ready, _ = self.battle.readiness(self._nation(), self.cfg)
+        self.assertAlmostEqual(ready, 1.0, places=2)
+        strong, _ = self.battle.readiness(self._nation(civil_stability=90, alchemical_grain=90, aether_cores=90, public_vitality=90), self.cfg)
+        weak, _ = self.battle.readiness(self._nation(civil_stability=10, alchemical_grain=10, aether_cores=10, public_vitality=10), self.cfg)
+        self.assertGreater(strong, 1.3)
+        self.assertLess(weak, 0.7)
+        lo, hi = self.cfg["readiness_range"]
+        self.assertTrue(lo <= weak and strong <= hi)
+
+    def test_the_further_from_fifty_the_more_drastic(self):
+        pull = lambda v: self.battle.readiness(self._nation(civil_stability=v), self.cfg)[0] - 1.0
+        self.assertGreater(pull(90), 2 * pull(70))                 # twice as far, more than twice the effect
+        self.assertGreater(pull(55), 0)
+        self.assertLess(pull(55), pull(70) / 2)                    # near 50 hardly matters
+        self.assertAlmostEqual(pull(30), -pull(70), places=2)      # symmetric above and below 50
+
+    def test_every_resource_in_the_formula_changes_the_strength(self):
+        base = self.battle.readiness(self._nation(), self.cfg)[0]
+        for field in ("civil_stability", "alchemical_grain", "aether_cores", "public_vitality", "diplomatic_standing", "echo_silk"):
+            better = self.battle.readiness(self._nation(**{field: 90}), self.cfg)[0]
+            worse = self.battle.readiness(self._nation(**{field: 10}), self.cfg)[0]
+            self.assertGreater(better, base, field)
+            self.assertLess(worse, base, field)
+
+    def test_stability_and_grain_matter_more_than_silk(self):
+        gain = lambda f: self.battle.readiness(self._nation(**{f: 90}), self.cfg)[0] - 1
+        self.assertGreater(gain("civil_stability"), gain("echo_silk") * 3)
+        self.assertGreater(gain("alchemical_grain"), gain("echo_silk") * 3)
+
+    def test_the_army_counts_most(self):
+        double = self._win_rate(self._nation("a", 80), self._nation("d", 40))
+        self.assertGreater(double, 0.97)
+        edge = self._win_rate(self._nation("a", 65), self._nation("d", 50))
+        self.assertGreater(edge, 0.85)
+        won, lost, drawn = self._outcomes(self._nation("a", 50), self._nation("d", 50))
+        self.assertTrue(0.05 < won < 0.35, won)                       # attacking an equal is a poor bet...
+        self.assertTrue(0.25 < lost < 0.5, lost)                      # ...the defender has the ground
+        self.assertTrue(0.3 < drawn < 0.65, drawn)                    # and many fights end in a stalemate
+
+    def test_readiness_can_beat_a_bigger_army(self):
+        fed_and_calm = self._nation("a", 50, civil_stability=95, alchemical_grain=100, aether_cores=90, public_vitality=90)
+        starving = self._nation("d", 62, civil_stability=15, alchemical_grain=5, aether_cores=20, public_vitality=30)
+        self.assertGreater(self._win_rate(fed_and_calm, starving), 0.85)
+
+    def test_luck_decides_close_fights_but_never_beats_a_clear_lead(self):
+        # the whole spread of luck, ground and weather is a few percent: much less than a 30 percent army lead
+        lo, hi = self.cfg["readiness_range"]
+        self.assertLess(self.cfg["luck"], (hi - lo) / 10)
+        for t in self.cfg["terrain"].values():
+            self.assertLess(abs(t["defence"]), 0.15)
+        for w in self.cfg["weather"]:
+            self.assertLess(max(abs(w["attacker"]), abs(w["defender"])), 0.1)
+        self.assertGreater(self._win_rate(self._nation("a", 65), self._nation("d", 50)), 0.8)
+        close = self._win_rate(self._nation("a", 56), self._nation("d", 50))
+        self.assertTrue(0.3 < close < 0.75, close)
+
+    def test_ground_and_weather_move_the_result_a_little(self):
+        rng_mountains = self._nation("d", 50, geography={"terrain": "volcanic_mountains"})
+        rng_fields = self._nation("d", 50, geography={"terrain": "verdant_lowlands"})
+        attacker = self._nation("a", 50)
+        self.assertLess(self._win_rate(attacker, rng_mountains, weather_id="clear"), self._win_rate(attacker, rng_fields, weather_id="clear"))
+        self.assertGreater(self._win_rate(attacker, rng_fields, weather_id="tailwind"), self._win_rate(attacker, rng_fields, weather_id="storm"))
+
+    def test_a_cordon_helps_the_defender(self):
+        plain = self._nation("d", 50)
+        fortified = self._nation("d", 50, is_quarantined=True)
+        attacker = self._nation("a", 50)
+        self.assertLess(self._win_rate(attacker, fortified, weather_id="clear"), self._win_rate(attacker, plain, weather_id="clear"))
+
+    def test_spoils_are_taken_from_the_loser_and_some_are_lost_in_the_fighting(self):
+        import random
+        rng = random.Random(3)
+        weather = dict(self.cfg["weather"][0])
+        for margin_army in (55, 70, 95):
+            a, d = self._nation("a", margin_army), self._nation("d", 40)
+            res = self.battle.resolve(a, d, weather, self.cfg, rng)
+            self.assertEqual(res["winner_id"], "a")
+            for resource, got in res["plunder"].items():
+                lost = -res["changes"]["d"][resource]
+                self.assertLessEqual(got, lost)                               # never more than the loser lost
+                self.assertGreater(lost, 0)
+            self.assertLess(res["changes"]["d"]["stability"], res["changes"]["a"]["stability"])   # the loser suffers more
+            self.assertLess(res["changes"]["a"]["standing"], 0)                                   # aggression costs Standing
+
+    def test_a_bigger_win_takes_more(self):
+        import random
+        weather = dict(self.cfg["weather"][0])
+        small = self.battle.resolve(self._nation("a", 55), self._nation("d", 50), weather, self.cfg, random.Random(1))
+        crushing = self.battle.resolve(self._nation("a", 160), self._nation("d", 50), weather, self.cfg, random.Random(1))
+        self.assertEqual(crushing["outcome"], "attacker_crushing")
+        self.assertGreater(sum(crushing["plunder"].values()), sum(small["plunder"].values()))
+        self.assertLess(crushing["changes"]["d"]["stability"], small["changes"]["d"].get("stability", 0))
+
+    def test_a_failed_attack_costs_the_attacker_dearly_and_pays_the_defender(self):
+        import random
+        res = self.battle.resolve(self._nation("a", 30), self._nation("d", 80), dict(self.cfg["weather"][0]), self.cfg, random.Random(5))
+        self.assertEqual(res["winner_id"], "d")
+        self.assertLessEqual(res["changes"]["a"]["standing"], -10)
+        self.assertEqual(res["changes"]["d"]["standing"], 3)
+        self.assertTrue(res["plunder"])
+
+    def test_a_dead_heat_has_no_winner_and_no_spoils(self):
+        import random
+        res = self.battle.resolve(self._nation("a", 50), self._nation("d", 50), {"id": "x", "name": "x", "attacker": 0, "defender": 0, "luck": 0.0},
+                                  dict(self.cfg, luck=0.0), random.Random(1))
+        self.assertEqual(res["outcome"], "stalemate")
+        self.assertIsNone(res["winner_id"])
+        self.assertEqual(res["plunder"], {})
+
+    def _report(self, attacker, defender, seed="s", weather=None):
+        return self.battle.scouting(attacker, defender, weather or {"id": "clear", "name": "Clear skies", "text": "x", "attacker": 0.0, "defender": 0.0, "luck": 1.0},
+                                    self.cfg, seed)
+
+    def test_the_more_wealth_the_more_modifiers_are_revealed(self):
+        poor = self._nation("a", alchemical_grain=10, aether_cores=10, echo_silk=10, civil_stability=90)
+        rich = self._nation("a", alchemical_grain=90, aether_cores=90, echo_silk=90, civil_stability=90)
+        enemy = self._nation("d", civil_stability=10, alchemical_grain=90, aether_cores=10, echo_silk=10, public_vitality=90)
+        few, many = self._report(poor, enemy), self._report(rich, enemy)
+        self.assertEqual(len(few["modifiers"]), 1)
+        self.assertGreater(len(many["modifiers"]), len(few["modifiers"]))
+        self.assertEqual(many["hidden"] + len(many["modifiers"]), many["total"])
+
+    def test_the_biggest_modifiers_come_first(self):
+        att = self._nation("a", alchemical_grain=60, aether_cores=60, echo_silk=60, civil_stability=95)
+        dfn = self._nation("d", civil_stability=5)
+        report = self._report(att, dfn)
+        sizes = [abs(self.battle.modifier_lines(att, "attacker", {}, self.cfg)[0]["pct"])]
+        self.assertTrue(report["modifiers"])
+        self.assertIn("stability", report["modifiers"][0]["label"].lower())
+
+    def test_better_spies_give_figures_closer_to_the_truth(self):
+        import statistics
+        dfn = self._nation("d", civil_stability=90)
+        truth = next(l for l in self.battle.modifier_lines(dfn, "defender", self.battle.terrain_for(dfn, self.cfg), self.cfg) if l["key"] == "stability")["pct"]
+        def error(silk_cores):
+            att = self._nation("a", echo_silk=silk_cores, aether_cores=silk_cores, alchemical_grain=90)
+            errs = []
+            for i in range(200):
+                rep = self.battle.reveal(att, {"defender": [{"key": "stability", "label": "x", "pct": truth}], "attacker": []}, "attacker",
+                                         self.battle.intel(att, self.cfg), self.cfg, f"seed{i}")
+                self.assertEqual(len(rep["modifiers"]), 1)
+                errs.append(rep)
+            return errs
+        # with poor scouts the report is only a word; with great scouts it is a figure close to the truth
+        self.assertTrue(all(not any(ch.isdigit() for ch in r["modifiers"][0]["text"]) for r in error(10)))
+        good = [int(r["modifiers"][0]["text"].split()[1].rstrip("%")) for r in error(100)]
+        self.assertLess(max(abs(g - truth) for g in good), 6)
+        self.assertTrue(any(g != truth for g in good))                  # but never perfectly accurate
+
+    def test_a_report_never_contains_luck_or_the_facilitators_adjustments(self):
+        att = self._nation("a", modifiers={"war_power_pct": 40}, alchemical_grain=90, aether_cores=90, echo_silk=90)
+        dfn = self._nation("d", modifiers={"war_defence_pct": 40})
+        text = json.dumps(self._report(att, dfn)).lower()
+        for secret in ("luck", "war_power", "war_defence", "defence\": 0.", "attacker\": 0", "own_power", "readiness"):
+            self.assertNotIn(secret, text)
+
+    def test_the_own_side_is_scouted_more_accurately_than_the_enemy(self):
+        att = self._nation("a", echo_silk=45, aether_cores=45, alchemical_grain=90)
+        rep = self.battle.reveal(att, {"attacker": [{"key": "grain", "label": "g", "pct": 10}], "defender": [{"key": "grain", "label": "g", "pct": 10}]},
+                                 "attacker", self.battle.intel(att, self.cfg), self.cfg, "z")
+        by = {m["whose"]: m["text"] for m in rep["modifiers"]}
+        self.assertEqual(len(by), 2)
+        self.assertNotEqual(by["own"].split()[0], by["enemy"].split()[0])    # a figure for your own side, a range for theirs
+
+    def test_scouts_give_a_stable_blurred_estimate(self):
+        a, d = self._nation("a", 70), self._nation("d", 50)
+        weather = dict(self.cfg["weather"][0])
+        first = self.battle.scouting(a, d, weather, self.cfg, "seed-1")
+        self.assertEqual(first, self.battle.scouting(a, d, weather, self.cfg, "seed-1"))     # asking again changes nothing
+        self.assertNotIn("alchemical_grain", json.dumps(first))                             # and says nothing about the target's stock
+
+
+class TestBattlesInTheGame(unittest.TestCase):
+    def setUp(self):
+        app.config["TESTING"] = True
+        from app import engine
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.reset_simulation()
+        meta = engine.db.get_state("meta")
+        meta["current_turn"] = 2                       # attacks unlock in Turn 2
+        engine.db.set_state("meta", meta)
+
+    def _realm(self, rid):
+        return next(r for r in self.engine.db.get_state("realms") if r["id"] == rid)
+
+    def _set(self, rid, **values):
+        realms = self.engine.db.get_state("realms")
+        next(r for r in realms if r["id"] == rid).update(values)
+        self.engine.db.set_state("realms", realms)
+
+    def test_attacks_wait_for_the_chosen_turn(self):
+        meta = self.engine.db.get_state("meta")
+        meta["current_turn"] = 1
+        self.engine.db.set_state("meta", meta)
+        ok, msg, _ = self.engine.declare_attack("aethelgard", "sylvan")
+        self.assertFalse(ok)
+        self.assertIn("from Turn 2", msg)
+        self.engine.update_settings({"attacks_from_turn": 1})
+        self.assertTrue(self.engine.declare_attack("aethelgard", "sylvan")[0])
+
+    def test_attacks_can_be_switched_off(self):
+        self.engine.update_settings({"attacks_enabled": False})
+        ok, msg, _ = self.engine.declare_attack("aethelgard", "sylvan")
+        self.assertFalse(ok)
+        self.assertIn("switched off", msg)
+        self.assertFalse(self.engine.get_war_status("aethelgard")["enabled"])
+
+    def test_the_rules_of_the_field(self):
+        self.assertFalse(self.engine.declare_attack("sylvan", "sylvan")[0])
+        self.engine.admin_toggle_realm("umbra", False)
+        self.assertFalse(self.engine.declare_attack("sylvan", "umbra")[0])
+        self._set("sylvan", military_power=5)
+        self.assertIn("at least", self.engine.declare_attack("sylvan", "aquila")[1])
+        self._set("sylvan", military_power=40, alchemical_grain=4)
+        self.assertIn("Grain", self.engine.declare_attack("sylvan", "aquila")[1])
+        meta = self.engine.db.get_state("meta")
+        meta["phase"] = "plenary_quick"
+        self.engine.db.set_state("meta", meta)
+        self.assertIn("working session", self.engine.declare_attack("aethelgard", "aquila")[1])
+
+    def test_one_march_per_turn_and_nobody_is_dog_piled(self):
+        self.assertTrue(self.engine.declare_attack("aethelgard", "sylvan")[0])
+        self.assertIn("already marched", self.engine.declare_attack("aethelgard", "umbra")[1])
+        self.assertTrue(self.engine.declare_attack("val_khor", "sylvan")[0])
+        ok, msg, _ = self.engine.declare_attack("solaria", "sylvan")
+        self.assertFalse(ok)
+        self.assertIn("already been attacked", msg)
+        self.engine.update_settings({"attacks_per_turn": 2})
+        self.assertTrue(self.engine.declare_attack("aethelgard", "umbra")[0])
+        self.engine.process_end_of_turn()                                # a new turn, new allowances
+        self.assertTrue(self.engine.declare_attack("aethelgard", "sylvan")[0])
+
+    def test_the_march_costs_supplies_and_the_outcome_is_recorded_and_announced(self):
+        grain = self._realm("aethelgard")["alchemical_grain"]
+        standing = self._realm("aethelgard")["diplomatic_standing"]
+        ok, msg, battle = self.engine.declare_attack("aethelgard", "sylvan")
+        self.assertTrue(ok)
+        self.assertLess(self._realm("aethelgard")["diplomatic_standing"], standing)
+        self.assertEqual(self.engine.db.get_state("battles")[0]["id"], battle["id"])
+        self.assertEqual(self.engine.db.get_state("news_feed")[0]["type"], "war")
+        self.assertEqual(self.engine.get_full_state()["meta"]["audio_cue"]["type"], "battle")
+        won = battle["winner_id"] == "aethelgard"
+        gained = battle["plunder"].get("grain", 0) if won else -battle["plunder"].get("grain", 0)
+        self.assertEqual(self._realm("aethelgard")["alchemical_grain"], max(0, grain - 10 + gained))
+
+    def test_spoils_are_never_more_than_the_loser_lost(self):
+        total = lambda: sum(r["alchemical_grain"] + r["aether_cores"] + r["echo_silk"] for r in self.engine.db.get_state("realms"))
+        before = total()
+        ok, msg, battle = self.engine.declare_attack("aethelgard", "sylvan")
+        self.assertTrue(ok)
+        self.assertLess(total(), before)                                   # war destroys: supplies and the spoils lost in the fighting
+
+    def test_weather_is_rolled_for_every_turn(self):
+        weathers = set()
+        for _ in range(25):
+            self.engine.process_end_of_turn()
+            meta = self.engine.db.get_state("meta")
+            self.assertIn("name", meta["weather"])
+            weathers.add(meta["weather"]["id"])
+            meta["current_turn"] = 1
+            self.engine.db.set_state("meta", meta)
+        self.assertGreater(len(weathers), 2)
+
+    def test_players_see_the_outcome_but_only_their_own_numbers(self):
+        ok, msg, battle = self.engine.declare_attack("aethelgard", "sylvan")
+        app.config["TESTING"] = False
+        try:
+            attacker, defender, bystander = app.test_client(), app.test_client(), app.test_client()
+            attacker.post("/api/auth/realm", json={"realm_id": "aethelgard", "pin": "1006"})
+            defender.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+            bystander.post("/api/auth/realm", json={"realm_id": "umbra", "pin": "1004"})
+            seen_by = lambda c: c.get("/api/state").json["battles"][0]
+            self.assertEqual(seen_by(attacker)["private"]["side"], "attacker")
+            self.assertEqual(seen_by(defender)["private"]["side"], "defender")
+            self.assertNotIn("private", seen_by(bystander))
+            self.assertNotIn("private", app.test_client().get("/api/state").json["battles"][0])      # the projector
+            for key in ("outcome", "share", "plunder", "weather", "terrain", "headline"):
+                self.assertIn(key, seen_by(bystander))
+            mine = seen_by(attacker)["private"]["mine"]
+            text = json.dumps(mine)
+            for secret in ("luck", "power", "environment", "readiness", "factors"):
+                self.assertNotIn(secret, text)                                  # no luck, no exact strength
+            self.assertIn("modifiers", mine)
+            self.assertIn("changes", mine)
+        finally:
+            app.config["TESTING"] = True
+        admin = app.test_client().get("/api/state").json["battles"][0]
+        self.assertIn("attacker", admin["private"])
+        self.assertIn("defender", admin["private"])
+
+    def test_war_endpoints(self):
+        app.config["TESTING"] = False
+        try:
+            c = app.test_client()
+            c.post("/api/auth/realm", json={"realm_id": "aethelgard", "pin": "1006"})
+            status = c.get("/api/war/aethelgard").json
+            self.assertTrue(status["enabled"])
+            self.assertEqual(len(status["targets"]), 5)
+            self.assertEqual(app.test_client().get("/api/war/aethelgard").status_code, 401)
+            preview = c.post("/api/war/preview", json={"realm_id": "aethelgard", "target_id": "umbra"}).json
+            self.assertTrue(preview["success"])
+            self.assertIn(preview["preview"]["label"], ("Very unfavourable", "Unfavourable", "Evenly matched", "Favourable", "Very favourable"))
+            self.assertNotIn("alchemical_grain", json.dumps(preview))
+            attack = c.post("/api/war/attack", json={"realm_id": "aethelgard", "target_id": "umbra"}).json
+            self.assertTrue(attack["success"])
+            self.assertEqual(attack["battle"]["private"]["side"], "attacker")
+            self.assertEqual(c.post("/api/war/attack", json={"realm_id": "aethelgard", "target_id": "sylvan"}).status_code, 400)
+            other = app.test_client()
+            other.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+            self.assertEqual(other.post("/api/war/attack", json={"realm_id": "aethelgard", "target_id": "umbra"}).status_code, 401)
+        finally:
+            app.config["TESTING"] = True
+
+    def test_starving_nations_fight_worse(self):
+        import battle
+        cfg = battle.config(load_scenario_config().get("battle"))
+        fed = self._realm("aethelgard")
+        hungry = dict(fed, alchemical_grain=0, civil_stability=20)
+        self.assertLess(battle.readiness(hungry, cfg)[0], battle.readiness(fed, cfg)[0] - 0.2)
+
+    def test_the_report_lists_the_battles(self):
+        self.engine.declare_attack("aethelgard", "sylvan")
+        report = self.engine.build_report()
+        self.assertEqual(len(report["battles"]), 1)
+        self.assertEqual(report["battles"][0]["attacker"], "Aethelgard Dominion")
+
+
+class TestModifiers(unittest.TestCase):
+    def setUp(self):
+        app.config["TESTING"] = True
+        from app import engine
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.reset_simulation()
+
+    def _realm(self, rid):
+        return next(r for r in self.engine.db.get_state("realms") if r["id"] == rid)
+
+    def test_the_sheet_explains_the_automatic_modifiers(self):
+        sheet = self.engine.modifier_sheet(self._realm("sylvan"))
+        self.assertEqual(sheet["votes"]["total"], self._realm("sylvan")["assembly_votes"])
+        self.assertEqual(sheet["grain_use"], 20)
+        self.assertEqual(sheet["manual"], {"votes": 0, "grain_use_pct": 0, "war_power_pct": 0, "war_defence_pct": 0})
+        self.assertTrue(any("defence" in line for line in sheet["automatic"]))      # the home terrain
+
+    def test_manual_votes_and_grain_use_take_effect(self):
+        before = self._realm("umbra")["assembly_votes"]
+        self.assertTrue(self.engine.admin_set_modifiers("umbra", {"votes": 2, "grain_use_pct": -50})[0])
+        self.assertEqual(self._realm("umbra")["assembly_votes"], before + 2)
+        grain = self._realm("umbra")["alchemical_grain"]
+        realms = self.engine.db.get_state("realms")
+        self.engine._consume_grain([r for r in realms if r["id"] == "umbra"], self.engine.settings())
+        self.assertEqual(next(r for r in realms if r["id"] == "umbra")["alchemical_grain"], grain - 10)
+        self.assertEqual(self.engine.modifier_sheet(self._realm("umbra"))["grain_use"], 10)
+
+    def test_values_outside_the_limits_are_refused(self):
+        self.assertFalse(self.engine.admin_set_modifiers("umbra", {"votes": 99})[0])
+        self.assertFalse(self.engine.admin_set_modifiers("umbra", {"nonsense": 1})[0])
+        self.assertFalse(self.engine.admin_set_modifiers("umbra", {"votes": "x"})[0])
+        self.assertFalse(self.engine.admin_set_modifiers("nobody", {"votes": 1})[0])
+
+    def test_war_modifiers_change_the_power_of_the_army(self):
+        import battle
+        cfg = battle.config(None)
+        realm = dict(self._realm("aethelgard"))
+        terrain = battle.terrain_for(realm, cfg)
+        base = battle.side_power(realm, "defender", terrain, {}, cfg, None)["power"]
+        realm["modifiers"] = {"war_power_pct": 20, "war_defence_pct": 10}
+        boosted = battle.side_power(realm, "defender", terrain, {}, cfg, None)["power"]
+        self.assertGreater(boosted, base)
+        attack_only = battle.side_power(realm, "attacker", terrain, {}, cfg, None)["power"]
+        self.assertLess(attack_only, boosted)                        # the defence bonus only counts when attacked
+
+    def test_the_efficiency_flag_can_be_switched_off_even_with_many_cores(self):
+        realms = self.engine.db.get_state("realms")
+        next(r for r in realms if r["id"] == "umbra")["aether_cores"] = 90
+        self.engine._recalculate_all_realms(realms)
+        self.engine.db.set_state("realms", realms)
+        self.assertTrue(self._realm("umbra")["tech_efficiency_unlocked"])
+        self.engine.admin_set_modifiers("umbra", None, {"tech_efficiency_unlocked": False})
+        self.assertFalse(self._realm("umbra")["tech_efficiency_unlocked"])
+        self.engine.admin_set_modifiers("umbra", None, {"tech_efficiency_unlocked": True})
+        self.assertTrue(self._realm("umbra")["tech_efficiency_unlocked"])
+
+    def test_endpoints_and_privacy(self):
+        client = app.test_client()
+        data = client.get("/api/admin/modifiers").get_json()
+        self.assertTrue(data["success"])
+        r = client.post("/api/admin/modifiers", json={"realm_id": "umbra", "manual": {"war_power_pct": 15}})
+        self.assertEqual(r.status_code, 200)
+        app.config["TESTING"] = False
+        try:
+            state = client.get("/api/state").get_json()
+        finally:
+            app.config["TESTING"] = True
+        self.assertTrue(all("modifiers" not in realm for realm in state["realms"]))
+
+
+class TestActionJournal(unittest.TestCase):
+    def setUp(self):
+        app.config["TESTING"] = True
+        from app import engine
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.reset_simulation()
+        self.client = app.test_client()
+
+    def _realm(self, rid):
+        return next(r for r in self.engine.db.get_state("realms") if r["id"] == rid)
+
+    def _entries(self):
+        return self.client.get("/api/admin/journal").get_json()["entries"]
+
+    def test_a_manual_change_is_recorded_and_can_be_reversed(self):
+        before = self._realm("sylvan")["alchemical_grain"]
+        self.client.post("/api/admin/resources/bulk", json={"realm_ids": ["sylvan"], "changes": [{"resource": "grain", "mode": "add", "amount": 25}]})
+        entries = self._entries()
+        self.assertEqual(len(entries), 1)
+        self.assertTrue(entries[0]["undoable"])
+        self.assertIn(f"Grain {before} → {before + 25}", entries[0]["lines"][0])
+        r = self.client.post("/api/admin/journal/undo", json={"id": entries[0]["id"]})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self._realm("sylvan")["alchemical_grain"], before)
+        self.assertTrue(self._entries()[0]["reverted"])
+        self.assertEqual(self.client.post("/api/admin/journal/undo", json={"id": entries[0]["id"]}).status_code, 400)
+
+    def test_undo_keeps_later_changes_to_the_same_nation(self):
+        base = self._realm("sylvan")["alchemical_grain"]
+        self.client.post("/api/admin/resources/bulk", json={"realm_ids": ["sylvan"], "changes": [{"resource": "grain", "mode": "add", "amount": 25}]})
+        first = self._entries()[0]["id"]
+        self.client.post("/api/admin/resources/bulk", json={"realm_ids": ["sylvan"], "changes": [{"resource": "grain", "mode": "add", "amount": 10}]})
+        self.client.post("/api/admin/journal/undo", json={"id": first})
+        self.assertEqual(self._realm("sylvan")["alchemical_grain"], base + 10)
+
+    def test_requests_that_change_nothing_are_not_recorded(self):
+        self.client.post("/api/admin/news/broadcast", json={"headline": "x", "detail": "y"})
+        self.assertEqual(self._entries(), [])
+
+    def test_a_player_action_is_recorded_under_the_nation_and_flags_are_restored(self):
+        self.client.post("/api/admin/modifiers", json={"realm_id": "umbra", "manual": {"votes": 2}, "flags": {"is_quarantined": True}})
+        entry = self._entries()[0]
+        self.assertEqual(entry["actor"], "Facilitator")
+        self.client.post("/api/admin/journal/undo", json={"id": entry["id"]})
+        self.assertFalse(self._realm("umbra").get("is_quarantined"))
+        self.assertEqual(self.engine.modifier_sheet(self._realm("umbra"))["manual"]["votes"], 0)
+
+    def test_the_end_of_a_turn_is_recorded_but_not_reversible_and_a_reset_clears_the_journal(self):
+        self.client.post("/api/admin/turn/next", json={})
+        entries = self._entries()
+        if entries:
+            self.assertFalse(entries[0]["undoable"])
+            self.assertEqual(self.client.post("/api/admin/journal/undo", json={"id": entries[0]["id"]}).status_code, 400)
+        self.client.post("/api/admin/resources/bulk", json={"realm_ids": ["sylvan"], "changes": [{"resource": "grain", "mode": "add", "amount": 1}]})
+        self.engine.reset_simulation()
+        self.assertEqual(self._entries(), [])

@@ -39,16 +39,15 @@ class RealmApp {
 
   async leaveDelegation(e) {
     if (e) e.preventDefault();
-    if (confirm('Leave this sovereign delegation and return to lobby?')) {
-      try {
-        await fetch('/api/auth/realm/logout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ realm_id: this.realmId })
-        });
-      } catch (err) {}
-      window.location.href = '/';
-    }
+    if (!(await confirmAction({ title: 'Leave your delegation?', message: 'You return to the lobby. You can join again with the passcode.', confirmLabel: 'Leave' }))) return;
+    try {
+      await fetch('/api/auth/realm/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: this.realmId })
+      });
+    } catch (err) {}
+    window.location.href = '/';
   }
 
   bindBottomNav() {
@@ -62,7 +61,7 @@ class RealmApp {
   }
 
   // ---------------------------------------------------------------------------
-  // Motions: template gallery -> editable draft
+  // Motions: pick a template, set its numbers, read what will happen, table it
   // ---------------------------------------------------------------------------
   renderMotionTemplates(types) {
     const box = document.getElementById('motion-templates');
@@ -82,19 +81,29 @@ class RealmApp {
     this.motionTemplatesRendered = true;
   }
 
+  _activeRealms() {
+    return (this._lastRealms || []).filter(r => r.active !== false);
+  }
+
+  _defaultMotionParams(t) {
+    if (t.builder === 'pact') return { lines: [{ kind: 'transfer', resource: 'grain', amount: 10, payers: [], receivers: [] }] };
+    return t.defaults ? JSON.parse(JSON.stringify(t.defaults)) : {};
+  }
+
   chooseMotionTemplate(typeId) {
     const form = document.getElementById('proposal-form');
     const gallery = document.getElementById('motion-templates');
     if (!typeId) {
       form.style.display = 'none';
       gallery.style.display = '';
+      this.motionDraft = null;
       return;
     }
     const t = (this.motionTypes || {})[typeId];
     if (!t) return;
+    this.motionDraft = { type: t, params: this._defaultMotionParams(t), text: [], error: '' };
     document.getElementById('proposal-type').value = t.id;
     document.getElementById('motion-chosen-name').innerText = `${t.icon || ''} ${t.name}`;
-    document.getElementById('motion-chosen-effect').innerText = t.effect_plain || t.statutory_effect;
     document.getElementById('proposal-title').value = t.default_title || t.name;
     document.getElementById('proposal-desc').value = t.default_terms || t.summary;
     const targetGroup = document.getElementById('proposal-target-nation-group');
@@ -104,21 +113,159 @@ class RealmApp {
     document.getElementById('proposal-target-nation-label').innerText = t.target_label || 'Nation';
     gallery.style.display = 'none';
     form.style.display = 'block';
+    this.renderMotionParams();
+    this.refreshMotionPreview();
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  _nationOptions(selected, extra = []) {
+    const esc = escapeHtml;
+    const dyn = extra.map(([v, label]) => `<option value="${esc(v)}" ${v === selected ? 'selected' : ''}>${esc(label)}</option>`).join('');
+    return dyn + this._activeRealms().map(r =>
+      `<option value="${esc(r.id)}" ${r.id === selected ? 'selected' : ''}>${esc(r.emoji || '')} ${esc(r.name)}</option>`).join('');
+  }
+
+  renderMotionParams() {
+    const box = document.getElementById('motion-params');
+    const d = this.motionDraft;
+    if (!box || !d) return;
+    const t = d.type, p = d.params, esc = escapeHtml;
+    const resOptions = (list, sel) => list.map(r => `<option value="${r}" ${r === sel ? 'selected' : ''}>${esc(RESOURCE_SHORT[r] || r)}</option>`).join('');
+    const num = (key, label, min, max) => `<label>${label}<input type="number" inputmode="numeric" min="${min}" max="${max}" value="${esc(p[key])}"
+        oninput="realmApp.setMotionParam('${key}', this.value)"></label>`;
+    if (t.builder === 'redistribute') {
+      box.innerHTML = `<div class="param-box"><div class="section-sub" style="margin:0 0 6px;">Set the numbers (they are applied exactly as written)</div>
+        <div class="param-grid">
+          <label>Resource<select class="form-select" onchange="realmApp.setMotionParam('resource', this.value)">${resOptions(['grain', 'cores', 'silk'], p.resource)}</select></label>
+          ${num('above', 'Nations above this give', 10, 150)}${num('give', 'They give up to', 1, 30)}
+          ${num('below', 'Nations below this receive', 1, 100)}${num('receive', 'They receive up to', 1, 30)}
+        </div></div>`;
+    } else if (t.builder === 'levy') {
+      const dyn = [['@richest', 'The richest nation'], ['@poorest', 'The poorest nation'], ['@strongest', 'The strongest army'], ['@weakest', 'The weakest army']];
+      box.innerHTML = `<div class="param-box"><div class="section-sub" style="margin:0 0 6px;">Who is sanctioned, and what do they lose?</div>
+        <div class="param-grid">
+          <label>Nation<select class="form-select" onchange="realmApp.setMotionParam('target', this.value)">${this._nationOptions(p.target, dyn)}</select></label>
+          <label>Loses<select class="form-select" onchange="realmApp.setMotionParam('resource', this.value)">${resOptions(['grain', 'cores', 'silk', 'military', 'vitality', 'standing', 'stability'], p.resource)}</select></label>
+          ${num('amount', 'Amount', 1, 30)}
+        </div></div>`;
+    } else if (t.builder === 'pact') {
+      this._renderPactLines(box);
+    } else {
+      box.innerHTML = '';
+    }
+  }
+
+  setMotionParam(key, value) {
+    if (!this.motionDraft) return;
+    this.motionDraft.params[key] = value === '' ? '' : (isNaN(Number(value)) ? value : Number(value));
+    this.refreshMotionPreview();
+  }
+
+  // A resource pact: up to three lines, each a transfer (who gives, who receives) or a penalty (who loses).
+  _renderPactLines(box) {
+    const esc = escapeHtml, lines = this.motionDraft.params.lines;
+    const nations = this._activeRealms();
+    const chips = (i, key, picked) => `<div class="pick-chips">${[['@all', 'Everyone']].concat(nations.map(r => [r.id, `${r.emoji || ''} ${r.name}`])).map(([id, label]) =>
+      `<button type="button" class="pick-chip ${picked.includes(id) ? 'on' : ''}" onclick="realmApp.pactToggle(${i}, '${key}', '${esc(id)}')">${esc(label)}</button>`).join('')}</div>`;
+    const resList = kind => kind === 'transfer' ? ['grain', 'cores', 'silk', 'military', 'standing'] : ['grain', 'cores', 'silk', 'military', 'vitality', 'standing', 'stability'];
+    box.innerHTML = `<div class="param-box"><div class="section-sub" style="margin:0;">Write your deal, line by line (up to 3). Everything given is shared equally by the receivers; nothing is created.</div>
+      ${lines.map((l, i) => `<div class="pact-line">
+        <div class="pl-head">
+          <select class="form-select" onchange="realmApp.pactSet(${i}, 'kind', this.value)">
+            <option value="transfer" ${l.kind === 'transfer' ? 'selected' : ''}>Transfer</option><option value="levy" ${l.kind === 'levy' ? 'selected' : ''}>Penalty</option></select>
+          <select class="form-select" onchange="realmApp.pactSet(${i}, 'resource', this.value)">
+            ${resList(l.kind).map(r => `<option value="${r}" ${r === l.resource ? 'selected' : ''}>${esc(RESOURCE_SHORT[r])}</option>`).join('')}</select>
+          <input type="number" class="form-input" inputmode="numeric" min="1" max="30" value="${esc(l.amount)}" oninput="realmApp.pactSet(${i}, 'amount', this.value, true)" aria-label="Amount">
+        </div>
+        ${l.kind === 'transfer' ? `<div class="form-label mt-1">Each of these gives up to that amount</div>${chips(i, 'payers', l.payers || [])}
+          <div class="form-label mt-1">These share what is collected</div>${chips(i, 'receivers', l.receivers || [])}`
+          : `<div class="form-label mt-1">Each of these loses up to that amount</div>${chips(i, 'targets', l.targets || [])}`}
+        ${lines.length > 1 ? `<button type="button" class="btn btn-secondary btn-sm mt-1" onclick="realmApp.pactRemove(${i})">Remove this line</button>` : ''}
+      </div>`).join('')}
+      ${lines.length < 3 ? '<button type="button" class="btn btn-secondary btn-sm mt-2" onclick="realmApp.pactAdd()">+ Add a line</button>' : ''}
+    </div>`;
+  }
+
+  pactSet(i, key, value, quiet) {
+    const line = this.motionDraft.params.lines[i];
+    if (key === 'amount') line.amount = value === '' ? '' : Number(value);
+    else line[key] = value;
+    if (key === 'kind') { line.resource = 'grain'; if (value === 'levy') line.targets = line.targets || []; }
+    if (!quiet) this.renderMotionParams();
+    this.refreshMotionPreview();
+  }
+
+  pactToggle(i, key, id) {
+    const line = this.motionDraft.params.lines[i];
+    const list = line[key] = line[key] || [];
+    const at = list.indexOf(id);
+    if (at >= 0) list.splice(at, 1); else list.push(id);
+    this.renderMotionParams();
+    this.refreshMotionPreview();
+  }
+
+  pactAdd() {
+    const lines = this.motionDraft.params.lines;
+    if (lines.length < 3) lines.push({ kind: 'transfer', resource: 'grain', amount: 10, payers: [], receivers: [] });
+    this.renderMotionParams();
+    this.refreshMotionPreview();
+  }
+
+  pactRemove(i) {
+    this.motionDraft.params.lines.splice(i, 1);
+    this.renderMotionParams();
+    this.refreshMotionPreview();
+  }
+
+  _motionBody() {
+    const d = this.motionDraft;
+    const t = d.type;
+    return {
+      proposer_id: this.realmId, effect_type: t.id, params: d.params,
+      target_realm_id: t.needs_target ? document.getElementById('proposal-target-nation').value : null,
+    };
+  }
+
+  // The server writes the effect in words, so what a player reads is exactly what the game will do.
+  refreshMotionPreview() {
+    clearTimeout(this._previewTimer);
+    this._previewTimer = setTimeout(async () => {
+      const box = document.getElementById('motion-preview');
+      const d = this.motionDraft;
+      if (!box || !d) return;
+      try {
+        const res = await (await fetch('/api/proposal/preview', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this._motionBody())
+        })).json();
+        if (!this.motionDraft) return;
+        d.text = res.success ? res.effect_text : [];
+        d.error = res.success ? '' : (res.message || 'This motion is not valid yet.');
+        box.style.display = 'block';
+        box.className = `preview-box${res.success ? '' : ' error'}`;
+        box.innerHTML = res.success
+          ? `<b>If passed, the game will:</b><ul>${res.effect_text.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`
+          : escapeHtml(d.error);
+      } catch (err) { /* offline for a moment: the next change tries again */ }
+    }, 250);
   }
 
   async handleDraftProposal(e) {
     e.preventDefault();
-    const effectType = document.getElementById('proposal-type').value;
-    const t = (this.motionTypes || {})[effectType] || {};
-    const body = {
-      proposer_id: this.realmId,
-      title: document.getElementById('proposal-title').value,
-      effect_type: effectType,
-      description: document.getElementById('proposal-desc').value,
+    const d = this.motionDraft;
+    if (!d) return;
+    if (d.error) { showToast(d.error, 'warning'); return; }
+    const title = document.getElementById('proposal-title').value;
+    const ok = await confirmAction({
+      title: 'Table this motion?',
+      message: `“${title}”\nAnother nation must co-sponsor it before the Assembly votes on it.`,
+      details: (d.text && d.text.length ? d.text.map(x => `If passed: ${x}`) : []),
+      confirmLabel: 'Table the motion',
+    });
+    if (!ok) return;
+    const body = Object.assign(this._motionBody(), {
+      title, description: document.getElementById('proposal-desc').value,
       target_seconder_id: document.getElementById('proposal-target-realm').value || null,
-      target_realm_id: t.needs_target ? document.getElementById('proposal-target-nation').value : null
-    };
+    });
     try {
       const resp = await fetch('/api/proposal/create', {
         method: 'POST',
@@ -166,6 +313,10 @@ class RealmApp {
     const { meta, realms, trades, proposals, news_feed } = state;
     const realm = realms.find(r => r.id === this.realmId);
     this._lastRealms = realms;
+    this._proposals = proposals || [];
+    this._trades = trades || [];
+    this._me = realm;
+    this._turn = meta.current_turn;
 
     // Audio cues
     if (meta.audio_cue && meta.audio_cue.seq !== undefined) {
@@ -173,6 +324,7 @@ class RealmApp {
         if (meta.audio_cue.type === 'gong' || meta.audio_cue.type === 'turn') synth.playGong();
         else if (meta.audio_cue.type === 'chime' || meta.audio_cue.type === 'trade') synth.playChime();
         else if (meta.audio_cue.type === 'alert') synth.playAlert();
+        else if (meta.audio_cue.type === 'battle') synth.playBattle();
         if (meta.audio_cue.message) showToast(meta.audio_cue.message, 'info');
       }
       this.lastAudioSeq = meta.audio_cue.seq;
@@ -208,6 +360,10 @@ class RealmApp {
     this.renderTradePartners(realms);
     this.renderMotionNationOptions(realms);
 
+    // What the people eat at the end of the turn (difficulty setting; a quarter less with technological efficiency)
+    const eat = (state.game_settings || {}).grain_consumption;
+    if (eat) this._setVal('eat-amount', `${realm.tech_efficiency_unlocked ? Math.round(eat * 0.75) : eat} Grain`);
+
     // Telemetry - Exact values for own country
     this._setVal('grain-val', realm.alchemical_grain);
     this._setVal('cores-val', realm.aether_cores);
@@ -242,7 +398,6 @@ class RealmApp {
     // Motions Tab
     this.renderMotionTemplates(state.resolution_types);
     this.renderProposals(proposals, realm);
-    this.renderMotionQuota(proposals, meta, state.game_settings || {});
 
     // Plenary Session Callout on Mobile
     this.renderPlenarySessionCallout(meta, proposals, realm);
@@ -250,15 +405,23 @@ class RealmApp {
     // Summit Concluded Personal Evaluation Callout
     this.renderConcludedDebrief(state, realm);
 
-    // Quiz: refresh when a new turn unlocks questions (or on first load for the badge)
-    // ...or when a teammate on another phone answered (one attempt per question per nation).
+    // Quiz: follow a question opened (or answered) on a teammate's phone
+    const openId = realm.quiz_active ? realm.quiz_active.question_id : null;
     const answeredCount = (realm.claimed_lore || []).length + (realm.failed_lore || []).length;
-    const teammateAnswered = this.quizAnswered !== undefined && answeredCount !== this.quizAnswered;
-    this.quizAnswered = answeredCount;
-    if ((this.quizTurn !== meta.current_turn || teammateAnswered) && !this.quizLoading) {
-      this.quizLoading = true;
-      this.loadQuiz().finally(() => { this.quizLoading = false; });
+    const quizChanged = this._seenQuizOpen !== undefined && (openId !== this._seenQuizOpen || answeredCount !== this._seenQuizAnswered);
+    this._seenQuizOpen = openId;
+    this._seenQuizAnswered = answeredCount;
+    const badge = document.getElementById('nav-quiz-badge');
+    if (badge && !this.quiz) { badge.innerText = '!'; badge.style.display = openId ? 'block' : 'none'; }
+    const quizVisible = document.getElementById('view-quiz').classList.contains('active');
+    if ((quizChanged || (this.quizTurn !== meta.current_turn)) && !this._quizAnswering) {
+      this.quizTurn = meta.current_turn;
+      if (quizVisible || this.quiz) this.loadQuiz();
     }
+
+    // War: weather, rules, targets and the battles that have been fought
+    this.renderWar(state, realm);
+    this.watchBattles(state.battles || []);
   }
 
   renderPhaseCard(meta) {
@@ -383,7 +546,7 @@ class RealmApp {
       return;
     }
 
-    const icons = { crisis: '⚡', trade: '🤝', assembly: '📜', lore: '📖', turn: '🔔', diplomacy: '🕊️' };
+    const icons = { crisis: '⚡', trade: '🤝', assembly: '📜', lore: '📖', turn: '🔔', diplomacy: '🕊️', war: '⚔️', boon: '🌟' };
     newsContainer.innerHTML = filtered.map(n => `
       <article class="news-item">
         <span class="news-item-icon">${icons[n.type] || '✦'}</span>
@@ -496,111 +659,188 @@ class RealmApp {
   }
 
   // ---------------------------------------------------------------------------
-  // Spireopedia Quiz (shared question bank; server validates every answer)
+  // Spireopedia Quiz: one question at a time, against the clock. The server owns the clock and the answers.
   // ---------------------------------------------------------------------------
   async loadQuiz() {
     try {
       const resp = await fetch(`/api/quiz/${encodeURIComponent(this.realmId)}`);
       if (!resp.ok) throw new Error('quiz fetch failed');
       const data = await resp.json();
-      this.quizData = data;
-      if (this.quizPending) {
-        const pend = data.questions.find(q => q.id === this.quizPending.id);
-        if (!pend || pend.status !== 'open') {
-          this.quizPending = null;
-          showToast('A teammate already answered that question for your nation.', 'warning');
+      this.quiz = data;
+      if (data.active) {
+        if (data.active.seconds_left > 0) {
+          if (!this._quizDeadline || this._quizActiveId !== data.active.question_id || !this._quizTimerHandle) {
+            this._startQuizCountdown(data.active);
+          }
+        } else {                                   // out of time: the server settles it a moment after the deadline
+          this._stopQuizCountdown();
+          this._quizExpiredId = data.active.question_id;
+          if (!this._quizRecheck) this._quizRecheck = setTimeout(() => { this._quizRecheck = null; this.loadQuiz(); }, 1000);
         }
+        this._quizActiveId = data.active.question_id;
+        this.quizResult = null;
+      } else {
+        this._stopQuizCountdown();
+        this._quizActiveId = null;
+        // A question that ran out of time (or was answered on a teammate's phone): show how it ended.
+        if (!this.quizResult && this._quizExpiredId) {
+          this.quizResult = (data.history || []).find(h => h.id === this._quizExpiredId) || null;
+        }
+        this._quizExpiredId = null;
       }
-      this.quizTurn = data.current_turn;
       this.renderQuiz();
     } catch (err) {
-      const c = document.getElementById('quiz-container');
-      if (c && !this.quizData) c.innerHTML = '<p class="empty-state">Could not load questions. Check your connection.</p>';
+      const c = document.getElementById('quiz-stage');
+      if (c && !this.quiz) c.innerHTML = '<p class="empty-state">Could not load the quiz. Check your connection.</p>';
     }
   }
 
-  filterQuiz(filter, btn) {
-    this.quizFilter = filter;
-    this.quizRecent = new Set();
-    document.querySelectorAll('#quiz-filter-row .chip').forEach(b => b.classList.toggle('active', b === btn));
+  _startQuizCountdown(active) {
+    this._stopQuizCountdown();
+    this._quizDeadline = Date.now() + active.seconds_left * 1000;
+    this._quizTotal = active.seconds_total * 1000;
+    this._quizTimerHandle = setInterval(() => this._quizTick(), 100);
+  }
+
+  _stopQuizCountdown() {
+    if (this._quizTimerHandle) clearInterval(this._quizTimerHandle);
+    this._quizTimerHandle = null;
+    this._quizDeadline = null;
+  }
+
+  _quizTick() {
+    const left = Math.max(0, this._quizDeadline - Date.now());
+    const clock = document.getElementById('quiz-clock');
+    const fill = document.getElementById('quiz-timer-fill');
+    const bar = document.getElementById('quiz-timer');
+    if (clock) { clock.innerText = Math.ceil(left / 1000); clock.classList.toggle('low', left <= 5000); }
+    if (fill) fill.style.transform = `scaleX(${Math.max(0, Math.min(1, left / this._quizTotal))})`;
+    if (bar) bar.classList.toggle('low', left <= 5000);
+    if (left <= 0) {
+      this._quizExpiredId = this._quizActiveId;
+      this._stopQuizCountdown();
+      document.querySelectorAll('#quiz-stage .quiz-option').forEach(b => { b.disabled = true; });
+      if (clock) clock.innerText = '0';
+      setTimeout(() => this.loadQuiz(), 1800);     // the server counts it as wrong a moment after the deadline
+    }
+  }
+
+  async takeQuizQuestion() {
+    // Pressing the button is the choice to start: no extra dialog, but nothing ever starts by itself.
+    const q = this.quiz;
+    if (!q || !q.next || this._quizStarting) return;
+    this._quizStarting = true;
+    try {
+      const res = await (await fetch('/api/quiz/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ realm_id: this.realmId })
+      })).json();
+      if (!res.success) showToast(res.message, 'danger');
+      this.quizResult = null;
+      await this.loadQuiz();
+    } catch (err) {
+      showToast('Could not start the question. Check your connection.', 'danger');
+    }
+    this._quizStarting = false;
+  }
+
+  // After a result: back to the start card (the next stake and topic), where the player chooses to start.
+  quizContinue() {
+    this.quizResult = null;
     this.renderQuiz();
   }
 
-  renderQuiz() {
-    const container = document.getElementById('quiz-container');
-    const data = this.quizData;
-    if (!container || !data) return;
-    const qs = data.questions;
-    const count = s => qs.filter(q => q.status === s).length;
-    this._setVal('quiz-stat-correct', count('correct'));
-    this._setVal('quiz-stat-wrong', count('failed'));
-    this._setVal('quiz-stat-open', count('open'));
-    const badge = document.getElementById('nav-quiz-badge');
-    if (badge) {
-      badge.innerText = count('open');
-      badge.style.display = count('open') > 0 ? 'block' : 'none';
+  async answerQuiz(originalIndex) {
+    const active = this.quiz && this.quiz.active;
+    if (!active || this._quizAnswering) return;
+    this._quizAnswering = true;
+    document.querySelectorAll('#quiz-stage .quiz-option').forEach(b => { b.disabled = true; });
+    try {
+      const res = await (await fetch('/api/lore/quiz', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: this.realmId, question_id: active.question_id, answer_index: originalIndex })
+      })).json();
+      this._stopQuizCountdown();
+      this._quizExpiredId = null;
+      showToast(res.message, res.success ? 'success' : 'danger');
+      res.success ? synth.playChime() : synth.playAlert();
+      this.quizResult = null;
+      this._quizAnswering = false;
+      await this.loadQuiz();
+      this.quizResult = ((this.quiz && this.quiz.history) || []).find(h => h.id === active.question_id) || null;
+      this.renderQuiz();
+      this.pollState();
+    } catch (err) {
+      this._quizAnswering = false;
+      showToast('Connection failed: your answer may not have been sent.', 'danger');
+      this.loadQuiz();
     }
-
-    const filter = this.quizFilter || 'open';
-    let shown = qs.map((q, i) => ({ q, n: i + 1 }));
-    // Keep questions answered in this visit on screen so the result/explanation can be read.
-    const recent = this.quizRecent || new Set();
-    if (filter === 'open') shown = shown.filter(x => x.q.status === 'open' || recent.has(x.q.id));
-    if (filter === 'answered') shown = shown.filter(x => x.q.status === 'correct' || x.q.status === 'failed');
-
-    const sealed = qs.filter(q => q.status === 'sealed');
-    let html = '';
-    if (shown.length === 0) {
-      const msg = filter === 'open'
-        ? (sealed.length ? 'All open questions answered. More unlock next turn.' : 'You have answered every question.')
-        : 'Nothing here yet.';
-      html += `<div class="card"><p class="empty-state">${msg}</p></div>`;
-    }
-    html += shown.map(({ q, n }) => this._quizCardHtml(q, n)).join('');
-    if (filter !== 'answered' && sealed.length && filter !== 'all') {
-      const nextTurn = Math.min(...sealed.map(q => q.turn));
-      html += `<div class="card quiz-sealed"><p class="empty-state">${sealed.length} more question${sealed.length === 1 ? '' : 's'} unlock from Turn ${nextTurn}.</p></div>`;
-    }
-    container.innerHTML = html;
   }
 
-  _quizCardHtml(q, n) {
-    const esc = escapeHtml;
-    const reward = `+${q.reward_amount} ${esc(RESOURCE_SHORT[q.reward_resource] || q.reward_resource)}`;
-    const num = `<span class="quiz-num">Q${String(n).padStart(2, '0')} &middot; TURN ${q.turn}</span>`;
-    if (q.status === 'sealed') {
-      return `<div class="card quiz-card quiz-sealed"><div class="quiz-meta">${num}<span class="status-pill">Unlocks turn ${q.turn}</span></div>
-        <p class="quiz-q muted">Sealed until Turn ${q.turn}.</p></div>`;
-    }
-    const answered = q.status === 'correct' || q.status === 'failed';
-    const pending = this.quizPending && this.quizPending.id === q.id ? this.quizPending.idx : null;
-    const pill = q.status === 'correct' ? `<span class="status-pill ok">Correct &middot; ${reward}</span>`
-      : q.status === 'failed' ? `<span class="status-pill bad">Wrong &middot; −${q.reward_amount} ${esc(RESOURCE_SHORT[q.reward_resource] || q.reward_resource)}</span>`
-      : `<span class="status-pill open">Stake ±${q.reward_amount} ${esc(RESOURCE_SHORT[q.reward_resource] || q.reward_resource)}</span>`;
-    const opts = q.options.map((opt, idx) => {
-      let cls = 'quiz-option';
-      if (answered && idx === q.correct_index) cls += ' correct';
-      else if (answered && q.status === 'failed' && idx === q.your_index) cls += ' wrong';
-      else if (pending === idx) cls += ' selected';
-      const key = String.fromCharCode(65 + idx);
-      return `<button type="button" class="${cls}" ${answered ? 'disabled' : `onclick="realmApp.selectQuizOption('${esc(q.id)}', ${idx})"`}>
-        <span class="opt-key">${key}</span><span>${esc(opt)}</span></button>`;
-    }).join('');
-    let foot = '';
-    if (!answered && pending !== null) {
-      foot = `<div class="quiz-confirm">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="realmApp.selectQuizOption(null)">Cancel</button>
-        <button type="button" class="btn btn-primary btn-sm" onclick="realmApp.submitQuizAnswer('${esc(q.id)}', this)">Lock in ${String.fromCharCode(65 + pending)}</button>
+  renderQuiz() {
+    const stage = document.getElementById('quiz-stage');
+    const q = this.quiz;
+    if (!stage || !q) return;
+    const esc = escapeHtml, label = r => esc(RESOURCE_SHORT[r] || r);
+    this._setVal('quiz-stat-correct', q.stats.correct);
+    this._setVal('quiz-stat-wrong', q.stats.wrong);
+    this._setVal('quiz-stat-open', q.stats.left);
+    this._setVal('quiz-seconds-rule', q.seconds);
+    const badge = document.getElementById('nav-quiz-badge');
+    if (badge) { badge.innerText = '!'; badge.style.display = q.active ? 'block' : 'none'; }
+
+    if (q.active) {
+      const a = q.active;
+      const key = String.fromCharCode;
+      const over = a.seconds_left <= 0;
+      stage.innerHTML = `<div class="quiz-live">
+        <div class="row-between"><span class="status-pill open">Stake ±${a.stake_amount} ${label(a.stake_resource)}</span><span class="quiz-clock ${over ? 'low' : ''}" id="quiz-clock">${over ? 0 : Math.ceil(a.seconds_left)}</span></div>
+        <div class="quiz-timer ${over ? 'low' : ''}" id="quiz-timer"><div id="quiz-timer-fill" style="transform: scaleX(${over ? 0 : a.seconds_left / a.seconds_total});"></div></div>
+        <p class="quiz-q">${esc(a.question)}</p>
+        <div class="quiz-options">${a.options.map((o, n) => `<button type="button" class="quiz-option" ${over ? 'disabled' : ''} onclick="realmApp.answerQuiz(${o.i})">
+          <span class="opt-key">${key(65 + n)}</span><span>${esc(o.text)}</span></button>`).join('')}</div>
+        ${over ? '<p class="empty-state mt-1">Time is up…</p>' : ''}
       </div>`;
+    } else if (this.quizResult) {
+      const h = this.quizResult;
+      const good = h.status === 'correct';
+      const pill = good ? `<span class="status-pill ok">Correct &middot; +${h.stake_amount} ${label(h.stake_resource)}</span>`
+        : `<span class="status-pill bad">${h.status === 'timeout' ? 'Out of time' : 'Wrong'} &middot; −${h.stake_amount} ${label(h.stake_resource)}</span>`;
+      stage.innerHTML = `<div class="quiz-card">
+        <div class="quiz-meta"><span class="quiz-num">RESULT</span>${pill}</div>
+        <p class="quiz-q">${esc(h.question)}</p>
+        <div class="quiz-options">${h.options.map((o, i) => {
+          let cls = 'quiz-option';
+          if (i === h.correct_index) cls += ' correct'; else if (i === h.your_index) cls += ' wrong';
+          return `<button type="button" class="${cls}" disabled><span class="opt-key">${String.fromCharCode(65 + i)}</span><span>${esc(o)}</span></button>`;
+        }).join('')}</div>
+        <div class="callout ${good ? 'ok' : 'danger'} quiz-result">${esc(h.explanation)}
+          <a href="#" onclick="realmApp.openArticle('${esc(h.article)}'); return false;" style="text-decoration: underline; white-space: nowrap;">Read the article</a></div>
+        ${q.next ? '<button type="button" class="btn btn-primary btn-block mt-2" onclick="realmApp.quizContinue()">Next question</button>'
+                 : `<p class="empty-state mt-2">${q.unlocks_turn ? `More questions unlock in Turn ${q.unlocks_turn}.` : 'You have answered every question.'}</p>`}
+      </div>`;
+    } else if (q.next) {
+      stage.innerHTML = `<div class="quiz-start">
+        <div class="section-sub" style="margin:0;">Your next question</div>
+        <div class="stake">±${q.next.stake_amount} ${label(q.next.stake_resource)}</div>
+        <div class="topic">Topic: ${esc(q.next.category)} &middot; ${q.next.tier === 'hard' ? 'a hard one' : 'standard'}</div>
+        <p class="small mt-1" style="color: var(--text-secondary);">Right answer: <b>+${q.next.stake_amount} ${label(q.next.stake_resource)}</b>. Wrong answer or no answer: <b>−${q.next.stake_amount} ${label(q.next.stake_resource)}</b>.<br>
+          ${q.seconds} seconds on the clock. You only see the question once you start it.</p>
+        <button type="button" class="btn btn-primary btn-block mt-2" onclick="realmApp.takeQuizQuestion()">Start the clock</button>
+      </div>`;
+    } else {
+      stage.innerHTML = `<p class="empty-state">${q.unlocks_turn ? `You have answered every question for now. More unlock in Turn ${q.unlocks_turn}.` : 'You have answered every question.'}</p>`;
     }
-    if (answered && q.explanation) {
-      foot = `<div class="callout ${q.status === 'correct' ? 'ok' : 'danger'} quiz-result">${esc(q.explanation)}
-        <a href="#" onclick="realmApp.openArticle('${esc(q.article)}'); return false;" style="text-decoration: underline; white-space: nowrap;">Read article</a></div>`;
+
+    const histCard = document.getElementById('quiz-history-card');
+    const hist = document.getElementById('quiz-history');
+    if (histCard && hist) {
+      const items = q.history.filter(h => !(this.quizResult && h.id === this.quizResult.id));
+      histCard.style.display = items.length ? '' : 'none';
+      hist.innerHTML = items.slice(0, 15).map(h => `<div class="quiz-history-item">
+        <div class="row-between"><b>${esc(h.question)}</b><span class="status-pill ${h.status === 'correct' ? 'ok' : 'bad'}">${h.status === 'correct' ? '✓' : h.status === 'timeout' ? '⏱' : '✗'}</span></div>
+        <div class="small" style="color: var(--text-secondary);">${h.status === 'correct' ? '' : `Your answer: ${h.your_index === null || h.your_index < 0 ? 'none' : esc(h.options[h.your_index])}. `}Correct: <b>${esc(h.options[h.correct_index])}</b></div>
+        <div class="small muted">${esc(h.explanation)}</div></div>`).join('');
     }
-    return `<div class="card quiz-card" id="quiz-${esc(q.id)}">
-      <div class="quiz-meta">${num}${pill}</div>
-      <p class="quiz-q">${esc(q.question)}</p>
-      <div class="quiz-options">${opts}</div>${foot}</div>`;
   }
 
   // ---------------------------------------------------------------------------
@@ -719,41 +959,213 @@ class RealmApp {
     return this.wikiSearch(null, { push: false });
   }
 
-  selectQuizOption(questionId, idx) {
-    this.quizPending = questionId ? { id: questionId, idx } : null;
-    this.renderQuiz();
+  // ---------------------------------------------------------------------------
+  // War room: weather, scouting report, the attack order, and the battle replay
+  // ---------------------------------------------------------------------------
+  renderWar(state, realm) {
+    const section = document.getElementById('war-section');
+    if (!section) return;
+    const settings = state.game_settings || {};
+    const meta = state.meta;
+    section.style.display = settings.attacks_enabled === false ? 'none' : '';
+    if (settings.attacks_enabled === false) return;
+    const w = meta.weather;
+    const box = document.getElementById('war-weather');
+    if (box && w && this._weatherKey !== w.id + meta.current_turn) {
+      this._weatherKey = w.id + meta.current_turn;
+      const icons = { clear: '☀️', rain: '🌧️', fog: '🌫️', storm: '⛈️', heat: '🔥', tailwind: '💨', night: '🌑' };
+      box.innerHTML = `<span class="w-icon">${icons[w.id] || '🌤️'}</span><span><b>${escapeHtml(w.name)}</b> this turn. ${escapeHtml(w.text || '')}</span>`;
+    }
+    const sig = `${meta.current_turn}|${meta.phase}|${meta.intermission_end ? 1 : 0}|${(state.battles || []).length}|${realm.military_power}|${realm.alchemical_grain}`;
+    const now = Date.now();
+    if (sig !== this._warSig || now - (this._warAt || 0) > 5000) {
+      this._warSig = sig;
+      this._warAt = now;
+      this.loadWar();
+    }
+    this.renderWarLog(state.battles || []);
   }
 
-  async submitQuizAnswer(questionId, btnEl) {
-    if (!this.quizPending || this.quizPending.id !== questionId) return;
-    const answerIndex = this.quizPending.idx;
-    if (btnEl) { btnEl.disabled = true; btnEl.innerText = 'Checking…'; }
+  async loadWar() {
     try {
-      const resp = await fetch('/api/lore/quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ realm_id: this.realmId, question_id: questionId, answer_index: answerIndex })
-      });
-      const res = await resp.json();
-      this.quizPending = null;
-      if (res.data && res.data.status) {
-        // Reflect the result locally (incl. which option this delegation picked), then resync.
-        const q = this.quizData.questions.find(x => x.id === questionId);
-        if (q) Object.assign(q, { status: res.data.status, correct_index: res.data.correct_index,
-                                  explanation: res.data.explanation, your_index: answerIndex });
-        (this.quizRecent = this.quizRecent || new Set()).add(questionId);
-        this.renderQuiz();
-        showToast(res.message, res.success ? 'success' : 'danger');
-        res.success ? synth.playChime() : synth.playAlert();
-      } else {
-        showToast(res.message || 'Answer rejected', 'danger');
-        this.loadQuiz();
+      const res = await (await fetch(`/api/war/${encodeURIComponent(this.realmId)}`)).json();
+      if (!res.success) return;
+      this.war = res;
+      if (this.warTarget && !(res.targets || []).some(t => t.id === this.warTarget && t.can_attack)) {
+        this.warTarget = null;
+        this.warPreview = null;
       }
-      this.pollState();
-    } catch (err) {
-      showToast('Connection failed — your answer was not sent.', 'danger');
-      if (btnEl) { btnEl.disabled = false; btnEl.innerText = 'Retry'; }
+      this.renderWarTargets();
+    } catch (err) { /* the next poll tries again */ }
+  }
+
+  renderWarTargets() {
+    const war = this.war;
+    if (!war) return;
+    const esc = escapeHtml;
+    const status = document.getElementById('war-status');
+    const cost = Object.entries(war.cost || {}).map(([r, n]) => `${n} ${RESOURCE_SHORT[r] || r}`).join(', ');
+    if (status) {
+      status.innerText = war.from_turn > (this._turn || 1)
+        ? `Attacks are allowed from Turn ${war.from_turn}.`
+        : `You can march ${war.attacks_left} more time${war.attacks_left === 1 ? '' : 's'} this turn. Supplies cost ${cost}; you need at least ${war.min_military} Military.`;
     }
+    const chips = document.getElementById('war-targets');
+    if (chips) {
+      const names = Object.fromEntries((this._lastRealms || []).map(r => [r.id, r]));
+      chips.innerHTML = (war.targets || []).map(t => {
+        const r = names[t.id] || {};
+        return `<button type="button" class="war-chip ${t.id === this.warTarget ? 'active' : ''}" style="--chip-color:${esc(r.theme_color || '#8c7a5e')}"
+          ${t.can_attack ? '' : 'disabled'} title="${esc(t.reason || '')}" onclick="realmApp.selectWarTarget('${esc(t.id)}')"><span>${esc(r.emoji || '🏛️')}</span>${esc(t.name)}</button>`;
+      }).join('') || '<p class="empty-state">No other nations are playing.</p>';
+      const blocked = (war.targets || []).filter(t => !t.can_attack);
+      if (blocked.length && blocked.length === (war.targets || []).length) {
+        chips.insertAdjacentHTML('beforeend', `<p class="section-sub" style="width:100%;">${esc(blocked[0].reason)}</p>`);
+      }
+    }
+    this.renderWarScout();
+  }
+
+  async selectWarTarget(id) {
+    this.warTarget = id;
+    this.warPreview = null;
+    this.renderWarTargets();
+    try {
+      const res = await (await fetch('/api/war/preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: this.realmId, target_id: id })
+      })).json();
+      if (this.warTarget !== id) return;
+      this.warPreview = res.preview || null;
+      if (!res.success) showToast(res.message, 'warning');
+    } catch (err) { showToast('The scouts could not report. Try again.', 'danger'); }
+    this.renderWarScout();
+  }
+
+  renderWarScout() {
+    const box = document.getElementById('war-scout');
+    const btn = document.getElementById('war-attack-btn');
+    if (!box || !btn) return;
+    const p = this.warPreview, esc = escapeHtml;
+    if (!this.warTarget || !p) {
+      box.innerHTML = '';
+      btn.disabled = true;
+      btn.innerText = this.warTarget ? 'The scouts are riding…' : 'Choose a target';
+      return;
+    }
+    const cls = /favourable/i.test(p.label) && !/un/i.test(p.label) ? 'good' : (/Unfavourable|Very unfavourable/.test(p.label) ? 'bad' : 'even');
+    const cost = Object.entries(p.cost || {}).map(([r, n]) => `−${n} ${RESOURCE_SHORT[r] || r}`).join(', ');
+    box.innerHTML = `<div class="scout-box">
+      <div class="scout-odds ${cls}">${esc(p.label)}</div>
+      <div class="scout-note">Your scouts' guess against ${esc(p.defender_name)}. It can be wrong, and chance still decides part of the fight.</div>
+      <div class="mt-1">Your army: <b>${esc(p.own_military)} Military</b>. Their Military: <b>${esc(p.defender_military_tier || '?')}</b>.</div>
+      <div class="mt-1"><b>What your scouts could find out</b> <span class="muted">(${esc(p.quality)}; ${p.modifiers.length} of ${esc(p.total)} modifiers revealed)</span>
+        ${this._modifierRows(p.modifiers, p.attacker_name, p.defender_name)}
+        <div class="section-sub" style="margin:4px 0 0;">More wealth reveals more modifiers; more Silk and Cores make them more accurate.</div></div>
+      <div class="mt-1">Ground: <b>${esc((p.terrain || {}).name || '')}</b>. ${esc((p.terrain || {}).note || '')}</div>
+      <div>Weather: <b>${esc((p.weather || {}).name || '')}</b>. ${esc((p.weather || {}).text || '')}</div>
+      <div>Cost of the march: <b>${esc(cost)}</b></div>
+    </div>`;
+    btn.disabled = !p.can_attack;
+    btn.innerText = p.can_attack ? `Attack ${p.defender_name}` : (p.reason || 'You cannot attack now');
+  }
+
+  async attackTarget() {
+    const p = this.warPreview, id = this.warTarget;
+    if (!p || !id || !p.can_attack) return;
+    const ok = await confirmAction({
+      title: `Attack ${p.defender_name}?`,
+      message: `Odds, as your scouts see them: ${p.label}. Nothing can be undone once the armies meet.`,
+      details: [
+        `Supplies for the march: ${Object.entries(p.cost || {}).map(([r, n]) => `${n} ${RESOURCE_SHORT[r] || r}`).join(', ')}`,
+        'You lose Standing for starting a war, win or lose',
+        'Both armies lose soldiers; the loser also loses Stability and Vitality, and the winner takes part of its Grain, Cores and Silk',
+      ],
+      confirmLabel: 'Sound the war horn', tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      const res = await (await fetch('/api/war/attack', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realm_id: this.realmId, target_id: id })
+      })).json();
+      if (!res.success) { showToast(res.message, 'danger'); this.loadWar(); return; }
+      this.warTarget = null;
+      this.warPreview = null;
+      (this._seenBattles = this._seenBattles || new Set()).add(res.battle.id);
+      this.showBattleModal(res.battle);
+      this.pollState();
+      this.loadWar();
+    } catch (err) {
+      showToast('The order did not reach the army. Check your connection.', 'danger');
+    }
+  }
+
+  renderWarLog(battles) {
+    const box = document.getElementById('war-log');
+    if (!box) return;
+    const key = battles.map(b => b.id).join(',');
+    if (key === this._warLogKey) return;
+    this._warLogKey = key;
+    this._battleById = Object.fromEntries(battles.map(b => [b.id, b]));
+    const esc = escapeHtml;
+    box.innerHTML = battles.slice(0, 4).map(b => `<div class="battle-row">
+      <div><b>${esc(b.attacker_emoji)} ${esc(b.attacker_name)} ⚔️ ${esc(b.defender_emoji)} ${esc(b.defender_name)}</b>
+        <span class="muted">Turn ${esc(b.turn)} · ${esc(BattleScene.outcome(b).text)}</span></div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="realmApp.replayBattle('${esc(b.id)}')">Replay</button></div>`).join('');
+  }
+
+  replayBattle(id) {
+    const b = (this._battleById || {})[id];
+    if (b) this.showBattleModal(b);
+  }
+
+  watchBattles(battles) {
+    if (this._seenBattles === undefined) {                       // first poll: do not replay old battles
+      this._seenBattles = new Set(battles.map(b => b.id));
+      return;
+    }
+    for (const b of battles.slice().reverse()) {
+      if (this._seenBattles.has(b.id)) continue;
+      this._seenBattles.add(b.id);
+      if (b.attacker_id === this.realmId || b.defender_id === this.realmId) this.showBattleModal(b);
+      else showToast(`⚔️ ${b.headline}`, 'info');
+    }
+  }
+
+  // The modifiers a nation's scouts could find out, as the scouts reported them (figures are estimates).
+  _modifierRows(list, ownName, enemyName) {
+    const esc = escapeHtml;
+    if (!list || !list.length) return '<div class="section-sub">Your scouts learned nothing.</div>';
+    return list.map(m => `<div class="bs-factor"><span>${esc(m.whose === 'own' ? ownName : enemyName)} · ${esc(m.label)}</span>
+      <b class="${m.dir === 'pos' ? 'pos' : 'neg'}">${esc(m.text)}</b></div>`).join('');
+  }
+
+  _battleExtraHtml(b) {
+    const mine = b.private && b.private.mine;
+    if (!mine) return '';
+    const esc = escapeHtml;
+    const changes = Object.entries(mine.changes || {}).map(([r, n]) => `${n > 0 ? '+' : '−'}${Math.abs(n)} ${RESOURCE_SHORT[r] || r}`).join(', ') || 'no change';
+    const you = b.private.side === 'attacker';
+    const [own, enemy] = you ? [b.attacker_name, b.defender_name] : [b.defender_name, b.attacker_name];
+    return `<div class="bs-modal-extra"><b>How it went for you (${you ? 'attacking' : 'defending'})</b>
+      <div class="mt-1"><b>Your nation's changes:</b> ${esc(changes)}</div>
+      <div class="mt-1"><b>What your scouts made of it</b> <span class="muted">(${esc(mine.quality)}; ${mine.modifiers.length} of ${esc(mine.total)} modifiers known)</span>
+        ${this._modifierRows(mine.modifiers, own, enemy)}</div></div>`;
+  }
+
+  showBattleModal(b) {
+    document.querySelectorAll('.bs-modal').forEach(m => m.remove());
+    if (this._battleScene) this._battleScene.stop();
+    const overlay = document.createElement('div');
+    overlay.className = 'bs-modal';
+    overlay.innerHTML = `<div class="bs-modal-card"><div class="bs-stage"></div>${this._battleExtraHtml(b)}
+      <button type="button" class="btn btn-primary btn-block mt-2" id="bs-close">Close</button></div>`;
+    document.body.appendChild(overlay);
+    this._battleScene = BattleScene.play(overlay.querySelector('.bs-stage'), b, {});
+    const close = () => { if (this._battleScene) this._battleScene.stop(); overlay.remove(); };
+    overlay.querySelector('#bs-close').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   }
 
   renderRegistry(realms) {
@@ -842,19 +1254,6 @@ class RealmApp {
     }
   }
 
-  renderMotionQuota(proposals, meta, settings) {
-    const box = document.getElementById('motion-quota');
-    if (!box) return;
-    const limit = settings.motions_per_turn || 2;
-    const used = proposals.filter(p => p.proposer_id === this.realmId && p.created_turn === meta.current_turn).length;
-    const left = Math.max(0, limit - used);
-    box.className = `motion-quota mt-1${left ? '' : ' empty'}`;
-    box.innerHTML = left
-      ? `You can table <b>${left}</b> more motion${left === 1 ? '' : 's'} this turn <span class="muted">(limit ${limit} per nation)</span>`
-      : `Your nation has tabled its ${limit} motion${limit === 1 ? '' : 's'} for this turn. You can still co-sponsor and vote.`;
-    document.querySelectorAll('#motion-templates .motion-template, #proposal-submit').forEach(b => { b.disabled = !left; });
-  }
-
   renderProposals(proposals, realm) {
     const esc = escapeHtml;
     const types = this.motionTypes || {};
@@ -870,11 +1269,7 @@ class RealmApp {
       motionsBadge.style.display = n > 0 ? 'inline-block' : 'none';
     }
 
-    const effectLine = p => {
-      const t = types[p.effect_type] || {};
-      const target = p.target_realm_name ? ` <em>(${esc(p.target_realm_name)})</em>` : '';
-      return `<div class="motion-effect"><span>If passed:</span> ${esc(t.effect_plain || t.statutory_effect || '')}${target}</div>`;
-    };
+    const effectLine = p => this._motionEffectHtml(p);
     const head = (p, pill) => {
       const t = types[p.effect_type] || {};
       return `<div class="row-between" style="align-items:flex-start;">
@@ -919,7 +1314,8 @@ class RealmApp {
         const pill = p.status === 'passed' ? '<span class="status-pill ok">Passed</span>' : '<span class="status-pill bad">Rejected</span>';
         const answer = p.effect_type === 'gm_question' && p.status === 'passed'
           ? (p.answer ? `<div class="callout ok mt-1"><b>Game masters' answer:</b> ${esc(p.answer)}</div>`
-                      : '<div class="callout neutral mt-1">Waiting for the game masters to answer.</div>') : '';
+                      : '<div class="callout neutral mt-1">Waiting for the game masters to answer.</div>')
+          : p.effect_type === 'open' && p.status === 'passed' && p.awaiting_gm ? '<div class="callout neutral mt-1">Waiting for the game masters to carry it out.</div>' : '';
         return `<div class="motion-card">${head(p, pill)}${effectLine(p)}${answer}
           <div class="vote-breakdown">
             <div><b>For</b> ${sum('support')} votes &middot; ${side('support').length} nations<br><span>${line('support')}</span></div>
@@ -930,11 +1326,15 @@ class RealmApp {
     }
   }
 
+  // What the game does if the motion passes: the sentences written when it was tabled (and, once decided, what really happened).
   _motionEffectHtml(p) {
+    const esc = escapeHtml;
     const t = (this.motionTypes || {})[p.effect_type] || {};
-    const target = p.target_realm_name ? ` (${escapeHtml(p.target_realm_name)})` : '';
-    const text = t.effect_plain || t.statutory_effect;
-    return text ? `<div class="motion-effect"><span>If passed:</span> ${escapeHtml(text)}${target}</div>` : '';
+    const lines = (p.effect_text && p.effect_text.length) ? p.effect_text : [t.effect_plain || t.statutory_effect].filter(Boolean);
+    if (!lines.length) return '';
+    const body = lines.length === 1 ? ` ${esc(lines[0])}` : `<ul>${lines.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+    const done = p.result_text && p.effect_type !== 'gm_question' && !p.awaiting_gm ? `<div class="motion-effect"><span>Carried out:</span> ${esc(p.result_text)}</div>` : '';
+    return `<div class="motion-effect"><span>If passed:</span>${body}</div>${done}`;
   }
 
   renderPlenarySessionCallout(meta, proposals, realm) {
@@ -1081,6 +1481,14 @@ class RealmApp {
         const reqAmt = parseInt(document.getElementById('trade-req-amt').value, 10);
         const noteEl = document.getElementById('trade-note');
         const note = noteEl ? noteEl.value : '';
+        const partner = (this._realmNames || {})[receiverId] || 'this nation';
+        const ok = await confirmAction({
+          title: `Send this offer to ${partner}?`,
+          details: [`You give: ${offerAmt} ${RESOURCE_SHORT[offerRes]}`, `You ask for: ${reqAmt} ${RESOURCE_SHORT[reqRes]}`, ...(note ? [`Message: “${note}”`] : [])],
+          message: 'Nothing moves until they accept.',
+          confirmLabel: 'Send the offer',
+        });
+        if (!ok) return;
 
         try {
           const resp = await fetch('/api/trade/create', {
@@ -1134,6 +1542,20 @@ class RealmApp {
   }
 
   async respondTrade(tradeId, action) {
+    if (action !== 'cancel') {
+      const t = (this._trades || []).find(x => x.id === tradeId);
+      const res = r => RESOURCE_SHORT[r] || r;
+      const details = t ? (t.receiver_id === this.realmId
+        ? [`You receive: ${t.offer_amount} ${res(t.offer_resource)}`, `You give: ${t.request_amount} ${res(t.request_resource)}`]
+        : []) : [];
+      const ok = await confirmAction({
+        title: action === 'accept' ? `Accept the offer from ${t ? t.sender_name : 'this nation'}?` : `Decline the offer from ${t ? t.sender_name : 'this nation'}?`,
+        message: action === 'accept' ? 'The exchange happens at once and cannot be undone.' : '',
+        details: action === 'accept' ? details : [],
+        confirmLabel: action === 'accept' ? 'Accept the trade' : 'Decline', tone: action === 'accept' ? undefined : 'danger',
+      });
+      if (!ok) return;
+    }
     try {
       const resp = await fetch(`/api/trade/${tradeId}/respond`, {
         method: 'POST',
@@ -1154,6 +1576,15 @@ class RealmApp {
   }
 
   async supportProposal(propId) {
+    const prop = (this._proposals || []).find(p => p.id === propId) || {};
+    const ok = await confirmAction({
+      title: 'Co-sponsor this motion?',
+      message: prop.title ? `“${prop.title}”` : '',
+      details: ['It can then go to the Assembly vote.', "Your nation's name stays hidden from the other nations."].concat(
+        ((prop.effect_text || []).map(x => `If passed: ${x}`))),
+      confirmLabel: 'Co-sponsor',
+    });
+    if (!ok) return;
     try {
       const resp = await fetch(`/api/proposal/${propId}/support`, {
         method: 'POST',
@@ -1174,6 +1605,16 @@ class RealmApp {
   }
 
   async castPlenaryVote(propId, choice) {
+    const prop = (this._proposals || []).find(p => p.id === propId) || {};
+    const votes = this._me ? this._me.assembly_votes : 1;
+    const ok = await confirmAction({
+      title: `Vote ${choice.toUpperCase()}?`,
+      message: prop.title ? `“${prop.title}”` : '',
+      details: choice === 'abstain' ? ['You do not take a side. Your votes are not counted for or against.', 'A ballot cannot be changed once cast.']
+        : [`Your nation's ${votes} vote${votes === 1 ? '' : 's'} count ${choice === 'support' ? 'for' : 'against'} the motion.`, 'A ballot cannot be changed once cast.'],
+      confirmLabel: `Cast ${choice} vote`, tone: choice === 'oppose' ? 'danger' : undefined,
+    });
+    if (!ok) return;
     try {
       const resp = await fetch('/api/plenary/vote', {
         method: 'POST',
@@ -1192,7 +1633,14 @@ class RealmApp {
     }
   }
 
-  async executeDomesticAction(actionType) {
+  async executeDomesticAction(actionType, btn) {
+    const d = (btn && btn.dataset) || {};
+    const ok = await confirmAction({
+      title: `Enact “${d.name || 'this decree'}”?`,
+      details: [d.cost ? `Cost: ${d.cost}` : '', d.gain ? `Gain: ${d.gain}` : ''].filter(Boolean),
+      confirmLabel: 'Enact the decree',
+    });
+    if (!ok) return;
     try {
       const resp = await fetch('/api/realm/action', {
         method: 'POST',

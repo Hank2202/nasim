@@ -10,7 +10,12 @@
         "5. GAME SETTINGS: 'game_settings_defaults' are the defaults for the facilitator's setup screen (/admin/setup): scenario, difficulty, timers, automatic phase changes and random events. Changes made on the setup screen are stored per game. Each scenario in 'scenarios' can carry 'suggested' values that the setup screen fills in when the scenario is chosen, and 'famine_storyline' switches the scripted Round 2 border incident and Round 3 famine on.",
         "6. EVENTS: 'minor_events' are the small random news items during working sessions. Each effect moves a resource by a random amount between 0 and (weight x the largest change set on the setup screen), at least 1. 'catastrophes_catalog' holds the large disasters: they strike at random only when 'large disasters per turn' is above 0 (the Armageddon scenario), otherwise only by hand from the admin page. 'events_catalog' is triggered by hand only.",
         "7. QUIZ: a wrong answer costs the same resource and amount that a correct answer would have earned.",
-        "8. FEWER NATIONS: a secret mission with 'requires' needs those nations at the table. When one is missing, the mission's 'stand_in' version is used instead (same idea, no reference to the absent nation); without a stand_in the mission is skipped. Public-mission targets (Val-Khor's Cores, Solaris' broad support, Aquila's network) scale with the number of nations playing."
+        "8. FEWER NATIONS: a secret mission with 'requires' needs those nations at the table. When one is missing, the mission's 'stand_in' version is used instead (same idea, no reference to the absent nation); without a stand_in the mission is skipped. Public-mission targets (Val-Khor's Cores, Solaris' broad support, Aquila's network) scale with the number of nations playing.",
+        "9. MOTIONS: each template in 'resolution_types' has a 'builder' (fixed, cordon, redistribute, levy, pact) and 'defaults'/'lines'. 'fixed' and 'cordon' templates carry their own 'lines' (kinds boost, levy, flag); players can only edit the parameters of redistribute, levy and pact motions, and only value-conserving transfers or penalties; there is no cap on amounts, a transfer or penalty takes at most what the nation has and receivers only get what was taken. The sentence players read under 'If passed' is generated from the lines, so it is always exactly what the game does. The Continental Food Acts are applied by the engine (no 'lines').",
+        "10. BATTLES: the 'battle' section tunes war: readiness weights (how much stability, grain, cores, vitality, standing and silk multiply an army, the further from 50 the harder), the luck range, terrain bonuses for the defender, the weather table (rolled once per turn), plunder and the attack cost. Missing keys fall back to the defaults in battle.py. 'game_settings_defaults' has attacks_enabled, attacks_per_turn and attacks_from_turn.",
+        "11. NATION DIFFICULTY: each realm has 'difficulty' (1 easiest to 5 hardest) and a 'difficulty_note' shown in the lobby, on the setup screen and in the Guide.",
+        "12. QUIZ: the stake of each question is drawn at random between quiz.stake_min and quiz.stake_max (average 5 with 1 and 9); a correct answer earns it and a wrong answer or running out of time loses the same amount of the question's 'reward_resource'. Questions are drawn at random from the unlocked ones a nation has not answered. 'reward_amount' in lore_quiz.json is no longer used.",
+        "13. OPEN MOTION: template 'open' (builder 'open') has no automatic effect. When it passes it waits in the facilitator's Resolutions tab until it is marked as carried out."
       ]
     }
   },
@@ -24,29 +29,43 @@
   "resolution_types": [
     {
       "id": "tax",
-      "name": "Emergency Grain Redistribution",
-      "summary": "Mandates wealthy grain silos transfer emergency grain to starving provinces across the continent.",
+      "name": "Resource Redistribution",
+      "summary": "Rich nations share with poor ones: you choose the resource and the limits. Nothing is created; only what is collected is handed out.",
       "effect_badge": "HUMANITARIAN GRAIN TRANSFER",
-      "statutory_effect": "Realms with >50 Grain contribute -10 Grain; realms with <25 Grain receive +15 Grain.",
+      "statutory_effect": "Conserving transfer from nations above a limit to nations below another.",
       "player_selectable": true,
       "icon": "🌾",
       "needs_target": false,
       "default_title": "Continental Granary Accord",
-      "effect_plain": "Every nation with more than 50 Grain gives 10 Grain; every nation with less than 25 Grain receives 15 Grain.",
-      "default_terms": "Recognising that hunger anywhere threatens peace everywhere, the signatory nations agree that well-stocked granaries shall share with the starving. Each nation holding more than 50 Grain contributes 10 Grain, and each nation holding less than 25 Grain receives 15 Grain."
+      "effect_plain": "Nations above the upper limit give up to the set amount; what is collected goes to nations below the lower limit. (Default: Grain, above 50 give 10, below 25 receive up to 15.)",
+      "default_terms": "Recognising that hunger anywhere threatens peace everywhere, the signatory nations agree that well-stocked granaries shall share with the starving.",
+      "builder": "redistribute",
+      "defaults": {
+        "resource": "grain",
+        "above": 50,
+        "give": 10,
+        "below": 25,
+        "receive": 15
+      }
     },
     {
       "id": "embargo",
-      "name": "Continental Wealth Surtax & Embargo",
-      "summary": "Imposes commercial trade sanctions on the single wealthiest realm to curb runaway oligarchic dominance.",
+      "name": "Sanction or Embargo",
+      "summary": "Punish one nation: you choose who and what it loses. By default the richest nation loses 15 Stability.",
       "effect_badge": "PLUTOCRATIC RESTRAINTS",
-      "statutory_effect": "The wealthiest realm suffers -15 Civil Stability as trade routes are legally choked.",
+      "statutory_effect": "A levy on one nation.",
       "player_selectable": true,
       "icon": "⚖️",
       "needs_target": false,
       "default_title": "Charter Against Hoarded Wealth",
-      "effect_plain": "The single wealthiest nation (Grain + Cores + Silk) loses 15 Stability.",
-      "default_terms": "No single realm shall grow so rich that it can bend the Assembly to its will. The Summit imposes trade restrictions on the wealthiest nation until its fortune is shared more fairly."
+      "effect_plain": "The chosen nation loses the chosen amount of one resource or value (default: the richest nation loses 15 Stability).",
+      "default_terms": "No single realm shall grow so rich that it can bend the Assembly to its will. The Summit imposes restrictions on the named nation until its conduct changes.",
+      "builder": "levy",
+      "defaults": {
+        "target": "@richest",
+        "resource": "stability",
+        "amount": 15
+      }
     },
     {
       "id": "aid",
@@ -59,21 +78,50 @@
       "needs_target": false,
       "default_title": "Spire Relief Mission",
       "effect_plain": "The nation that tables this motion gains 10 Diplomatic Standing for leading the relief effort.",
-      "default_terms": "Our nation will organise and lead a relief mission to the regions worst struck by the failed harvest, coordinating aid from all willing signatories."
+      "default_terms": "Our nation will organise and lead a relief mission to the regions worst struck by the failed harvest, coordinating aid from all willing signatories.",
+      "builder": "fixed",
+      "lines": [
+        {
+          "kind": "boost",
+          "resource": "standing",
+          "amount": 10,
+          "targets": [
+            "@me"
+          ]
+        }
+      ]
     },
     {
       "id": "cordon",
       "name": "Frontier Defense & Quarantine Cordon",
       "summary": "Fortifies a nation's frontier checkpoints against refugee surges, plague and unrest.",
       "effect_badge": "BORDER QUARANTINE",
-      "statutory_effect": "Targeted realm gains +10 Stability and the cordon flag (disaster damage from plague, border surge and tsunami reduced by 50–70%).",
+      "statutory_effect": "Target gains +10 Stability and the cordon flag.",
       "player_selectable": true,
       "icon": "🛡️",
       "needs_target": true,
       "target_label": "Nation whose borders are guarded",
       "default_title": "Frontier Watch Covenant",
-      "effect_plain": "The chosen nation gains 10 Stability, and plagues, border surges and tsunamis hit it far less hard from then on. Trade is not affected.",
-      "default_terms": "To keep unrest from spreading, the borders of the named nation shall be guarded and its frontier checkpoints reinforced until the crisis passes."
+      "effect_plain": "The chosen nation gains 10 Stability, is shielded from plague, border surges and tsunamis, and defends itself better in battle. Trade is not affected.",
+      "default_terms": "To keep unrest from spreading, the borders of the named nation shall be guarded and its frontier checkpoints reinforced until the crisis passes.",
+      "builder": "cordon",
+      "lines": [
+        {
+          "kind": "boost",
+          "resource": "stability",
+          "amount": 10,
+          "targets": [
+            "@target"
+          ]
+        },
+        {
+          "kind": "flag",
+          "flag": "cordon",
+          "targets": [
+            "@target"
+          ]
+        }
+      ]
     },
     {
       "id": "custom",
@@ -85,8 +133,41 @@
       "icon": "📜",
       "needs_target": false,
       "default_title": "Concord of the Spire",
-      "effect_plain": "The nation that tables this motion gains 5 Standing and 5 Stability. Write any further promises in the terms; the nations involved keep them by hand.",
-      "default_terms": "The signatory nations pledge to … (write your agreement here: who gives what, who promises what, and for how long)."
+      "effect_plain": "The nation that tables this motion gains 5 Standing and 5 Stability. Promises written in the terms are kept by hand; for resources use a Resource Pact instead.",
+      "default_terms": "The signatory nations pledge to … (write your agreement here: who gives what, who promises what, and for how long).",
+      "builder": "fixed",
+      "lines": [
+        {
+          "kind": "boost",
+          "resource": "standing",
+          "amount": 5,
+          "targets": [
+            "@me"
+          ]
+        },
+        {
+          "kind": "boost",
+          "resource": "stability",
+          "amount": 5,
+          "targets": [
+            "@me"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pact",
+      "name": "Resource Pact",
+      "icon": "🤝",
+      "player_selectable": true,
+      "needs_target": false,
+      "builder": "pact",
+      "summary": "Write your own deal in up to three lines: who gives how much of what, and who receives it. Carried out automatically when it passes.",
+      "effect_badge": "CUSTOM PACT",
+      "effect_plain": "Exactly the lines you write, applied automatically. Everything given is shared by the receivers; nothing is created.",
+      "statutory_effect": "Player-written transfers and penalties (up to three lines).",
+      "default_title": "A pact between nations",
+      "default_terms": "Explain the deal in your own words: why the nations give, what they get in return, and for how long."
     },
     {
       "id": "emergency_food_a",
@@ -109,6 +190,20 @@
       "icon": "⚙️",
       "needs_target": false,
       "effect_plain": "Every nation pays 10 Cores; if enough is collected, every nation receives 15 Grain."
+    },
+    {
+      "id": "open",
+      "name": "Open Motion (no template)",
+      "icon": "✍️",
+      "player_selectable": true,
+      "needs_target": false,
+      "builder": "open",
+      "summary": "Write anything you like, with no template. It has no automatic effect: if it passes, the game masters carry it out as written.",
+      "effect_badge": "OPEN MOTION",
+      "effect_plain": "Nothing happens automatically. If it passes, the game masters carry it out as you wrote it.",
+      "statutory_effect": "Free text; carried out by the facilitators.",
+      "default_title": "An open motion",
+      "default_terms": "We propose that…"
     },
     {
       "id": "gm_question",
@@ -206,7 +301,9 @@
           "virulent_pestilence",
           "famine_border_surge"
         ]
-      }
+      },
+      "difficulty": 4,
+      "difficulty_note": "Everyone needs its grain, yet its secret mission wants 70 Grain kept at home. A weak army and a tempting target."
     },
     {
       "id": "val_khor",
@@ -275,7 +372,9 @@
           "aether_reactor_breach",
           "plutocratic_labor_revolt"
         ]
-      }
+      },
+      "difficulty": 5,
+      "difficulty_note": "Starts with 30 Grain, a sixth of what the game demands, and its three secret missions pull against each other and against Aethelgard."
     },
     {
       "id": "solaria",
@@ -351,7 +450,9 @@
           "locust_and_blight",
           "famine_border_surge"
         ]
-      }
+      },
+      "difficulty": 1,
+      "difficulty_note": "Rich and respected (Standing 90, 3 votes): its missions fit a cooperative game. The challenge is coordinating 4 delegates."
     },
     {
       "id": "umbra",
@@ -408,7 +509,9 @@
           "aether_reactor_breach",
           "virulent_pestilence"
         ]
-      }
+      },
+      "difficulty": 4,
+      "difficulty_note": "One delegate, one vote, the lowest Standing (40). Its public mission needs the strong nations to hold their armies back."
     },
     {
       "id": "aquila",
@@ -462,7 +565,9 @@
           "virulent_pestilence",
           "plutocratic_labor_revolt"
         ]
-      }
+      },
+      "difficulty": 3,
+      "difficulty_note": "Its public mission is easy, but being the wealthiest by 25 points means hoarding while trading with everyone. Short on grain and military."
     },
     {
       "id": "aethelgard",
@@ -531,7 +636,9 @@
           "great_drought_wildfire",
           "famine_border_surge"
         ]
-      }
+      },
+      "difficulty": 2,
+      "difficulty_note": "The strongest army and a calm people, and its missions are within reach. Careful: its secret missions pull against Umbra's and Val-Khor's."
     }
   ],
   "initial_news": [
@@ -1099,7 +1206,10 @@
     "minor_event_max": 5,
     "intermission_seconds": 45,
     "large_events_per_turn": 0,
-    "motions_per_turn": 2
+    "quiz_seconds": 15,
+    "attacks_enabled": true,
+    "attacks_per_turn": 1,
+    "attacks_from_turn": 2
   },
   "scenarios": {
     "famine": {
@@ -1138,19 +1248,19 @@
       "name": "Gentle",
       "grain_consumption": 15,
       "positive_share": 0.65,
-      "description": "Nations eat 15 Grain per turn; two out of three random events are good news."
+      "description": "15 Grain per turn; two in three random events are good news. A group that shares its grain can win without the quiz."
     },
     "standard": {
       "name": "Standard",
       "grain_consumption": 20,
       "positive_share": 0.5,
-      "description": "As in the facilitator notes: 20 Grain per turn; good and bad events are equally likely."
+      "description": "As in the facilitator notes: 20 Grain per turn; good and bad events equally likely. Needs good cooperation and some luck in the quiz; with careful sharing the continent usually ends in a fragile peace."
     },
     "harsh": {
       "name": "Harsh",
       "grain_consumption": 25,
       "positive_share": 0.35,
-      "description": "Nations eat 25 Grain per turn; most random events are bad news."
+      "description": "25 Grain per turn; most random events are bad news. Only a group that shares everything and answers the hard quiz well gets through."
     }
   },
   "minor_events": [
@@ -1631,5 +1741,151 @@
         "vitality": -0.4
       }
     }
-  ]
+  ],
+  "battle": {
+    "readiness_weights": {
+      "stability": 0.22,
+      "grain": 0.2,
+      "cores": 0.14,
+      "vitality": 0.1,
+      "standing": 0.06,
+      "silk": 0.04
+    },
+    "curve": 1.6,
+    "readiness_range": [
+      0.35,
+      1.9
+    ],
+    "luck": 0.12,
+    "cordon_defence": 0.08,
+    "attack_cost": {
+      "grain": 10
+    },
+    "min_military": 10,
+    "max_attacks_received_per_turn": 2,
+    "stalemate_below": 0.04,
+    "narrow_below": 0.15,
+    "crushing_above": 0.4,
+    "plunder": {
+      "base": 0.05,
+      "scale": 0.3,
+      "keep": 0.75,
+      "caps": {
+        "grain": 30,
+        "cores": 25,
+        "silk": 25
+      }
+    },
+    "terrain": {
+      "volcanic_mountains": {
+        "name": "Volcanic mountains",
+        "defence": 0.1,
+        "note": "Steep passes favour the defenders."
+      },
+      "abyssal_chasm": {
+        "name": "The Abyssal Rift",
+        "defence": 0.1,
+        "note": "Attackers must fight in the dark."
+      },
+      "northern_steppes": {
+        "name": "Open steppe",
+        "defence": -0.04,
+        "note": "Open ground favours the attackers."
+      },
+      "verdant_lowlands": {
+        "name": "Soft lowland fields",
+        "defence": -0.05,
+        "note": "Flat farmland is hard to hold."
+      },
+      "solar_plateau": {
+        "name": "Sunlit plateau",
+        "defence": 0.03,
+        "note": "A good view of the approach."
+      },
+      "coastal_archipelago": {
+        "name": "Island coast",
+        "defence": 0.08,
+        "note": "Landings under fire are costly."
+      }
+    },
+    "weather": [
+      {
+        "id": "clear",
+        "name": "Clear skies",
+        "weight": 4,
+        "attacker": 0.0,
+        "defender": 0.0,
+        "luck": 1.0,
+        "text": "Clear skies: neither side has an advantage."
+      },
+      {
+        "id": "rain",
+        "name": "Heavy rain",
+        "weight": 2,
+        "attacker": -0.05,
+        "defender": 0.0,
+        "luck": 1.0,
+        "text": "Heavy rain turns the roads to mud and slows attackers."
+      },
+      {
+        "id": "fog",
+        "name": "Dense fog",
+        "weight": 2,
+        "attacker": -0.03,
+        "defender": -0.03,
+        "luck": 1.6,
+        "text": "Dense fog hides both armies from each other."
+      },
+      {
+        "id": "storm",
+        "name": "Thunderstorm",
+        "weight": 1,
+        "attacker": -0.08,
+        "defender": -0.02,
+        "luck": 1.0,
+        "text": "A thunderstorm batters marching columns."
+      },
+      {
+        "id": "heat",
+        "name": "Scorching heat",
+        "weight": 1,
+        "attacker": -0.04,
+        "defender": -0.04,
+        "luck": 1.0,
+        "text": "Scorching heat saps both armies."
+      },
+      {
+        "id": "tailwind",
+        "name": "Favourable winds",
+        "weight": 1,
+        "attacker": 0.05,
+        "defender": 0.0,
+        "luck": 1.0,
+        "text": "Favourable winds speed the march."
+      },
+      {
+        "id": "night",
+        "name": "Moonless night",
+        "weight": 1,
+        "attacker": 0.04,
+        "defender": -0.02,
+        "luck": 1.0,
+        "text": "A moonless night favours raiders."
+      }
+    ],
+    "intel": {
+      "wealth_per_line": 28,
+      "max_lines": 9,
+      "accuracy_at": 80,
+      "own_bonus": 0.3,
+      "noise_pp": 14,
+      "odds_blur_base": 0.08,
+      "odds_blur_scale": 0.3,
+      "accuracy_cap": 0.9
+    }
+  },
+  "quiz": {
+    "stake_min": 1,
+    "stake_max": 9
+  }
 }

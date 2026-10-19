@@ -79,6 +79,35 @@ class AudioSynthesizer {
     });
   }
 
+  // War horn and drums: a battle has been fought.
+  playBattle() {
+    this._initContext();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    [0, 0.32, 0.64, 0.96].forEach((offset, i) => {            // drums
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(110 - i * 8, now + offset);
+      osc.frequency.exponentialRampToValueAtTime(48, now + offset + 0.25);
+      gain.gain.setValueAtTime(0.45, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.3);
+      osc.connect(gain); gain.connect(this.ctx.destination);
+      osc.start(now + offset); osc.stop(now + offset + 0.32);
+    });
+    [196, 294].forEach((freq, i) => {                          // horn
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, now + 1.1);
+      gain.gain.setValueAtTime(0.0001, now + 1.1);
+      gain.gain.exponentialRampToValueAtTime(0.16 / (i + 1), now + 1.3);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.4);
+      osc.connect(gain); gain.connect(this.ctx.destination);
+      osc.start(now + 1.1); osc.stop(now + 2.5);
+    });
+  }
+
   playAlert() {
     this._initContext();
     if (!this.ctx) return;
@@ -139,12 +168,54 @@ function formatSeconds(secs) {
 }
 
 const RESOURCE_ICONS = { grain: '🌾', cores: '⚙️', silk: '🧵', military: '⚔️' };
-const RESOURCE_SHORT = { grain: 'Grain', cores: 'Cores', silk: 'Silk', military: 'Military', standing: 'Standing', stability: 'Stability' };
+const RESOURCE_SHORT = { grain: 'Grain', cores: 'Cores', silk: 'Silk', military: 'Military', vitality: 'Vitality', standing: 'Standing', stability: 'Stability' };
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+
+// -----------------------------------------------------------------------------
+// Ask before doing something: a themed confirmation instead of the browser's plain dialog.
+//   if (!(await confirmAction({ title, message, details: ['…'], confirmLabel, tone: 'danger' }))) return;
+// Resolves true on Confirm and false on Cancel, Escape or a tap outside the card.
+// -----------------------------------------------------------------------------
+function confirmAction(opts) {
+  opts = typeof opts === 'string' ? { message: opts } : (opts || {});
+  return new Promise(resolve => {
+    const previous = document.activeElement;
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    const items = (opts.details || []).map(d => `<li>${escapeHtml(d)}</li>`).join('');
+    overlay.innerHTML = `<div class="confirm-card ${opts.tone === 'danger' ? 'danger' : ''}">
+      <div class="confirm-title">${escapeHtml(opts.title || 'Are you sure?')}</div>
+      ${opts.message ? `<p class="confirm-msg">${escapeHtml(opts.message)}</p>` : ''}
+      ${items ? `<ul class="confirm-list">${items}</ul>` : ''}
+      <div class="confirm-actions">
+        <button type="button" class="btn btn-secondary confirm-no">${escapeHtml(opts.cancelLabel || 'Cancel')}</button>
+        <button type="button" class="btn ${opts.tone === 'danger' ? 'btn-danger' : 'btn-primary'} confirm-yes">${escapeHtml(opts.confirmLabel || 'Confirm')}</button>
+      </div></div>`;
+    const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } };
+    const close = answer => {
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      if (previous && previous.focus) { try { previous.focus(); } catch (e) { /* element is gone */ } }
+      resolve(answer);
+    };
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
+    // A tap or key that opened the dialog must not also answer it (the same Enter key, or a double tap on a phone):
+    // answers are ignored for the first moments after it appears.
+    const openedAt = Date.now();
+    const settled = () => Date.now() - openedAt > 350;
+    overlay.querySelector('.confirm-no').addEventListener('click', () => { if (settled()) close(false); });
+    overlay.querySelector('.confirm-yes').addEventListener('click', () => { if (settled()) close(true); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(overlay);
+    setTimeout(() => { const yes = overlay.querySelector('.confirm-yes'); if (yes && overlay.isConnected) yes.focus(); }, 360);
+  });
+}
 
 // -----------------------------------------------------------------------------
 // Keep the screen awake (projector, phones, facilitator laptop)
@@ -170,5 +241,6 @@ function keepScreenAwake() {
 }
 
 window.synth = synth;
+window.confirmAction = confirmAction;
 window.showToast = showToast;
 window.keepScreenAwake = keepScreenAwake;

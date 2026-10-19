@@ -5,11 +5,19 @@ to check that the game is playable and winnable.
     venv/bin/python tools/simulate.py                 # default sweep, ~5 minutes
     venv/bin/python tools/simulate.py --games 200     # more games per scenario
     venv/bin/python tools/simulate.py --rosters       # every 5-nation roster (one nation left out)
+    venv/bin/python tools/simulate.py --nations       # how each nation fares (to rate easy and hard nations)
+    venv/bin/python tools/simulate.py --war           # what attacks do to the continent
 
-Two kinds of delegations:
+Kinds of delegations:
   cooperative  - share grain so nobody starves, trade widely, table and back broad motions,
-                 study the Spireopedia (answer the quiz well) and pursue their own secret missions
+                 study the Spireopedia (take quiz questions they can answer) and pursue their own secret missions
   selfish      - only look after their own reserves, trade at random, vote at random
+  devoted      - like cooperative, but in the last turn (after the Assembly, before the final meal) nations that would
+                 starve are rescued by the others, even at the cost of their own secret missions
+  warlike      - like devoted, but opportunistic: attacks whenever the scouts report favourable odds
+
+The quiz: one question at a time, the nation chooses whether to take the next one. `skill` is the chance of knowing
+a standard question; hard ones are known with skill x 0.65.
 
 The numbers are an estimate of what is *possible* with sensible play, not a prediction of a real group.
 """
@@ -43,11 +51,14 @@ models.Database._get_conn = _fast_conn
 
 ARMAGEDDON = dict(scenario="armageddon", **load_scenario_config()["scenarios"]["armageddon"]["suggested"])
 FIELDS = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk", "military": "military_power"}
+HARD_FACTOR = 0.65
+QUIZ_PER_TURN = 6               # a nation has time for about this many 15-second questions between negotiations
 
 
 class Game:
     def __init__(self, engine, policy, quiz_skill, rng):
         self.e, self.policy, self.skill, self.rng = engine, policy, quiz_skill, rng
+        self.bank = {q["id"]: q for q in load_quiz()["questions"]}
 
     # ------------------------------------------------------------------ helpers
     def realms(self):
@@ -66,16 +77,24 @@ class Game:
 
     # ------------------------------------------------------------------ phases
     def quiz(self, turn):
-        for q in load_quiz()["questions"]:
-            if q["turn"] > turn:
-                continue
-            for rid in self.realms():
-                correct = self.rng.random() < self.skill
-                answer = q["correct_index"] if correct else (q["correct_index"] + 1) % 4
-                # cooperative delegations skip questions they would guess (only answer when they studied)
-                if self.policy == "cooperative" and not correct and self.rng.random() < 0.7:
-                    continue
-                self.e.submit_lore_quiz(rid, q["id"], answer)
+        for rid in self.realms():
+            for _ in range(QUIZ_PER_TURN):
+                status = self.e.get_quiz_status(rid)
+                nxt = status["next"]
+                if not nxt:
+                    break
+                p = self.skill * (HARD_FACTOR if nxt["tier"] == "hard" else 1.0)
+                # a cooperative delegation only takes a question it expects to answer (the stake is lost otherwise);
+                # an unprepared one waits and studies, so it does not take the question this turn
+                if self.policy != "selfish" and p < 0.5:
+                    break
+                ok, _, q = self.e.quiz_start(rid)
+                if not ok:
+                    break
+                correct = self.rng.random() < p
+                bank = self.bank[q["question_id"]]
+                answer = bank["correct_index"] if correct else (bank["correct_index"] + 1) % 4
+                self.e.submit_lore_quiz(rid, q["question_id"], answer)
 
     def decrees(self, turn):
         R = self.realms()
@@ -107,7 +126,7 @@ class Game:
             return
         turns_left = 4 - turn
         eat = self.e.settings()["grain_consumption"]
-        famine_hit = 15 if (turn <= 2 and self.e.settings()["scenario"] == "famine") else 0
+        famine_hit = 15 if (turn <= 2 and self.e.settings()["famine_storyline"]) else 0
         reserve = {"sylvan": 75, "val_khor": 35, "aethelgard": 40}
         # grain flows from nations with a surplus to nations that would otherwise starve
         need = {}
@@ -155,8 +174,8 @@ class Game:
         first = lambda *pref: next((x for x in pref if x in R), ids[0])
         leader = first("solaria", "aquila", "sylvan", "aethelgard", "val_khor", "umbra")
         plan = {1: [(leader, "aid")], 2: [(leader, "custom")] + ([("solaria", "embargo")] if "solaria" in R else []), 3: []}[turn]
-        # the grain tax creates food when more nations are short (<25, +15) than rich (>50, −10)
-        if 15 * sum(r["alchemical_grain"] < 25 for r in R.values()) > 10 * sum(r["alchemical_grain"] > 50 for r in R.values()):
+        # a redistribution helps when some nations run low while others hold a lot
+        if any(r["alchemical_grain"] < 25 for r in R.values()) and any(r["alchemical_grain"] > 50 for r in R.values()):
             plan.append((first("aquila", "sylvan", "umbra", "val_khor"), "tax"))
         for proposer, kind in plan:
             ok, _, pid = self.e.draft_proposal(proposer, f"{kind} motion", "x", kind)
@@ -177,6 +196,46 @@ class Game:
             else:
                 choice = "support"
             self.e.cast_plenary_vote(rid, prop["id"], choice)
+
+    def rescue(self):
+        """Last minute: nobody should starve. The richest nations hand over just enough Grain (paid in small change)."""
+        if self.policy not in ("devoted", "warlike"):
+            return
+        eat = self.e.settings()["grain_consumption"]
+        for _ in range(8):                                                   # a few rounds of haggling
+            R = self.realms()
+            cost = {rid: round(eat * 0.75) if r.get("tech_efficiency_unlocked") else eat for rid, r in R.items()}
+            short = [rid for rid, r in R.items() if r["alchemical_grain"] - cost[rid] <= 0]
+            if not short:
+                return
+            donors = sorted((rid for rid, r in R.items() if r["alchemical_grain"] - cost[rid] >= 8), key=lambda i: -R[i]["alchemical_grain"])
+            if not donors:
+                return
+            t, d = short[0], donors[0]
+            give = min(R[d]["alchemical_grain"] - cost[d] - 1, cost[t] - R[t]["alchemical_grain"] + 1)
+            if give < 1:
+                return
+            payment = "silk" if R[t]["echo_silk"] >= R[t]["aether_cores"] else "cores"
+            self.trade(d, t, "grain", give, payment, min(give // 2, max(0, R[t][FIELDS[payment]] - 15)))
+
+    def wars(self, turn):
+        """Opportunists attack when the scouts say the odds are good (and always from a position of supplies)."""
+        if self.policy != "warlike":
+            return
+        for rid in list(self.realms()):
+            if self.rng.random() < 0.5:
+                continue
+            status = self.e.get_war_status(rid)
+            best = None
+            for t in status["targets"]:
+                if not t["can_attack"]:
+                    continue
+                ok, _, info = self.e.battle_preview(rid, t["id"])
+                rank = {"Very favourable": 2, "Favourable": 1}.get(info["label"], 0)
+                if rank and (best is None or rank > best[0]):
+                    best = (rank, t["id"])
+            if best:
+                self.e.declare_attack(rid, best[1])
 
     def assembly(self, turn):
         ok, _ = self.e.start_plenary_session()
@@ -206,98 +265,167 @@ class Game:
             self.decrees(turn)
             self.trades(turn)
             self.motions(turn)
+            self.wars(turn)
             self.assembly(turn)
             if turn < 3:
                 self.e.process_end_of_turn()
+            else:
+                self.rescue()
         ok, _, outcome = self.e.conclude_summit()
         return outcome
 
 
+class Results:
+    """What a batch of games came to."""
+
+    def __init__(self):
+        self.games = 0
+        self.verdicts = collections.Counter()
+        self.mission_hits, self.mission_totals = collections.Counter(), collections.Counter()
+        self.nation_hits, self.nation_totals = collections.Counter(), collections.Counter()
+        self.best = self.total = 0
+        self.ratio = self.starving = self.unstable = self.battles = self.standing = self.stability = 0.0
+
+    def add(self, engine, outcome):
+        self.games += 1
+        self.verdicts[outcome["continental_verdict"]] += 1
+        self.starving += outcome["starving_count"]
+        self.standing += outcome["avg_standing"]
+        self.stability += outcome["avg_stability"]
+        self.battles += len(engine.db.get_state("battles", []))
+        self.unstable += sum(1 for r in engine.db.get_state("realms") if r.get("active", True) and r["civil_stability"] < 50)
+        achieved = total = 0
+        for ev in outcome["realm_evaluations"]:
+            items = [("public:" + ev["realm_id"], ev["public_mission_eval"]["achieved"])] + \
+                    [("secret:" + s["id"], s["achieved"]) for s in ev["secret_missions_eval"]]
+            for key, ok in items:
+                self.mission_totals[key] += 1
+                self.mission_hits[key] += int(ok)
+            self.nation_hits[ev["realm_id"]] += ev["achieved_missions"]
+            self.nation_totals[ev["realm_id"]] += ev["total_missions"]
+            achieved += ev["achieved_missions"]
+            total += ev["total_missions"]
+        self.best = max(self.best, achieved)
+        self.total = total
+        self.ratio += achieved / total
+
+    def avg(self, name):
+        return getattr(self, name) / max(1, self.games)
+
+    def share(self, verdict):
+        return self.verdicts[verdict] / max(1, self.games)
+
+
 def run(engine, policy, skill, games, settings, seed=1, drop=None):
     rng = random.Random(seed)
-    verdicts = collections.Counter()
-    mission_hits = collections.Counter()
-    mission_totals = collections.Counter()
-    best = 0
-    avg_ratio = starving = unstable = 0.0
-    for g in range(games):
+    res = Results()
+    for _ in range(games):
         random.seed(rng.random())
         engine.db.set_state("settings", settings)
         engine.reset_simulation()
         if drop:
             engine.admin_toggle_realm(drop, False)
-        out = Game(engine, policy, skill, rng).play()
-        verdicts[out["continental_verdict"]] += 1
-        starving += out["starving_count"] / games
-        unstable += sum(1 for r in engine.db.get_state("realms") if r.get("active", True)
-                        and r["civil_stability"] < 50) / games
-        achieved = total = 0
-        for ev in out["realm_evaluations"]:
-            items = [("public:" + ev["realm_id"], ev["public_mission_eval"]["achieved"])] + \
-                    [("secret:" + s["id"], s["achieved"]) for s in ev["secret_missions_eval"]]
-            for key, ok in items:
-                mission_totals[key] += 1
-                mission_hits[key] += int(ok)
-            achieved += ev["achieved_missions"]
-            total += ev["total_missions"]
-        best = max(best, achieved)
-        avg_ratio += achieved / total / games
-    return verdicts, mission_hits, mission_totals, best, total, avg_ratio, starving, unstable
+        res.add(engine, Game(engine, policy, skill, rng).play())
+    return res
+
+
+def row(label, r):
+    return (f"{label:36} {r.share('STABLE CONTINENT'):7.0%} {r.share('FRAGILE PEACE'):8.0%} {r.share('CONTINENTAL CRISIS'):7.0%}"
+            f" {r.avg('ratio'):13.0%} {r.best:>7}/{r.total} {r.avg('starving'):9.1f} {r.avg('unstable'):8.1f} {r.avg('battles'):8.1f}")
+
+
+HEADER = (f"{'Scenario':36} {'Stable':>7} {'Fragile':>8} {'Crisis':>7} {'Missions met':>13} {'Best game':>10} "
+          f"{'Starving':>9} {'Stab<50':>8} {'Battles':>8}")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--games", type=int, default=40)
     ap.add_argument("--rosters", action="store_true", help="play every 5-nation roster instead of the default sweep")
+    ap.add_argument("--nations", action="store_true", help="how each nation fares, to rate easy and hard nations")
+    ap.add_argument("--war", action="store_true", help="what attacks do to the continent")
     args = ap.parse_args()
     engine = SummitEngine(models.Database(models.DB_PATH))
     if args.rosters:
         return roster_sweep(engine, args.games)
+    if args.nations:
+        return nation_sweep(engine, args.games)
+    if args.war:
+        return war_sweep(engine, args.games)
 
+    no_war = {"attacks_enabled": False}
     scenarios = [
-        ("cooperative, good quiz (80%)", "cooperative", 0.8, {"difficulty": "standard"}),
-        ("cooperative, weak quiz (40%)", "cooperative", 0.4, {"difficulty": "standard"}),
-        ("cooperative, no quiz", "cooperative", 0.0, {"difficulty": "standard"}),
-        ("selfish, random quiz (25%)", "selfish", 0.25, {"difficulty": "standard"}),
-        ("cooperative, good quiz, gentle", "cooperative", 0.8, {"difficulty": "gentle"}),
-        ("cooperative, good quiz, harsh", "cooperative", 0.8, {"difficulty": "harsh"}),
-        ("Armageddon, cooperative, good quiz", "cooperative", 0.8, dict(ARMAGEDDON, difficulty="standard")),
-        ("Armageddon, cooperative, weak quiz", "cooperative", 0.4, dict(ARMAGEDDON, difficulty="standard")),
+        ("cooperative, good quiz (80%)", "cooperative", 0.8, dict(no_war, difficulty="standard")),
+        ("cooperative, weak quiz (45%)", "cooperative", 0.45, dict(no_war, difficulty="standard")),
+        ("cooperative, no quiz", "cooperative", 0.0, dict(no_war, difficulty="standard")),
+        ("selfish, random quiz (25%)", "selfish", 0.25, dict(no_war, difficulty="standard")),
+        ("cooperative, good quiz, gentle", "cooperative", 0.8, dict(no_war, difficulty="gentle")),
+        ("cooperative, good quiz, harsh", "cooperative", 0.8, dict(no_war, difficulty="harsh")),
+        ("Armageddon, cooperative, good quiz", "cooperative", 0.8, dict(ARMAGEDDON, attacks_enabled=False, difficulty="standard")),
+        ("Armageddon, cooperative, weak quiz", "cooperative", 0.45, dict(ARMAGEDDON, attacks_enabled=False, difficulty="standard")),
     ]
     d = engine.settings()
     print(f"{args.games} games per row · 6 nations · famine storyline · {d['minor_events_per_turn']} small events "
-          f"per turn (up to {d['minor_event_max']:g})\n")
-    print(f"{'Scenario':34} {'Stable':>7} {'Fragile':>8} {'Crisis':>7} {'Missions met':>13} {'Best game':>10} {'Starving':>9} {'Stab<50':>8}")
+          f"per turn (up to {d['minor_event_max']:g}) · no attacks\n")
+    print(HEADER)
     detail = None
     for label, policy, skill, settings in scenarios:
         if sys.stdout.isatty():
             print(label, end="\r", flush=True)
-        v, hits, totals, best, total, ratio, starving, unstable = run(engine, policy, skill, args.games, settings)
-        n = sum(v.values())
-        print(f"{label:34} {v['STABLE CONTINENT'] / n:7.0%} {v['FRAGILE PEACE'] / n:8.0%} {v['CONTINENTAL CRISIS'] / n:7.0%}"
-              f" {ratio:13.0%} {best:>7}/{total} {starving:9.1f} {unstable:8.1f}")
+        r = run(engine, policy, skill, args.games, settings)
+        print(row(label, r))
         if detail is None:
-            detail = (label, hits, totals)
-    label, hits, totals = detail
+            detail = (label, r)
+    label, r = detail
     print(f"\nHow often each mission was met ({label}):")
-    for key in sorted(totals):
-        print(f"  {key:34} {hits[key] / totals[key]:5.0%}")
+    for key in sorted(r.mission_totals):
+        print(f"  {key:34} {r.mission_hits[key] / r.mission_totals[key]:5.0%}")
+
+
+def war_sweep(engine, games):
+    print(f"{games} games per row · 6 nations · famine storyline · standard difficulty\n")
+    print(HEADER)
+    rows = [
+        ("peaceful, good quiz (80%)", "devoted", 0.8, {"attacks_enabled": False}),
+        ("peaceful, weak quiz (45%)", "devoted", 0.45, {"attacks_enabled": False}),
+        ("warlike, good quiz (80%)", "warlike", 0.8, {"attacks_enabled": True}),
+        ("warlike, weak quiz (45%)", "warlike", 0.45, {"attacks_enabled": True}),
+        ("warlike, harsh difficulty", "warlike", 0.8, {"attacks_enabled": True, "difficulty": "harsh"}),
+        ("warlike, Armageddon", "warlike", 0.8, dict(ARMAGEDDON, attacks_enabled=True)),
+        ("warlike from Turn 1", "warlike", 0.8, {"attacks_enabled": True, "attacks_from_turn": 1}),
+        ("warlike, 3 marches per turn", "warlike", 0.8, {"attacks_enabled": True, "attacks_per_turn": 3}),
+    ]
+    for label, policy, skill, settings in rows:
+        if sys.stdout.isatty():
+            print(label, end="\r", flush=True)
+        print(row(label, run(engine, policy, skill, games, dict({"difficulty": "standard"}, **settings))))
+
+
+def nation_sweep(engine, games):
+    """Average share of its missions each nation meets, with cooperative and with warlike delegations."""
+    names = {r["id"]: r["name"] for r in load_scenario_config()["realms"]}
+    stars = {r["id"]: r["difficulty"] for r in load_scenario_config()["realms"]}
+    print(f"{games} games per row · famine storyline · standard difficulty\n")
+    print(f"{'Nation':26} {'Rated':>6}  " + "".join(f"{label:>22}" for label in ("devoted, quiz 80%", "devoted, quiz 45%", "warlike, quiz 80%")))
+    results = [run(engine, p, s, games, dict(difficulty="standard", attacks_enabled=(p == "warlike")))
+               for p, s in (("devoted", 0.8), ("devoted", 0.45), ("warlike", 0.8))]
+    for rid in names:
+        cells = "".join(f"{r.nation_hits[rid] / max(1, r.nation_totals[rid]):>22.0%}" for r in results)
+        print(f"{names[rid]:26} {stars[rid]:>6}  {cells}")
 
 
 def roster_sweep(engine, games):
-    print(f"{games} games per row · famine storyline · standard difficulty · cooperative delegations\n")
+    print(f"{games} games per row · famine storyline · standard difficulty · cooperative delegations · no attacks\n")
     print(f"{'Left out':12} {'Quiz':>5} {'Stable':>7} {'Fragile':>8} {'Crisis':>7} {'Missions met':>13} {'Starving':>9}  Missions met least often")
     for drop in (None, "sylvan", "val_khor", "solaria", "umbra", "aquila", "aethelgard"):
-        for skill in (0.8, 0.4):
+        for skill in (0.8, 0.45):
             if sys.stdout.isatty():
                 print(drop or "nobody", end="\r", flush=True)
-            v, hits, totals, best, total, ratio, starving, unstable = run(
-                engine, "cooperative", skill, games, {"difficulty": "standard"}, drop=drop)
-            n = sum(v.values())
-            hardest = sorted(totals, key=lambda k: hits[k] / totals[k])[:3]
-            hard = ", ".join(f"{k.replace('public:', 'public ').replace('secret:', '')} {hits[k] / totals[k]:.0%}" for k in hardest)
-            print(f"{drop or 'nobody':12} {skill:5.0%} {v['STABLE CONTINENT'] / n:7.0%} {v['FRAGILE PEACE'] / n:8.0%} "
-                  f"{v['CONTINENTAL CRISIS'] / n:7.0%} {ratio:13.0%} {starving:9.1f}  {hard}")
+            r = run(engine, "cooperative", skill, games, {"difficulty": "standard", "attacks_enabled": False}, drop=drop)
+            hardest = sorted(r.mission_totals, key=lambda k: r.mission_hits[k] / r.mission_totals[k])[:3]
+            hard = ", ".join(f"{k.replace('public:', 'public ').replace('secret:', '')} {r.mission_hits[k] / r.mission_totals[k]:.0%}" for k in hardest)
+            print(f"{drop or 'nobody':12} {skill:5.0%} {r.share('STABLE CONTINENT'):7.0%} {r.share('FRAGILE PEACE'):8.0%} "
+                  f"{r.share('CONTINENTAL CRISIS'):7.0%} {r.avg('ratio'):13.0%} {r.avg('starving'):9.1f}  {hard}")
 
 
 if __name__ == "__main__":

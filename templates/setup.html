@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_difficulty.html" as diff %}
 
 {% block title %}Summit setup · The Summit of Realms{% endblock %}
 
@@ -62,11 +63,12 @@
       <button type="button" class="btn btn-secondary btn-sm" onclick="setup.shufflePins()">Shuffle passcodes</button>
     </div>
     <table class="table-deck setup-nations mt-2">
-      <tr><th>Plays</th><th>Nation</th><th>Delegates</th><th>Secret missions</th><th>Passcode</th></tr>
+      <tr><th>Plays</th><th>Nation</th><th>Difficulty</th><th>Delegates</th><th>Secret missions</th><th>Passcode</th></tr>
       {% for r in realms %}
       <tr data-realm="{{ r.id }}">
         <td><input type="checkbox" class="realm-active" {% if r.active != false %}checked{% endif %} onchange="setup.toggleRealm('{{ r.id }}', this)"></td>
         <td><span class="crest small" style="--nc: {{ r.theme_color }};">{{ r.emoji }}</span> <b>{{ r.name }}</b></td>
+        <td>{{ diff.badge(r) }}</td>
         <td>
           <div class="stepper small-stepper">
             <button type="button" onclick="setup.delegates('{{ r.id }}', -1)">−</button>
@@ -97,12 +99,26 @@
       <label>Grand Plenary debate, per motion <span><input type="number" id="debate_min" min="0.5" max="20" step="0.5" value="{{ '%g' % (settings.debate_session_seconds / 60) }}"> min</span></label>
       <label>Grand Plenary vote, per motion <span><input type="number" id="grand_vote_sec" min="20" max="600" step="10" value="{{ settings.grand_vote_seconds }}"> s</span></label>
       <label>Pause before the next turn <span><input type="number" id="intermission_sec" min="0" max="600" step="15" value="{{ settings.intermission_seconds }}"> s</span></label>
-      <label>Motions per nation per turn <span><input type="number" id="motions_per_turn" min="1" max="10" step="1" value="{{ settings.motions_per_turn or 2 }}"> motions</span></label>
+      <label>Time per quiz question <span><input type="number" id="quiz_seconds" min="5" max="60" step="1" value="{{ settings.quiz_seconds or 15 }}"> s</span></label>
     </div>
     <label class="check mt-2">
       <input type="checkbox" id="auto_advance" {% if settings.auto_advance %}checked{% endif %}>
       <span><b>Move on automatically when time runs out</b><em>When a clock reaches zero an alert sounds and the game moves to the next phase: working session → Assembly vote → next turn (after the pause) → … → results. Untick to only sound the alert and move on by hand.</em></span>
     </label>
+  </section>
+
+  <!-- War -->
+  <section class="card">
+    <div class="card-title">War</div>
+    <p class="section-sub">Nations can attack each other from their phones. The result depends mostly on the armies, then on how fed, stable and supplied each side is, on the ground and the weather, and a little on luck.</p>
+    <label class="check mt-2">
+      <input type="checkbox" id="attacks_enabled" {% if settings.attacks_enabled is not defined or settings.attacks_enabled %}checked{% endif %}>
+      <span><b>Allow attacks</b><em>Untick for a purely diplomatic summit.</em></span>
+    </label>
+    <div class="setup-fields mt-2">
+      <label>Attacks unlock in turn <span><input type="number" id="attacks_from_turn" min="1" max="3" step="1" value="{{ settings.attacks_from_turn or 2 }}"></span></label>
+      <label>Attacks per nation per turn <span><input type="number" id="attacks_per_turn" min="1" max="3" step="1" value="{{ settings.attacks_per_turn or 1 }}"></span></label>
+    </div>
   </section>
 
   <!-- 5. Random events -->
@@ -143,7 +159,10 @@
         minor_events_per_turn: parseInt(document.getElementById('events_per_turn').value, 10) || 0,
         minor_event_max: parseFloat(document.getElementById('event_max').value) || 1,
         large_events_per_turn: parseInt(document.getElementById('large_per_turn').value, 10) || 0,
-        motions_per_turn: parseInt(document.getElementById('motions_per_turn').value, 10) || 2,
+        quiz_seconds: parseInt(document.getElementById('quiz_seconds').value, 10) || 15,
+        attacks_enabled: document.getElementById('attacks_enabled').checked,
+        attacks_from_turn: parseInt(document.getElementById('attacks_from_turn').value, 10) || 2,
+        attacks_per_turn: parseInt(document.getElementById('attacks_per_turn').value, 10) || 1,
       };
     },
     applySuggested(radio) {
@@ -159,12 +178,18 @@
       return res.success;
     },
     async newSummit() {
-      if (!confirm('Start a new summit? The current game is replaced (a save of it is kept on the Saves tab).')) return;
+      if (!(await confirmAction({ title: 'Start a new summit?', message: 'The current game is replaced (a save of it is kept on the Saves tab). Every phone is logged out.', confirmLabel: 'Start a new summit', tone: 'danger' }))) return;
       if (!(await this.save())) return;
       const res = await this.post('/api/admin/setup/new');
       if (res.success) { showToast(res.message, 'success'); setTimeout(() => location.href = '/admin', 900); }
     },
     async toggleRealm(id, box) {
+      const name = box.closest('tr').querySelector('b').innerText;
+      if (!(await confirmAction({ title: box.checked ? `Bring ${name} into the summit?` : `Leave ${name} out of the summit?`,
+                                  message: 'Missions, quotas, votes and trade lists adjust at once.', confirmLabel: box.checked ? 'Bring in' : 'Leave out' }))) {
+        box.checked = !box.checked;
+        return;
+      }
       const res = await this.post('/api/admin/realm/toggle', { realm_id: id, active: box.checked });
       if (!res.success) box.checked = !box.checked;
       this.refreshMissionCounts();
@@ -189,7 +214,7 @@
       if (res.success) showToast(res.message, 'success');
     },
     async shufflePins() {
-      if (!confirm('Give every nation a new random passcode? Phones that are logged in will need the new code.')) return;
+      if (!(await confirmAction({ title: 'Give every nation a new passcode?', message: 'Phones that are logged in will need the new code.', confirmLabel: 'Shuffle passcodes' }))) return;
       const res = await this.post('/api/admin/pins/shuffle');
       if (!res.success) return;
       for (const [id, pin] of Object.entries(res.pins)) {

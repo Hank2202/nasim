@@ -145,6 +145,7 @@
       this.cam = { yaw: -0.18, tilt: 0.62, zoom: 1, x: 0, y: 0, tx: 0, ty: 0, tzoom: 1 };
       this.tourStep = 0;
       this.events = [];
+      this.wars = [];                       // real battles between nations: an arc of fire between their capitals
       this.eventClock = 0;
       this.nextEvent = 5;
       // Weather appears roughly once per cycle of ten events, i.e. every few minutes.
@@ -693,6 +694,7 @@
       this.drawShips(ctx, s);
       this.drawCarts(ctx, s);
       this.drawTrades(ctx, s);
+      this.drawWars(ctx, s);
       this.hits = [];
 
       // 2. upright scenery and banners, back to front
@@ -752,7 +754,46 @@
       return [-430, 300];
     }
 
+    // A battle has been fought: draw a burning arc from the attacker's capital to the defender's for a while.
+    addWar(attackerId, defenderId, outcome) {
+      if (!CAPITALS[attackerId] || !CAPITALS[defenderId]) return;
+      this.wars.push({ a: attackerId, d: defenderId, age: 0, dur: 30, outcome });
+      if (this.wars.length > 4) this.wars.shift();
+    }
+
+    drawWars(ctx, s) {
+      for (const w of this.wars) {
+        const A = CAPITALS[w.a], D = CAPITALS[w.d];
+        const vis = Math.min(1, w.age / 1.5, (w.dur - w.age) / 3);
+        const pa = this.project(A[0], A[1], 6), pb = this.project(D[0], D[1], 6);
+        const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2 - 80 * s;
+        const wonByAttacker = /^attacker/.test(w.outcome);
+        ctx.save();
+        ctx.globalAlpha = vis;
+        ctx.strokeStyle = 'rgba(190,48,36,0.9)'; ctx.lineWidth = 3.5; ctx.setLineDash([10, 7]); ctx.lineDashOffset = -this.time * 44;
+        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.quadraticCurveTo(mx, my, pb.x, pb.y); ctx.stroke();
+        ctx.setLineDash([]);
+        for (let i = 0; i < 5; i++) {                                    // embers racing along the arc
+          const u = (this.time * 0.35 + i * 0.2) % 1;
+          const qx = (1 - u) * (1 - u) * pa.x + 2 * (1 - u) * u * mx + u * u * pb.x;
+          const qy = (1 - u) * (1 - u) * pa.y + 2 * (1 - u) * u * my + u * u * pb.y;
+          ctx.fillStyle = i % 2 ? '#ffb347' : '#ff6a3d';
+          ctx.beginPath(); ctx.arc(qx, qy, 3.5, 0, 6.283); ctx.fill();
+        }
+        // shockwaves ring the nation that took the brunt of it
+        const loser = wonByAttacker ? pb : pa;
+        for (let k = 0; k < 3; k++) {
+          const r = ((this.time * 0.6 + k / 3) % 1);
+          ctx.strokeStyle = `rgba(190,48,36,${(1 - r) * 0.7})`; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.ellipse(loser.x, loser.y, (14 + r * 46) * s * 1.2, (6 + r * 20) * s * 1.2, 0, 0, 6.283); ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
     updateEvents(dt) {
+      for (const w of this.wars) w.age += dt;
+      this.wars = this.wars.filter(w => w.age < w.dur);
       this.eventClock += dt;
       for (const ev of this.events) ev.age += dt;
       this.events = this.events.filter(ev => ev.age < ev.dur);

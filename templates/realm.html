@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_difficulty.html" as diff %}
 
 {% block title %}{{ realm.name }} &middot; The Summit of Realms{% endblock %}
 {% block body_attrs %}class="console" style="--nation: {{ realm.theme_color or '#2f6b57' }};"{% endblock %}
@@ -56,7 +57,7 @@
       <div class="coin"><span class="coin-icon">🧵</span><b id="silk-val">{{ realm.echo_silk }}</b><span>Silk</span></div>
       <div class="coin"><span class="coin-icon">⚔️</span><b id="military-val">{{ realm.military_power }}</b><span>Military</span></div>
     </section>
-    <p class="treasury-note">Your people eat <b>20 Grain</b> at the end of every turn.</p>
+    <p class="treasury-note">Your people eat <b id="eat-amount">{{ game_settings.grain_consumption if game_settings else 20 }} Grain</b> at the end of every turn.</p>
 
     <!-- Vitals -->
     <section class="card vitals">
@@ -79,6 +80,7 @@
       <div class="scroll public">
         <div class="scroll-kicker">Public mandate &middot; everyone knows</div>
         <strong id="realm-public-title">{{ realm.public_mission.title if realm.public_mission else 'Continental Mandate' }}</strong>
+        <div class="mt-1">{{ diff.badge(realm) }}{{ diff.note(realm) }}</div>
         <p id="realm-public-desc">{{ realm.public_mission.description if realm.public_mission else '' }}</p>
       </div>
       <div class="scroll secret agenda-card">
@@ -112,7 +114,7 @@
           ('gala', '🎭', 'Grand Gala', '−15 Silk', '+10 Standing, +10 Stability'),
           ('security', '🛡️', 'Civil Guard', '−10 Cores', '+15 Stability'),
           ('muster', '⚔️', 'Muster Regiments', '−10 Grain, −10 Cores', '+15 Military')] %}
-        <button type="button" class="decree" onclick="realmApp.executeDomesticAction('{{ key }}')">
+        <button type="button" class="decree" data-name="{{ name }}" data-cost="{{ cost }}" data-gain="{{ gain }}" onclick="realmApp.executeDomesticAction('{{ key }}', this)">
           <span class="decree-icon">{{ icon }}</span>
           <span class="decree-name">{{ name }}</span>
           <span class="decree-cost">{{ cost }}</span>
@@ -120,6 +122,21 @@
         </button>
         {% endfor %}
       </div>
+    </section>
+
+    <!-- War room: weather, scouts and the attack order -->
+    <section id="war-section" style="display: none;">
+      <h2 class="section-heading">War room</h2>
+      <div class="card war-card">
+        <div id="war-weather" class="weather-line"></div>
+        <p id="war-status" class="section-sub mt-1"></p>
+        <div class="form-label mt-2">Choose a target</div>
+        <div id="war-targets" class="partner-chips"></div>
+        <div id="war-scout"></div>
+        <button id="war-attack-btn" type="button" class="btn btn-danger btn-block mt-2" disabled onclick="realmApp.attackTarget()">Choose a target</button>
+        <p class="section-sub mt-1">An attack costs supplies, loses Standing and is never free. The result depends mostly on the armies, but also on how fed, stable and supplied each nation is, on the ground and the weather, and a little on luck.</p>
+      </div>
+      <div id="war-log" class="stack mt-2"></div>
     </section>
 
     <!-- Latest dispatch -->
@@ -146,6 +163,7 @@
       <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('crisis', this)">Crises</button>
       <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('trade', this)">Trades</button>
       <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('assembly', this)">Assembly</button>
+      <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('war', this)">War</button>
       <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('lore', this)">Quiz</button>
     </div>
     <div id="mobile-news-feed" class="stack"></div>
@@ -223,8 +241,7 @@
     <!-- Step 1: pick a motion template; Step 2: edit its wording -->
     <div class="card">
       <div class="card-title">Propose a Motion</div>
-      <p class="section-sub">Pick the template closest to your idea, then <b>rewrite its title and terms in your own words</b>. Only the "If passed" effect is fixed. Another nation must co-sponsor it before the vote.</p>
-      <div id="motion-quota" class="motion-quota mt-1"></div>
+      <p class="section-sub">Pick the template closest to your idea, set its numbers, and <b>rewrite the title and terms in your own words</b>. What happens "If passed" is written out under the form and carried out automatically. Another nation must co-sponsor it before the vote.</p>
 
       <div id="motion-templates" class="stack mt-2">
         <p class="empty-state">Loading templates&hellip;</p>
@@ -240,12 +257,11 @@
             </div>
             <button type="button" class="btn btn-secondary btn-sm" onclick="realmApp.chooseMotionTemplate(null)">Change</button>
           </div>
-          <div class="motion-effect mt-1"><span>If passed:</span> <span id="motion-chosen-effect"></span></div>
         </div>
 
         <div class="edit-hint mt-2">
           <span class="edit-hint-icon">&#9998;</span>
-          <span><b>This is only the template's example wording.</b> Change the title and terms to say exactly what your nation proposes: amounts, conditions, deadlines, who does what.</span>
+          <span><b>This is only the template's example wording.</b> Change the title and terms to explain your proposal. The numbers that really count are the ones you set above: they are applied automatically if the motion passes.</span>
         </div>
 
         <div class="form-group mt-2">
@@ -253,9 +269,11 @@
           <input type="text" id="proposal-title" class="form-input editable" maxlength="100" required>
         </div>
 
+        <div id="motion-params"></div>
+
         <div class="form-group" id="proposal-target-nation-group" style="display: none;">
           <label class="form-label" for="proposal-target-nation" id="proposal-target-nation-label">Nation</label>
-          <select id="proposal-target-nation" class="form-select">
+          <select id="proposal-target-nation" class="form-select" onchange="realmApp.refreshMotionPreview()">
             <option value="">Choose a nation&hellip;</option>
             {% for r in realms if r.active != false %}
             <option value="{{ r.id }}">{{ r.emoji }} {{ r.name }}</option>
@@ -278,7 +296,9 @@
           </select>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block" id="proposal-submit">Table this motion</button>
+        <div id="motion-preview" class="preview-box" style="display: none;"></div>
+
+        <button type="submit" class="btn btn-primary btn-block mt-2" id="proposal-submit">Table this motion</button>
       </form>
     </div>
 
@@ -327,26 +347,25 @@
   <!-- QUIZ -->
   <!-- ===================================================================== -->
   <div id="view-quiz" class="mobile-view">
+    <div id="quiz-stage" class="card quiz-stage"><p class="empty-state">Loading&hellip;</p></div>
     <div class="card">
       <div class="card-title">Spireopedia Quiz</div>
-      <p class="section-sub">Same questions for every nation &middot; new ones each turn</p>
-      <div class="callout neutral mt-2">
-        Find the answers in the <a href="#" onclick="realmApp.switchView('view-wiki'); return false;" style="text-decoration: underline;">Encyclopedia</a> tab.
-        Each question shows its stake: a correct answer <strong>earns</strong> it, a wrong answer <strong>costs</strong> the same amount and locks the question for your nation. <strong>One attempt per question.</strong>
-      </div>
+      <p class="section-sub">One question at a time, against the clock</p>
       <div class="quiz-progress">
         <div class="inset quiz-stat ok"><b id="quiz-stat-correct">0</b><span>Correct</span></div>
         <div class="inset quiz-stat bad"><b id="quiz-stat-wrong">0</b><span>Wrong</span></div>
-        <div class="inset quiz-stat"><b id="quiz-stat-open">0</b><span>Open</span></div>
+        <div class="inset quiz-stat"><b id="quiz-stat-open">0</b><span>Left now</span></div>
       </div>
-      <div class="chip-row mt-2" id="quiz-filter-row">
-        <button type="button" class="chip active" data-filter="open" onclick="realmApp.filterQuiz('open', this)">To answer</button>
-        <button type="button" class="chip" data-filter="answered" onclick="realmApp.filterQuiz('answered', this)">Answered</button>
-        <button type="button" class="chip" data-filter="all" onclick="realmApp.filterQuiz('all', this)">All</button>
+      <div class="callout neutral mt-2">
+        Questions come in a <strong>random order, one at a time</strong>, and a question never starts until you press its start button. Each has a <strong>random stake</strong>
+        (5 on average): a correct answer <strong>earns</strong> it; a wrong answer <strong>or running out of time costs exactly the same</strong> and locks the question.
+        You get <strong id="quiz-seconds-rule">15</strong> seconds per question, and the clock does not stop if you leave. Study the
+        <a href="#" onclick="realmApp.switchView('view-wiki'); return false;" style="text-decoration: underline;">Encyclopedia</a> first.
       </div>
     </div>
-    <div id="quiz-container" class="stack-lg">
-      <p class="empty-state">Loading questions&hellip;</p>
+    <div class="card" id="quiz-history-card" style="display: none;">
+      <div class="card-title">Your answers</div>
+      <div id="quiz-history" class="mt-1"></div>
     </div>
   </div>
 
@@ -383,7 +402,7 @@
 </nav>
 {% endblock %}
 
-{% block page_scripts %}<script src="{{ url_for('static', filename='js/realm.js') }}"></script>{% endblock %}
+{% block page_scripts %}<script src="{{ url_for('static', filename='js/battle.js') }}"></script><script src="{{ url_for('static', filename='js/realm.js') }}"></script>{% endblock %}
 
 {% block scripts %}
 <script>

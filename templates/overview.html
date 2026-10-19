@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_difficulty.html" as diff %}
 
 {% block title %}Game Overview & Simulation Guide - The Summit of Realms{% endblock %}
 
@@ -211,6 +212,7 @@
               <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">🌾 Sylvan Concordat</h3>
               <span class="badge">2 VOTES • 2 PLAYERS</span>
             </div>
+            <div style="margin-bottom: 8px;">{% set _r = (realms | selectattr('id', 'equalto', 'sylvan') | list | first) %}{% if _r %}{{ diff.badge(_r) }}{{ diff.note(_r) }}{% endif %}</div>
             <div style="font-size: 0.75rem; color: #10b981; font-family: var(--font-mono); margin-bottom: 8px;">
               Verdant Lowlands & Greatweald Basin
             </div>
@@ -243,6 +245,7 @@
               <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">⚙️ Iron Val-Khor</h3>
               <span class="badge">2 VOTES • 3 PLAYERS</span>
             </div>
+            <div style="margin-bottom: 8px;">{% set _r = (realms | selectattr('id', 'equalto', 'val_khor') | list | first) %}{% if _r %}{{ diff.badge(_r) }}{{ diff.note(_r) }}{% endif %}</div>
             <div style="font-size: 0.75rem; color: #f59e0b; font-family: var(--font-mono); margin-bottom: 8px;">
               Mount Khor Volcanic Spine & Mistveil Chasm
             </div>
@@ -275,6 +278,7 @@
               <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">☀️ Solaris Ascendancy</h3>
               <span class="badge">3 VOTES (SUPERPOWER) • 4 PLAYERS</span>
             </div>
+            <div style="margin-bottom: 8px;">{% set _r = (realms | selectattr('id', 'equalto', 'solaria') | list | first) %}{% if _r %}{{ diff.badge(_r) }}{{ diff.note(_r) }}{% endif %}</div>
             <div style="font-size: 0.75rem; color: #eab308; font-family: var(--font-mono); margin-bottom: 8px;">
               Solar Plateau & Sun Marble Terraces
             </div>
@@ -307,6 +311,7 @@
               <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">🔮 Umbral Enclave</h3>
               <span class="badge">1 VOTE (ISOLATED) • 1 PLAYER</span>
             </div>
+            <div style="margin-bottom: 8px;">{% set _r = (realms | selectattr('id', 'equalto', 'umbra') | list | first) %}{% if _r %}{{ diff.badge(_r) }}{{ diff.note(_r) }}{% endif %}</div>
             <div style="font-size: 0.75rem; color: #8b5cf6; font-family: var(--font-mono); margin-bottom: 8px;">
               Abyssal Rift & Subterranean Catacombs
             </div>
@@ -339,6 +344,7 @@
               <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">🌊 Aquila Maritime League</h3>
               <span class="badge">2 VOTES • 2 PLAYERS</span>
             </div>
+            <div style="margin-bottom: 8px;">{% set _r = (realms | selectattr('id', 'equalto', 'aquila') | list | first) %}{% if _r %}{{ diff.badge(_r) }}{{ diff.note(_r) }}{% endif %}</div>
             <div style="font-size: 0.75rem; color: #06b6d4; font-family: var(--font-mono); margin-bottom: 8px;">
               Sea of Glass Archipelago & Whispering Straits
             </div>
@@ -371,6 +377,7 @@
               <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">⚔️ Aethelgard Dominion</h3>
               <span class="badge">2 VOTES • 3 PLAYERS</span>
             </div>
+            <div style="margin-bottom: 8px;">{% set _r = (realms | selectattr('id', 'equalto', 'aethelgard') | list | first) %}{% if _r %}{{ diff.badge(_r) }}{{ diff.note(_r) }}{% endif %}</div>
             <div style="font-size: 0.75rem; color: #ec4899; font-family: var(--font-mono); margin-bottom: 8px;">
               Northern Rocky Steppes & Frontier Citadels
             </div>
@@ -557,29 +564,30 @@
     <div class="card">
       <div class="card-title" style="margin-bottom: 10px;">Statutory Motions & Two-Sponsor Mandate</div>
       <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 14px;">
-        Any nation can author a statutory declaration, but to prevent filibustering, a motion only qualifies for a plenary vote once a <strong>different sovereign nation seconds it</strong>:
+        Any nation can author a motion, but to prevent filibustering a motion only qualifies for a plenary vote once a <strong>different sovereign nation seconds it</strong>.
+        Players pick a template, <strong>set its numbers</strong> and rewrite the title and terms in their own words. The sentence under "If passed" is written by the game from the numbers, and the game carries it out when the motion passes:
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 20px;">
         <div class="overview-resolution-card">
           <span class="badge" style="color: #10b981; border-color: #10b981;">HUMANITARIAN GRAIN TRANSFER</span>
-          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Emergency Grain Redistribution</h4>
+          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Resource Redistribution</h4>
           <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">
-            Mandates wealthy grain silos contribute emergency food to starving provinces.
+            Rich nations share with poor ones. You choose the resource and the limits.
           </p>
           <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
-            Realms with &gt;50 Grain lose -10 Grain; realms with &lt;25 Grain gain +15 Grain.
+            Default: Grain. Nations above 50 give up to 10; nations below 25 receive up to 15 each, from what was collected. Nothing is created.
           </div>
         </div>
 
         <div class="overview-resolution-card">
           <span class="badge" style="color: #ef4444; border-color: #ef4444;">PLUTOCRATIC RESTRAINTS</span>
-          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Continental Wealth Surtax & Embargo</h4>
+          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Sanction or Embargo</h4>
           <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">
-            Imposes commercial trade sanctions on runaway oligarchic dominance.
+            Punish one nation. You choose who and what it loses.
           </p>
           <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
-            Wealthiest realm suffers -15 Civil Stability as trade routes are choked.
+            Default: the richest nation loses 15 Stability. Limits: 30 of a resource, 15 of a value.
           </div>
         </div>
 
@@ -601,8 +609,27 @@
             Fortifies frontier checkpoints against refugee surges, plague and unrest.
           </p>
           <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
-            Target gains +10 Stability; plague, border surges and tsunamis hit it far less hard. Trade is not affected.
+            Target gains +10 Stability; plague, border surges and tsunamis hit it far less hard, and it defends better in battle. Trade is not affected.
           </div>
+        </div>
+
+        <div class="overview-resolution-card">
+          <span class="badge" style="color: #8b5cf6; border-color: #8b5cf6;">CUSTOM PACT</span>
+          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Resource Pact</h4>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">
+            Write your own deal in up to three lines: who gives how much of what, and who receives it.
+          </p>
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
+            Carried out automatically if it passes. Everything given is shared by the receivers; nothing is created.
+          </div>
+        </div>
+
+        <div class="overview-resolution-card">
+          <span class="badge">QUESTION</span>
+          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 6px 0;">Question to the Game Masters</h4>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">
+            Ask the facilitators a question. Like any motion it needs a co-sponsor and must pass the vote; the answer goes to everyone.
+          </p>
         </div>
       </div>
 
@@ -612,9 +639,24 @@
         Delegates read it in the <strong>Wiki</strong> tab of their phone console and answer questions in the separate <strong>Quiz</strong> tab.
       </p>
       <ul style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.6; margin-left: 20px; margin-top: 6px;">
-        <li>Every nation gets the <strong>same {{ quiz_count }} questions</strong>; about a third unlock each turn.</li>
-        <li><strong style="color: var(--ok);">Correct answer:</strong> +5 Grain, Cores or Silk (shown on each question).</li>
-        <li><strong style="color: var(--danger);">Wrong answer:</strong> loses the <strong>same resource and amount</strong> (e.g. −5 Cores), and the question is locked for that nation. One attempt per question.</li>
+        <li>The quiz is a <strong>timed run, one question at a time</strong>. A nation sees the stake and the topic, <strong>confirms that it wants the next question</strong>, and then has a short time (15 seconds by default, set on the setup screen) to answer. There is no pause, no skipping once it has started, and no pointer to the article.</li>
+        <li>Every nation meets the <strong>same {{ quiz_count }} questions in the same order</strong>; about a third unlock each turn. Standard questions stake 5, hard ones 8.</li>
+        <li><strong style="color: var(--ok);">Correct answer:</strong> the stake in Grain, Cores or Silk.</li>
+        <li><strong style="color: var(--danger);">Wrong answer or no answer in time:</strong> loses the <strong>same resource and amount</strong>, and the question is locked for that nation.</li>
+        <li>A nation's delegates share one open question. The news only carries a summary of the quiz every five minutes, never who answered what.</li>
+      </ul>
+
+      <div class="card-title" style="margin: 18px 0 10px;">War</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+        From the turn the facilitator allows (Turn 2 by default) a nation can <strong>attack another nation</strong> from the War room on its phone, once per turn. The army decides most of the fight, but not all of it:
+      </p>
+      <ul style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.6; margin-left: 20px; margin-top: 6px;">
+        <li><strong>Strength = Military × readiness × (1 + ground and weather + luck).</strong></li>
+        <li><strong>Readiness</strong> (about 0.35 to 1.9) comes from Stability, Grain, Cores, Vitality, Standing and Silk. The further a value is from 50 the harder it pulls: a starving, unstable nation fights far worse, a fed and calm one far better.</li>
+        <li><strong>Ground and weather</strong>: the defender's home ground (mountains and islands help it, open fields hurt it) and the weather of the turn, shown to everyone, add or take a few percent. <strong>Luck</strong> is a little more. All of this is smaller than the army and the readiness.</li>
+        <li>The scouts give the attacker a blurred estimate of the odds; other nations' exact numbers stay secret.</li>
+        <li><strong>Result:</strong> the loser loses soldiers, Stability and Vitality and a part of its Grain, Cores and Silk goes to the winner (some is lost in the fighting). The bigger the win, the more is taken. Attacking always costs supplies (10 Grain) and Standing, and a lost attack costs more.</li>
+        <li>A battle is announced on the news and pops up on the projector with an animation.</li>
       </ul>
     </div>
   </div>
@@ -642,7 +684,7 @@
             3. Trade: Bilateral resource offers.<br>
             4. Motions: Draft and co-sponsor resolutions.<br>
             5. Wiki: The Spireopedia (reading only).<br>
-            6. Quiz: Shared lore questions (one attempt each).
+            6. Quiz: Timed lore questions, one at a time.
           </div>
         </div>
 
