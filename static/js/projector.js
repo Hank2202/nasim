@@ -47,6 +47,7 @@ class ProjectorApp {
     const { meta, realms, proposals, news_feed } = state;
 
     if (this.map) this.map.update(state);
+    this.watchBattles(state.battles || []);
     this.renderTicker(news_feed || []);
     this.resolutionTypes = state.resolution_types || this.resolutionTypes;
     this.renderTimeline(meta);
@@ -76,6 +77,7 @@ class ProjectorApp {
         if (meta.audio_cue.type === 'gong' || meta.audio_cue.type === 'turn') synth.playGong();
         else if (meta.audio_cue.type === 'chime' || meta.audio_cue.type === 'trade') synth.playChime();
         else if (meta.audio_cue.type === 'alert') synth.playAlert();
+        else if (meta.audio_cue.type === 'battle') synth.playBattle();
       }
       this.lastAudioSeq = meta.audio_cue.seq;
     }
@@ -123,6 +125,51 @@ class ProjectorApp {
       if (mainLayout) mainLayout.style.display = 'grid';
       this.renderWorkingSession(meta, proposals, realms, news_feed);
     }
+  }
+
+  // What the game does if a motion passes, in the words written when it was tabled.
+  effectInner(p, type) {
+    const esc = escapeHtml;
+    const lines = (p.effect_text && p.effect_text.length) ? p.effect_text : [type.effect_plain].filter(Boolean);
+    return lines.length ? `<span>If passed:</span> ${lines.map(esc).join(' ')}` : '';
+  }
+
+  effectHtml(p, type) {
+    const inner = this.effectInner(p, type);
+    return inner ? `<div class="motion-effect">${inner}</div>` : '';
+  }
+
+  // Battles pop up at the side of the projector, one after another, for about eleven seconds each.
+  watchBattles(battles) {
+    if (this._seenBattles === undefined) {                 // first poll: older battles are not replayed
+      this._seenBattles = new Set(battles.map(b => b.id));
+      this._battleQueue = [];
+      return;
+    }
+    for (const b of battles.slice().reverse()) {
+      if (this._seenBattles.has(b.id)) continue;
+      this._seenBattles.add(b.id);
+      this._battleQueue.push(b);
+      if (this.map && this.map.addWar) this.map.addWar(b.attacker_id, b.defender_id, b.outcome);
+    }
+    if (!this._battleShowing) this.nextBattle();
+  }
+
+  nextBattle() {
+    const pop = document.getElementById('battle-pop');
+    const b = this._battleQueue.shift();
+    if (!pop || !b) { this._battleShowing = false; return; }
+    this._battleShowing = true;
+    pop.innerHTML = '<div class="battle-pop-inner"></div>';
+    pop.classList.add('show');
+    if (this._battleScene) this._battleScene.stop();
+    this._battleScene = BattleScene.play(pop.firstElementChild, b, {
+      duration: 11000,
+      onDone: () => {
+        pop.classList.remove('show');
+        setTimeout(() => this.nextBattle(), 700);
+      },
+    });
   }
 
   renderSummitConcluded(outcome, proposals, news_feed) {
@@ -307,7 +354,7 @@ class ProjectorApp {
     const key = items.map(n => n.id || n.headline + n.time_str).join('|');
     if (key === this._tickerKey) return;   // only rebuild when the news changes, so scrolling stays smooth
     this._tickerKey = key;
-    const icons = { crisis: '⚡', trade: '🤝', assembly: '📜', lore: '📖', turn: '🔔', diplomacy: '🕊️' };
+    const icons = { crisis: '⚡', trade: '🤝', assembly: '📜', lore: '📖', turn: '🔔', diplomacy: '🕊️', war: '⚔️', boon: '🌟' };
     const html = items.map(n => `<span class="ticker-item"><b>${icons[n.type] || '✦'} ${escapeHtml(n.headline)}</b> ${escapeHtml(n.detail)}</span>`).join('');
     el.innerHTML = html + html;  // duplicated so the loop is seamless
     const seconds = Math.max(30, el.scrollWidth / 2 / 70);   // ~70 px per second
@@ -423,7 +470,7 @@ class ProjectorApp {
           <span class="status-pill">Motion ${idx + 1} of ${docketProps.length}</span>
         </div>
         <div class="motion-sponsor">Tabled by ${esc(p.proposer_name)}</div>
-        ${t.effect_plain ? `<div class="motion-effect"><span>If passed:</span> ${esc(t.effect_plain)}${p.target_realm_name ? ` (${esc(p.target_realm_name)})` : ''}</div>` : ''}
+        ${this.effectHtml(p, t)}
         <div class="balance">
           <span class="for">For ${tallies.support_weight}</span>
           <div class="balance-bar"><div style="width:${pct}%"></div></div>
@@ -442,11 +489,15 @@ class ProjectorApp {
     if (!activeProp) return;
 
     document.getElementById('proj-grand-badge').innerText = `GRAND PLENARY RESOLUTION ${idx + 1} OF ${docket.length}`;
-    document.getElementById('proj-grand-phase-label').innerText = meta.phase === 'grand_plenary_discussion' ? '5-MINUTE FLOOR DEBATE' : 'SOVEREIGN ROLL-CALL VOTE';
+    const debateMin = (meta.discussion_timer_total || 300) / 60;
+    document.getElementById('proj-grand-phase-label').innerText = meta.phase === 'grand_plenary_discussion'
+      ? `${debateMin % 1 ? debateMin.toFixed(1) : debateMin}-MINUTE FLOOR DEBATE` : 'SOVEREIGN ROLL-CALL VOTE';
     document.getElementById('proj-debate-clock').innerText = formatSeconds(meta.discussion_timer_remaining);
     document.getElementById('proj-grand-title').innerText = activeProp.title;
     document.getElementById('proj-grand-sponsors').innerText = `Tabled by ${activeProp.proposer_name}`;
     document.getElementById('proj-grand-desc').innerText = activeProp.description;
+    const effectBox = document.getElementById('proj-grand-effect');
+    if (effectBox) effectBox.innerHTML = this.effectInner(activeProp, (this.resolutionTypes || []).find(t => t.id === activeProp.effect_type) || {});
 
     const votingFloor = document.getElementById('proj-grand-voting-floor');
     if (meta.phase === 'grand_plenary_voting') {

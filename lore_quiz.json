@@ -1,519 +1,1061 @@
 {
- "_meta": {
-  "note": "Shared question bank: every nation answers the same questions. Questions unlock by turn. Each realm gets ONE attempt per question (correct = reward, wrong = Standing penalty from simulation_settings + permanent lock). Every answer must be stated in the Spireopedia article named in 'article'."
- },
- "questions": [
-  {
-   "id": "q01",
-   "turn": 1,
-   "article": "great-convergence",
-   "question": "What does “AC” stand for in the Continent’s calendar?",
-   "options": [
-    "After the Charter",
-    "After Convergence",
-    "Age of Cores",
-    "Accord Calendar"
-   ],
-   "correct_index": 1,
-   "explanation": "Years are counted from the Great Convergence, the tectonic upheaval three centuries ago.",
-   "reward_resource": "cores",
-   "reward_amount": 5
+  "_meta": {
+    "note": "Shared question bank: every nation answers the same questions, in a random order for each nation. Questions unlock by turn. Nations take them one at a time against the clock (quiz_seconds). The stake of each question is random (quiz.stake_min..stake_max in scenario_config.json, average 5); a correct answer earns it and a wrong answer or running out of time loses the same amount of the question's reward_resource, and the question is locked. 'tier' (standard or hard) only says how detailed the question is. Every answer must be stated in the Spireopedia article named in 'article'."
   },
-  {
-   "id": "q02",
-   "turn": 1,
-   "article": "great-convergence",
-   "question": "Roughly how long did the Dark Decades of aftershocks and ash-darkened skies last?",
-   "options": [
-    "Nine days",
-    "About forty years",
-    "Twelve years",
-    "A full century"
-   ],
-   "correct_index": 1,
-   "explanation": "The Convergence itself lasted nine days; the Dark Decades of aftershocks followed for about forty years.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q03",
-   "turn": 1,
-   "article": "verdant-lowlands",
-   "question": "In which region does Convergence silt let Alchemical Grain germinate twice as fast?",
-   "options": [
-    "The Northern Steppes",
-    "The Solar Plateau",
-    "The Abyssal Rift",
-    "The Verdant Lowlands"
-   ],
-   "correct_index": 3,
-   "explanation": "The silt plains around the Spire plateaus are the Continent’s breadbasket.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q04",
-   "turn": 1,
-   "article": "sylvan-concordat",
-   "question": "How do Sylvan Vault-Wardens keep grain from rotting for decades?",
-   "options": [
-    "They salt it in sea-caves",
-    "They freeze it in mountain glaciers",
-    "They seal it in sun marble jars",
-    "They bind it with mycorrhizal fungal threads in root-vaults"
-   ],
-   "correct_index": 3,
-   "explanation": "Fungal threads in the root-vaults draw off the moisture that breeds rot.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q05",
-   "turn": 1,
-   "article": "echo-silk",
-   "question": "What provides the fibre for Echo Silk?",
-   "options": [
-    "Cocoons of luminescent moths in the Whispering Straits",
-    "Webs of steppe spiders",
-    "Glow-worms of the Abyssal Rift",
-    "Flax grown on the Solar Plateau"
-   ],
-   "correct_index": 0,
-   "explanation": "The moths nest only in the sea-caves of the Whispering Straits.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q06",
-   "turn": 1,
-   "article": "sea-of-glass",
-   "question": "Why do Aquilan ships use rowed, shallow-draft galleys on the Sea of Glass?",
-   "options": [
-    "Sails were banned by the Spire Accords",
-    "The sea has almost no wind or current",
-    "The water is too shallow for any keel",
-    "Umbral pirates target sailing ships"
-   ],
-   "correct_index": 1,
-   "explanation": "The Sea of Glass is mirror-calm: there is no wind to sail by and no current to ride.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q07",
-   "turn": 1,
-   "article": "aether-cores",
-   "question": "How many Aether Cores must a nation hold to unlock technological efficiency?",
-   "options": [
-    "50",
-    "60",
-    "75",
-    "100"
-   ],
-   "correct_index": 2,
-   "explanation": "At 75 or more active cores, a nation’s population consumes a quarter less grain.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q08",
-   "turn": 1,
-   "article": "spire-accords",
-   "question": "What does the Two-Sponsor Rule require?",
-   "options": [
-    "Every nation must send two delegates",
-    "A motion needs at least two co-sponsoring nations before it can be voted on",
-    "Two nations must object to block a motion",
-    "Every trade needs two witnesses"
-   ],
-   "correct_index": 1,
-   "explanation": "Unsponsored motions die on the floor.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q09",
-   "turn": 1,
-   "article": "neutral-spire",
-   "question": "Who administers the Neutral Spire?",
-   "options": [
-    "The Solaris Chancellery",
-    "The Archivists, who renounce all national loyalty",
-    "The six rulers in rotation",
-    "The Aquilan Ledger Council"
-   ],
-   "correct_index": 1,
-   "explanation": "Archivists keep the minutes, count the votes and maintain the Spire Archive.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q10",
-   "turn": 1,
-   "article": "umbral-enclave",
-   "question": "Which nation has only a single base vote in the Assembly?",
-   "options": [
-    "Umbral Enclave",
-    "Sylvan Concordat",
-    "Aquila Maritime League",
-    "Aethelgard Dominion"
-   ],
-   "correct_index": 0,
-   "explanation": "Umbra’s base strength is a single vote, which it uses with extreme precision.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q11",
-   "turn": 2,
-   "article": "sylvan-concordat",
-   "question": "Which founding agreement created the Sylvan Concordat in 12 AC?",
-   "options": [
-    "The Pact of Roots",
-    "The Oath of the Steppe",
-    "The Compact of Harbours",
-    "The Mandate of the Sun"
-   ],
-   "correct_index": 0,
-   "explanation": "Nine clan elders swore at the Hearthroot that no clan would let another starve while any vault stood full.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q12",
-   "turn": 2,
-   "article": "iron-val-khor",
-   "question": "Who drew the first solid aether crystal out of the Mistveil Chasm in 31 AC?",
-   "options": [
-    "Maren Ostrel",
-    "Ilvara Sunmaker",
-    "Hadrek Vorn",
-    "Corvane Brask"
-   ],
-   "correct_index": 2,
-   "explanation": "Vorn lowered a basalt crucible on a chain into the vapour.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q13",
-   "turn": 2,
-   "article": "iron-val-khor",
-   "question": "Who holds power in Iron Val-Khor?",
-   "options": [
-    "A hereditary Forge-King",
-    "The Seven Veils",
-    "The Council of Nine, one delegate per Forge Collective",
-    "The richest merchant houses"
-   ],
-   "correct_index": 2,
-   "explanation": "Delegates are chosen by journeymen vote.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q14",
-   "turn": 2,
-   "article": "iron-val-khor",
-   "question": "What sparked the Ember Riots of 203 AC?",
-   "options": [
-    "The Collectives cut bread rations to fill an order for cores",
-    "Aethelgard seized the northern passes",
-    "A reactor breach at Khor-Deep",
-    "A tariff on Echo Silk"
-   ],
-   "correct_index": 0,
-   "explanation": "Afterwards the Charter guaranteed every foundry-town a grain allocation, the root of Val-Khor’s dependence on Sylvan grain.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q15",
-   "turn": 2,
-   "article": "solaris-ascendancy",
-   "question": "Who founded the Solaris Ascendancy in 94 AC?",
-   "options": [
-    "Aethel Garrowmere, a knight",
-    "Ilsa Quenn, a Ledger-Master",
-    "Ilvara Sunmaker, an astronomer-priest",
-    "Hadrek Vorn, a smith"
-   ],
-   "correct_index": 2,
-   "explanation": "Sunmaker proclaimed the Mandate of the Sun.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q16",
-   "turn": 2,
-   "article": "solaris-ascendancy",
-   "question": "What did the Lantern Edict of 119 AC do?",
-   "options": [
-    "It lit the Plenary Hall for night sessions",
-    "It banned the export of Echo Silk",
-    "It ended the Salt War",
-    "It banned unlicensed aether-study and expelled those who refused"
-   ],
-   "correct_index": 3,
-   "explanation": "The exiles walked into the Abyssal Rift and founded the Umbral Enclave.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q17",
-   "turn": 2,
-   "article": "umbral-enclave",
-   "question": "How is power divided in the Umbral Enclave?",
-   "options": [
-    "A single elected Speaker",
-    "Among Seven Veils, councils that each know only part of every decision",
-    "A Council of Nine forges",
-    "A hereditary Chancellor and Senate"
-   ],
-   "correct_index": 1,
-   "explanation": "The founders, remembering the Lantern Edict, made sure no single authority could rule.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q18",
-   "turn": 2,
-   "article": "aquila-maritime-league",
-   "question": "Who discovered the silk moths that made Aquila rich?",
-   "options": [
-    "Ilsa Quenn, a Ledger-Master",
-    "Maren Ostrel, a harbour pilot",
-    "Hadrek Vorn, a smith",
-    "Ilvara Sunmaker, a priest"
-   ],
-   "correct_index": 1,
-   "explanation": "In 70 AC Ostrel traced the shimmering cocoons in the sea-caves of the Straits.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q19",
-   "turn": 2,
-   "article": "aquila-maritime-league",
-   "question": "How are votes weighted on Aquila’s Ledger Council?",
-   "options": [
-    "Equally among all islands",
-    "By the size of each house’s fleet",
-    "By population of each port",
-    "By the taxes each merchant house has paid"
-   ],
-   "correct_index": 3,
-   "explanation": "Critics call it an oligarchy; supporters call it honesty.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q20",
-   "turn": 2,
-   "article": "aethelgard-dominion",
-   "question": "Whom is the Aethelgard Dominion named after?",
-   "options": [
-    "A mountain on the steppe",
-    "Its first High Marshal",
-    "An ancient standing stone",
-    "Aethel Garrowmere, who united forty hill-lords"
-   ],
-   "correct_index": 3,
-   "explanation": "She gathered the hill-lords to swear the Oath of the Steppe in 33 AC.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q21",
-   "turn": 2,
-   "article": "aethelgard-dominion",
-   "question": "What must a young Aethelgard knight complete to earn a place at court?",
-   "options": [
-    "A pilgrimage to the Neutral Spire",
-    "A masterwork forged in Khor",
-    "The Long Watch: a winter alone on a frontier tower",
-    "A year of service on an Aquilan galley"
-   ],
-   "correct_index": 2,
-   "explanation": "Places at court are earned, not inherited alone.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q22",
-   "turn": 3,
-   "article": "salt-war",
-   "question": "Which two nations fought the Salt War (141–149 AC)?",
-   "options": [
-    "Solaris and Umbra",
-    "Aethelgard and Aquila",
-    "Val-Khor and Sylvan",
-    "Aethelgard and Val-Khor"
-   ],
-   "correct_index": 1,
-   "explanation": "It was fought over tolls on salt-ships in the Whispering Straits.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q23",
-   "turn": 3,
-   "article": "salt-war",
-   "question": "How did Aquila win the Salt War?",
-   "options": [
-    "Its galleys sank Aethelgard’s fleet",
-    "Solaris sent troops to defend it",
-    "It closed every League port to Aethelgard until its granaries ran dry",
-    "Umbra assassinated the High Marshal"
-   ],
-   "correct_index": 2,
-   "explanation": "Within eight months Aethelgard’s army was starving.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q24",
-   "turn": 3,
-   "article": "salt-war",
-   "question": "Where was the treaty that ended the Salt War signed?",
-   "options": [
-    "Rootholm",
-    "Helion",
-    "The Neutral Spire",
-    "Brinegate"
-   ],
-   "correct_index": 3,
-   "explanation": "The Treaty of Brinegate (149 AC) led directly to the Spire Accords.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q25",
-   "turn": 3,
-   "article": "salt-war",
-   "question": "Which nation sold intelligence to both sides in the Salt War?",
-   "options": [
-    "Solaris Ascendancy",
-    "Iron Val-Khor",
-    "Umbral Enclave",
-    "Sylvan Concordat"
-   ],
-   "correct_index": 2,
-   "explanation": "Umbra calls it the rational course for a small state; neither side has fully forgiven it.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q26",
-   "turn": 3,
-   "article": "spire-accords",
-   "question": "What was the Midnight Tariff of 149 AC?",
-   "options": [
-    "A grain tariff imposed by one delegate acting alone in a late-night session",
-    "A toll on ships crossing the Straits at night",
-    "A curfew on trade during the Salt War",
-    "A tax on lamps in Lanternfall"
-   ],
-   "correct_index": 0,
-   "explanation": "It caused a famine in two provinces and led to the Two-Sponsor Rule.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q27",
-   "turn": 3,
-   "article": "neutral-spire",
-   "question": "Which nation’s diplomats proposed building a neutral place for talks after the Salt War?",
-   "options": [
-    "Aquila Maritime League",
-    "Solaris Ascendancy",
-    "Umbral Enclave",
-    "Iron Val-Khor"
-   ],
-   "correct_index": 1,
-   "explanation": "The Spire Accords were largely a Solaris design, and Solaris has chaired the Plenary ever since.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q28",
-   "turn": 3,
-   "article": "winter-of-open-silos",
-   "question": "What caused the famine known as the Winter of Open Silos (188 AC)?",
-   "options": [
-    "The Cinder Night reactor breach",
-    "The Salt War blockade",
-    "The Alchemical Rust blight",
-    "A tsunami on the Sea of Glass"
-   ],
-   "correct_index": 2,
-   "explanation": "A rust-coloured spore turned ripe grain to powder in a single night.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q29",
-   "turn": 3,
-   "article": "winter-of-open-silos",
-   "question": "Who escorted Sylvan grain convoys during the Winter of Open Silos?",
-   "options": [
-    "Aquilan galleys",
-    "Umbral scouts",
-    "Aethelgard soldiers",
-    "The Archivists of the Spire"
-   ],
-   "correct_index": 2,
-   "explanation": "Aethelgard still cites this whenever its military budget is questioned.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  },
-  {
-   "id": "q30",
-   "turn": 3,
-   "article": "cinder-night",
-   "question": "What reform followed the Cinder Night of 241 AC?",
-   "options": [
-    "A ban on all aether mining",
-    "Moving the foundries to Umbra",
-    "Abolishing the Forge Collectives",
-    "Safety wardens answerable to the workers, not the managers"
-   ],
-   "correct_index": 3,
-   "explanation": "Val-Khor also invited foreign observers into its foundries for the first time.",
-   "reward_resource": "grain",
-   "reward_amount": 5
-  },
-  {
-   "id": "q31",
-   "turn": 3,
-   "article": "spire-accords",
-   "question": "Under the Founders’ Charter, what extra privilege goes to the wealthiest realm?",
-   "options": [
-    "A permanent veto",
-    "The chair of the Plenary",
-    "Exemption from the Two-Sponsor Rule",
-    "One extra Assembly vote"
-   ],
-   "correct_index": 3,
-   "explanation": "The rule was drafted by Aquila’s merchants and has been criticised ever since.",
-   "reward_resource": "cores",
-   "reward_amount": 5
-  },
-  {
-   "id": "q32",
-   "turn": 3,
-   "article": "timeline-of-the-continent",
-   "question": "In what year does the Summit of Realms convene?",
-   "options": [
-    "304 AC",
-    "298 AC",
-    "188 AC",
-    "150 AC"
-   ],
-   "correct_index": 0,
-   "explanation": "298 AC saw the last full harvest; 303 AC the Failed Harvest; the Summit opens in 304 AC.",
-   "reward_resource": "silk",
-   "reward_amount": 5
-  }
- ]
+  "questions": [
+    {
+      "id": "q01",
+      "turn": 1,
+      "article": "great-convergence",
+      "question": "What does “AC” stand for in the Continent’s calendar?",
+      "options": [
+        "After the Charter",
+        "After Convergence",
+        "Age of Cores",
+        "Accord Calendar"
+      ],
+      "correct_index": 1,
+      "explanation": "Years are counted from the Great Convergence, the tectonic upheaval three centuries ago.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q02",
+      "turn": 1,
+      "article": "great-convergence",
+      "question": "Roughly how long did the Dark Decades of aftershocks and ash-darkened skies last?",
+      "options": [
+        "Nine days",
+        "About forty years",
+        "Twelve years",
+        "A full century"
+      ],
+      "correct_index": 1,
+      "explanation": "The Convergence itself lasted nine days; the Dark Decades of aftershocks followed for about forty years.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q03",
+      "turn": 1,
+      "article": "verdant-lowlands",
+      "question": "In which region does Convergence silt let Alchemical Grain germinate twice as fast?",
+      "options": [
+        "The Northern Steppes",
+        "The Solar Plateau",
+        "The Abyssal Rift",
+        "The Verdant Lowlands"
+      ],
+      "correct_index": 3,
+      "explanation": "The silt plains around the Spire plateaus are the Continent’s breadbasket.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q04",
+      "turn": 1,
+      "article": "sylvan-concordat",
+      "question": "How do Sylvan Vault-Wardens keep grain from rotting for decades?",
+      "options": [
+        "They salt it in sea-caves",
+        "They freeze it in mountain glaciers",
+        "They seal it in sun marble jars",
+        "They bind it with mycorrhizal fungal threads in root-vaults"
+      ],
+      "correct_index": 3,
+      "explanation": "Fungal threads in the root-vaults draw off the moisture that breeds rot.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q05",
+      "turn": 1,
+      "article": "echo-silk",
+      "question": "What provides the fibre for Echo Silk?",
+      "options": [
+        "Cocoons of luminescent moths in the Whispering Straits",
+        "Webs of steppe spiders",
+        "Glow-worms of the Abyssal Rift",
+        "Flax grown on the Solar Plateau"
+      ],
+      "correct_index": 0,
+      "explanation": "The moths nest only in the sea-caves of the Whispering Straits.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q06",
+      "turn": 1,
+      "article": "sea-of-glass",
+      "question": "Why do Aquilan ships use rowed, shallow-draft galleys on the Sea of Glass?",
+      "options": [
+        "Sails were banned by the Spire Accords",
+        "The sea has almost no wind or current",
+        "The water is too shallow for any keel",
+        "Umbral pirates target sailing ships"
+      ],
+      "correct_index": 1,
+      "explanation": "The Sea of Glass is mirror-calm: there is no wind to sail by and no current to ride.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q07",
+      "turn": 1,
+      "article": "aether-cores",
+      "question": "How many Aether Cores must a nation hold to unlock technological efficiency?",
+      "options": [
+        "50",
+        "60",
+        "75",
+        "100"
+      ],
+      "correct_index": 2,
+      "explanation": "At 75 or more active cores, a nation’s population consumes a quarter less grain.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q08",
+      "turn": 1,
+      "article": "spire-accords",
+      "question": "What does the Two-Sponsor Rule require?",
+      "options": [
+        "Every nation must send two delegates",
+        "A motion needs at least two co-sponsoring nations before it can be voted on",
+        "Two nations must object to block a motion",
+        "Every trade needs two witnesses"
+      ],
+      "correct_index": 1,
+      "explanation": "Unsponsored motions die on the floor.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q09",
+      "turn": 1,
+      "article": "neutral-spire",
+      "question": "Who administers the Neutral Spire?",
+      "options": [
+        "The Solaris Chancellery",
+        "The Archivists, who renounce all national loyalty",
+        "The six rulers in rotation",
+        "The Aquilan Ledger Council"
+      ],
+      "correct_index": 1,
+      "explanation": "Archivists keep the minutes, count the votes and maintain the Spire Archive.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q10",
+      "turn": 1,
+      "article": "umbral-enclave",
+      "question": "Which nation has only a single base vote in the Assembly?",
+      "options": [
+        "Umbral Enclave",
+        "Sylvan Concordat",
+        "Aquila Maritime League",
+        "Aethelgard Dominion"
+      ],
+      "correct_index": 0,
+      "explanation": "Umbra’s base strength is a single vote, which it uses with extreme precision.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q11",
+      "turn": 2,
+      "article": "sylvan-concordat",
+      "question": "Which founding agreement created the Sylvan Concordat in 12 AC?",
+      "options": [
+        "The Pact of Roots",
+        "The Oath of the Steppe",
+        "The Compact of Harbours",
+        "The Mandate of the Sun"
+      ],
+      "correct_index": 0,
+      "explanation": "Nine clan elders swore at the Hearthroot that no clan would let another starve while any vault stood full.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q12",
+      "turn": 2,
+      "article": "iron-val-khor",
+      "question": "Who drew the first solid aether crystal out of the Mistveil Chasm in 31 AC?",
+      "options": [
+        "Maren Ostrel",
+        "Ilvara Sunmaker",
+        "Hadrek Vorn",
+        "Corvane Brask"
+      ],
+      "correct_index": 2,
+      "explanation": "Vorn lowered a basalt crucible on a chain into the vapour.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q13",
+      "turn": 2,
+      "article": "iron-val-khor",
+      "question": "Who holds power in Iron Val-Khor?",
+      "options": [
+        "A hereditary Forge-King",
+        "The Seven Veils",
+        "The Council of Nine, one delegate per Forge Collective",
+        "The richest merchant houses"
+      ],
+      "correct_index": 2,
+      "explanation": "Delegates are chosen by journeymen vote.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q14",
+      "turn": 2,
+      "article": "iron-val-khor",
+      "question": "What sparked the Ember Riots of 203 AC?",
+      "options": [
+        "The Collectives cut bread rations to fill an order for cores",
+        "Aethelgard seized the northern passes",
+        "A reactor breach at Khor-Deep",
+        "A tariff on Echo Silk"
+      ],
+      "correct_index": 0,
+      "explanation": "Afterwards the Charter guaranteed every foundry-town a grain allocation, the root of Val-Khor’s dependence on Sylvan grain.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q15",
+      "turn": 2,
+      "article": "solaris-ascendancy",
+      "question": "Who founded the Solaris Ascendancy in 94 AC?",
+      "options": [
+        "Aethel Garrowmere, a knight",
+        "Ilsa Quenn, a Ledger-Master",
+        "Ilvara Sunmaker, an astronomer-priest",
+        "Hadrek Vorn, a smith"
+      ],
+      "correct_index": 2,
+      "explanation": "Sunmaker proclaimed the Mandate of the Sun.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q16",
+      "turn": 2,
+      "article": "solaris-ascendancy",
+      "question": "What did the Lantern Edict of 119 AC do?",
+      "options": [
+        "It lit the Plenary Hall for night sessions",
+        "It banned the export of Echo Silk",
+        "It ended the Salt War",
+        "It banned unlicensed aether-study and expelled those who refused"
+      ],
+      "correct_index": 3,
+      "explanation": "The exiles walked into the Abyssal Rift and founded the Umbral Enclave.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q17",
+      "turn": 2,
+      "article": "umbral-enclave",
+      "question": "How is power divided in the Umbral Enclave?",
+      "options": [
+        "A single elected Speaker",
+        "Among Seven Veils, councils that each know only part of every decision",
+        "A Council of Nine forges",
+        "A hereditary Chancellor and Senate"
+      ],
+      "correct_index": 1,
+      "explanation": "The founders, remembering the Lantern Edict, made sure no single authority could rule.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q18",
+      "turn": 2,
+      "article": "aquila-maritime-league",
+      "question": "Who discovered the silk moths that made Aquila rich?",
+      "options": [
+        "Ilsa Quenn, a Ledger-Master",
+        "Maren Ostrel, a harbour pilot",
+        "Hadrek Vorn, a smith",
+        "Ilvara Sunmaker, a priest"
+      ],
+      "correct_index": 1,
+      "explanation": "In 70 AC Ostrel traced the shimmering cocoons in the sea-caves of the Straits.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q19",
+      "turn": 2,
+      "article": "aquila-maritime-league",
+      "question": "How are votes weighted on Aquila’s Ledger Council?",
+      "options": [
+        "Equally among all islands",
+        "By the size of each house’s fleet",
+        "By population of each port",
+        "By the taxes each merchant house has paid"
+      ],
+      "correct_index": 3,
+      "explanation": "Critics call it an oligarchy; supporters call it honesty.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q20",
+      "turn": 2,
+      "article": "aethelgard-dominion",
+      "question": "Whom is the Aethelgard Dominion named after?",
+      "options": [
+        "A mountain on the steppe",
+        "Its first High Marshal",
+        "An ancient standing stone",
+        "Aethel Garrowmere, who united forty hill-lords"
+      ],
+      "correct_index": 3,
+      "explanation": "She gathered the hill-lords to swear the Oath of the Steppe in 33 AC.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q21",
+      "turn": 2,
+      "article": "aethelgard-dominion",
+      "question": "What must a young Aethelgard knight complete to earn a place at court?",
+      "options": [
+        "A pilgrimage to the Neutral Spire",
+        "A masterwork forged in Khor",
+        "The Long Watch: a winter alone on a frontier tower",
+        "A year of service on an Aquilan galley"
+      ],
+      "correct_index": 2,
+      "explanation": "Places at court are earned, not inherited alone.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q22",
+      "turn": 3,
+      "article": "salt-war",
+      "question": "Which two nations fought the Salt War (141–149 AC)?",
+      "options": [
+        "Solaris and Umbra",
+        "Aethelgard and Aquila",
+        "Val-Khor and Sylvan",
+        "Aethelgard and Val-Khor"
+      ],
+      "correct_index": 1,
+      "explanation": "It was fought over tolls on salt-ships in the Whispering Straits.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q23",
+      "turn": 3,
+      "article": "salt-war",
+      "question": "How did Aquila win the Salt War?",
+      "options": [
+        "Its galleys sank Aethelgard’s fleet",
+        "Solaris sent troops to defend it",
+        "It closed every League port to Aethelgard until its granaries ran dry",
+        "Umbra assassinated the High Marshal"
+      ],
+      "correct_index": 2,
+      "explanation": "Within eight months Aethelgard’s army was starving.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q24",
+      "turn": 3,
+      "article": "salt-war",
+      "question": "Where was the treaty that ended the Salt War signed?",
+      "options": [
+        "Rootholm",
+        "Helion",
+        "The Neutral Spire",
+        "Brinegate"
+      ],
+      "correct_index": 3,
+      "explanation": "The Treaty of Brinegate (149 AC) led directly to the Spire Accords.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q25",
+      "turn": 3,
+      "article": "salt-war",
+      "question": "Which nation sold intelligence to both sides in the Salt War?",
+      "options": [
+        "Solaris Ascendancy",
+        "Iron Val-Khor",
+        "Umbral Enclave",
+        "Sylvan Concordat"
+      ],
+      "correct_index": 2,
+      "explanation": "Umbra calls it the rational course for a small state; neither side has fully forgiven it.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q26",
+      "turn": 3,
+      "article": "spire-accords",
+      "question": "What was the Midnight Tariff of 149 AC?",
+      "options": [
+        "A grain tariff imposed by one delegate acting alone in a late-night session",
+        "A toll on ships crossing the Straits at night",
+        "A curfew on trade during the Salt War",
+        "A tax on lamps in Lanternfall"
+      ],
+      "correct_index": 0,
+      "explanation": "It caused a famine in two provinces and led to the Two-Sponsor Rule.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q27",
+      "turn": 3,
+      "article": "neutral-spire",
+      "question": "Which nation’s diplomats proposed building a neutral place for talks after the Salt War?",
+      "options": [
+        "Aquila Maritime League",
+        "Solaris Ascendancy",
+        "Umbral Enclave",
+        "Iron Val-Khor"
+      ],
+      "correct_index": 1,
+      "explanation": "The Spire Accords were largely a Solaris design, and Solaris has chaired the Plenary ever since.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q28",
+      "turn": 3,
+      "article": "winter-of-open-silos",
+      "question": "What caused the famine known as the Winter of Open Silos (188 AC)?",
+      "options": [
+        "The Cinder Night reactor breach",
+        "The Salt War blockade",
+        "The Alchemical Rust blight",
+        "A tsunami on the Sea of Glass"
+      ],
+      "correct_index": 2,
+      "explanation": "A rust-coloured spore turned ripe grain to powder in a single night.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q29",
+      "turn": 3,
+      "article": "winter-of-open-silos",
+      "question": "Who escorted Sylvan grain convoys during the Winter of Open Silos?",
+      "options": [
+        "Aquilan galleys",
+        "Umbral scouts",
+        "Aethelgard soldiers",
+        "The Archivists of the Spire"
+      ],
+      "correct_index": 2,
+      "explanation": "Aethelgard still cites this whenever its military budget is questioned.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q30",
+      "turn": 3,
+      "article": "cinder-night",
+      "question": "What reform followed the Cinder Night of 241 AC?",
+      "options": [
+        "A ban on all aether mining",
+        "Moving the foundries to Umbra",
+        "Abolishing the Forge Collectives",
+        "Safety wardens answerable to the workers, not the managers"
+      ],
+      "correct_index": 3,
+      "explanation": "Val-Khor also invited foreign observers into its foundries for the first time.",
+      "reward_resource": "grain",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q31",
+      "turn": 3,
+      "article": "spire-accords",
+      "question": "Under the Founders’ Charter, what extra privilege goes to the wealthiest realm?",
+      "options": [
+        "A permanent veto",
+        "The chair of the Plenary",
+        "Exemption from the Two-Sponsor Rule",
+        "One extra Assembly vote"
+      ],
+      "correct_index": 3,
+      "explanation": "The rule was drafted by Aquila’s merchants and has been criticised ever since.",
+      "reward_resource": "cores",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "q32",
+      "turn": 3,
+      "article": "timeline-of-the-continent",
+      "question": "In what year does the Summit of Realms convene?",
+      "options": [
+        "304 AC",
+        "298 AC",
+        "188 AC",
+        "150 AC"
+      ],
+      "correct_index": 0,
+      "explanation": "298 AC saw the last full harvest; 303 AC the Failed Harvest; the Summit opens in 304 AC.",
+      "reward_resource": "silk",
+      "reward_amount": 5,
+      "tier": "standard"
+    },
+    {
+      "id": "h01",
+      "turn": 1,
+      "article": "great-convergence",
+      "question": "By most estimates, what share of the Continent’s inhabitants died of famine and plague in the Dark Decades?",
+      "options": [
+        "One in three",
+        "Half",
+        "Two in three",
+        "Nine in ten"
+      ],
+      "correct_index": 2,
+      "explanation": "Famine and plague killed, by most estimates, two in every three inhabitants.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h02",
+      "turn": 1,
+      "article": "great-convergence",
+      "question": "Which three things did the Convergence leave behind that shaped every later age?",
+      "options": [
+        "Obsidian plateaus, sun marble and salt flats",
+        "Silt-rich lowlands, raw aether and the memory of scarcity",
+        "Fertile silt, volcanic glass and a standing army",
+        "Raw aether, silk moths and the Spire"
+      ],
+      "correct_index": 1,
+      "explanation": "Fertile silt, raw aether venting from the chasms, and the memory of scarcity.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h03",
+      "turn": 1,
+      "article": "sylvan-concordat",
+      "question": "What may a Sylvan Vault-Warden not own?",
+      "options": [
+        "A weapon",
+        "A vault key",
+        "Silk",
+        "Farmland"
+      ],
+      "correct_index": 3,
+      "explanation": "“The keeper must not be the eater”: a Warden may not own farmland.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h04",
+      "turn": 1,
+      "article": "sylvan-concordat",
+      "question": "Where did the elders of nine clans swear the Pact of Roots in 12 AC?",
+      "options": [
+        "At a ring of standing stones",
+        "At a hollow oak called the Hearthroot",
+        "In the vaults of Rootholm",
+        "On the Spire plateau"
+      ],
+      "correct_index": 1,
+      "explanation": "They met at a hollow oak called the Hearthroot.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h05",
+      "turn": 1,
+      "article": "iron-val-khor",
+      "question": "What did the smith Hadrek Vorn lower into the Mistveil vapour in 31 AC?",
+      "options": [
+        "A pressurised turbine",
+        "A copper bell",
+        "A basalt crucible on a chain",
+        "A cooled suit with a lantern"
+      ],
+      "correct_index": 2,
+      "explanation": "He lowered a basalt crucible on a chain and drew up the first solid crystal of aether.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h06",
+      "turn": 1,
+      "article": "solaris-ascendancy",
+      "question": "How many delegates sit in the Solaris Senate of Terraces?",
+      "options": [
+        "60",
+        "90",
+        "120",
+        "240"
+      ],
+      "correct_index": 2,
+      "explanation": "The Senate of Terraces has 120 delegates elected by the city guilds.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h07",
+      "turn": 1,
+      "article": "umbral-enclave",
+      "question": "Roughly how many exiles walked into the Abyssal Rift after the Lantern Edict?",
+      "options": [
+        "About forty",
+        "About four hundred",
+        "About four thousand",
+        "About forty thousand"
+      ],
+      "correct_index": 2,
+      "explanation": "Around four thousand scholars, smiths and dissidents.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h08",
+      "turn": 1,
+      "article": "aquila-maritime-league",
+      "question": "How many islands’ harbour-masters signed the Compact of Harbours in 57 AC?",
+      "options": [
+        "Seven",
+        "Nine",
+        "Eleven",
+        "Forty"
+      ],
+      "correct_index": 2,
+      "explanation": "The harbour-masters of eleven islands.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h09",
+      "turn": 1,
+      "article": "aethelgard-dominion",
+      "question": "How many citadels guard the steppe ridgeline?",
+      "options": [
+        "Seven",
+        "Nine",
+        "Forty",
+        "Seventeen"
+      ],
+      "correct_index": 3,
+      "explanation": "A chain of seventeen citadels, each commanded by a hereditary Warden.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h10",
+      "turn": 1,
+      "article": "neutral-spire",
+      "question": "How many galleries spiral up to the Plenary Hall of the Neutral Spire?",
+      "options": [
+        "Three",
+        "Six",
+        "Nine",
+        "Thirteen"
+      ],
+      "correct_index": 1,
+      "explanation": "A spiral of six galleries, one in the style of each nation.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h11",
+      "turn": 2,
+      "article": "spire-accords",
+      "question": "What does the fourth provision of the Founders’ Charter require?",
+      "options": [
+        "That the Spire is never garrisoned",
+        "That every nation sends two delegates",
+        "That the wealthiest realm chairs the Plenary",
+        "An emergency Assembly session whenever a nation faces famine"
+      ],
+      "correct_index": 3,
+      "explanation": "The Charter requires an emergency session whenever a nation faces famine.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h12",
+      "turn": 2,
+      "article": "spire-accords",
+      "question": "Who drafted the rule that gives one extra Assembly vote to the wealthiest realm?",
+      "options": [
+        "The Archivists of the Spire",
+        "The Solaris diplomats",
+        "The merchants of Aquila",
+        "Aethelgard’s Council of Wardens"
+      ],
+      "correct_index": 2,
+      "explanation": "The rule was drafted by the merchants of Aquila and criticised ever since.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h13",
+      "turn": 2,
+      "article": "salt-war",
+      "question": "Who led Aethelgard’s expeditionary force against the Straits in 141 AC?",
+      "options": [
+        "Ledger-Master Ilsa Quenn",
+        "High Marshal Corvane Brask",
+        "Aethel Garrowmere",
+        "Hadrek Vorn"
+      ],
+      "correct_index": 1,
+      "explanation": "High Marshal Corvane Brask.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h14",
+      "turn": 2,
+      "article": "salt-war",
+      "question": "How long did Aquila’s port closure take to empty Aethelgard’s granaries?",
+      "options": [
+        "Within eight weeks",
+        "Within eight months",
+        "Within two years",
+        "Within eight years"
+      ],
+      "correct_index": 1,
+      "explanation": "Within eight months the Dominion’s granaries were empty.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h15",
+      "turn": 2,
+      "article": "salt-war",
+      "question": "By how long did Umbra’s intelligence sales to both sides prolong the war?",
+      "options": [
+        "Almost two months",
+        "Almost a decade",
+        "It ended the war early",
+        "Almost two years"
+      ],
+      "correct_index": 3,
+      "explanation": "They prolonged the war by almost two years.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h16",
+      "turn": 2,
+      "article": "winter-of-open-silos",
+      "question": "What did Sylvan’s Vault-Wardens decide in 188 AC?",
+      "options": [
+        "To sell grain at cost to the highest bidder",
+        "To distribute grain free to every nation, against their treasurers’ advice",
+        "To feed only the northern nations",
+        "To wait until the Spire ordered it"
+      ],
+      "correct_index": 1,
+      "explanation": "They voted, against the advice of their treasurers, to distribute their reserves to every nation without payment.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h17",
+      "turn": 2,
+      "article": "verdant-lowlands",
+      "question": "How did the Vault-Wardens stop the Alchemical Rust at the Lowlands’ borders?",
+      "options": [
+        "They flooded the border fields",
+        "They burned a firebreak a hundred miles long",
+        "They bound the border crops with fungal threads",
+        "Aethelgard’s soldiers formed a cordon"
+      ],
+      "correct_index": 1,
+      "explanation": "They burned a firebreak a hundred miles long.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h18",
+      "turn": 2,
+      "article": "cinder-night",
+      "question": "Roughly how many people died in the weeks after the Cinder Night?",
+      "options": [
+        "Over ninety",
+        "Over nine hundred",
+        "Over nine thousand",
+        "Over ninety thousand"
+      ],
+      "correct_index": 2,
+      "explanation": "Over nine thousand people died.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h19",
+      "turn": 2,
+      "article": "cinder-night",
+      "question": "What did Val-Khor do for the first and only time after the Cinder Night?",
+      "options": [
+        "Closed the Mistveil vents",
+        "Invited foreign observers into its foundries",
+        "Handed the formula to Umbra",
+        "Opened its granaries to Aethelgard"
+      ],
+      "correct_index": 1,
+      "explanation": "It invited foreign observers into its foundries.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h20",
+      "turn": 2,
+      "article": "aquila-maritime-league",
+      "question": "What is punishable by exile under Aquilan law?",
+      "options": [
+        "Selling silk below the ledger price",
+        "Spinning silk outside Aquila",
+        "Exporting unspun cocoons",
+        "Fishing in the Whispering Straits"
+      ],
+      "correct_index": 2,
+      "explanation": "The export of unspun cocoons is punishable by exile.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h21",
+      "turn": 3,
+      "article": "timeline-of-the-continent",
+      "question": "Which year saw the last fully successful harvest before the Summit?",
+      "options": [
+        "241 AC",
+        "298 AC",
+        "303 AC",
+        "304 AC"
+      ],
+      "correct_index": 1,
+      "explanation": "298 AC was the last fully successful harvest; 303 AC was the failed one.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h22",
+      "turn": 3,
+      "article": "timeline-of-the-continent",
+      "question": "In what year was the Neutral Spire completed?",
+      "options": [
+        "149 AC",
+        "150 AC",
+        "163 AC",
+        "188 AC"
+      ],
+      "correct_index": 2,
+      "explanation": "Building began in 150 AC and was completed in 163 AC.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h23",
+      "turn": 3,
+      "article": "iron-val-khor",
+      "question": "After the Ember Riots of 203 AC, what did the rewritten Charter guarantee every foundry-town?",
+      "options": [
+        "A seat on the Council of Nine",
+        "A share of the Mistveil cores",
+        "A safety warden",
+        "A grain allocation"
+      ],
+      "correct_index": 3,
+      "explanation": "A grain allocation, the root of Val-Khor’s dependence on Sylvan grain.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h24",
+      "turn": 3,
+      "article": "solaris-ascendancy",
+      "question": "What is the largest annual gathering on the Continent?",
+      "options": [
+        "Lanternfall",
+        "The Festival of the Long Noon",
+        "The Iron Ring ceremony",
+        "The harvest oath of the Hearthroot"
+      ],
+      "correct_index": 1,
+      "explanation": "The Solaris Festival of the Long Noon.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h25",
+      "turn": 3,
+      "article": "umbral-enclave",
+      "question": "What is the guiding rule of Umbral foreign policy about Assembly votes?",
+      "options": [
+        "No rival should ever hold three or more votes",
+        "Umbra must always vote last",
+        "No two rivals may vote together",
+        "Umbra should always hold three votes"
+      ],
+      "correct_index": 0,
+      "explanation": "No rival should ever hold three or more Assembly votes.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h26",
+      "turn": 3,
+      "article": "aethelgard-dominion",
+      "question": "What lasting conviction did the defeat at Brinegate leave in Aethelgard?",
+      "options": [
+        "That it must never field a navy",
+        "That it must never again depend on others for food or fuel",
+        "That it must never trade with Aquila",
+        "That Umbra must be conquered"
+      ],
+      "correct_index": 1,
+      "explanation": "The Dominion must never again be dependent on others for food or fuel.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h27",
+      "turn": 3,
+      "article": "abyssal-rift",
+      "question": "What is the foundation of Umbra’s economy?",
+      "options": [
+        "Mining raw aether from vents",
+        "Farming glowcaps in the catacombs",
+        "Synthesising aether from the mineral its walls weep",
+        "Selling intelligence"
+      ],
+      "correct_index": 2,
+      "explanation": "The dark mineral that seeps from the Rift’s walls can be synthesised into aether.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h28",
+      "turn": 3,
+      "article": "sea-of-glass",
+      "question": "Whose knowledge of the sea-lanes through the reefs is a guild secret?",
+      "options": [
+        "The Ledger Council",
+        "The silk guilds",
+        "The Archivists",
+        "The pilots"
+      ],
+      "correct_index": 3,
+      "explanation": "Pilots memorise the sea-lanes, and their knowledge is a guild secret.",
+      "reward_resource": "cores",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h29",
+      "turn": 3,
+      "article": "solar-plateau",
+      "question": "How does Solaris cope with having little rain?",
+      "options": [
+        "Terraced rice paddies",
+        "Imported grain and cisterns that collect winter snow",
+        "Sylvan-run irrigation canals",
+        "Desalination on the Sea of Glass"
+      ],
+      "correct_index": 1,
+      "explanation": "It depends on imported grain and on underground cisterns that collect the winter snow.",
+      "reward_resource": "silk",
+      "reward_amount": 8,
+      "tier": "hard"
+    },
+    {
+      "id": "h30",
+      "turn": 3,
+      "article": "alchemical-grain",
+      "question": "How soon does untreated Alchemical Grain rot?",
+      "options": [
+        "Within two months",
+        "Within two years",
+        "Within twenty years",
+        "Never"
+      ],
+      "correct_index": 1,
+      "explanation": "Untreated grain rots within two years.",
+      "reward_resource": "grain",
+      "reward_amount": 8,
+      "tier": "hard"
+    }
+  ]
 }

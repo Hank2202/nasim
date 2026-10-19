@@ -199,20 +199,57 @@ Notes:
 ## 📖 Spireopedia & Quiz
 
 - **Spireopedia**: the game's built-in, Wikipedia-style encyclopedia, read in the phone console's **Wiki** tab (no separate site). 22 articles in `lore_articles.json` (`[[slug|label]]` links, infoboxes, contents, search, "what links here"), served as JSON by `/api/wiki`, `/api/wiki/<slug>` and `/api/wiki/search` to logged-in delegations and the facilitator.
-- **Quiz** (phone **Quiz** tab): one shared bank in `lore_quiz.json` — every nation gets the same questions. Questions unlock by turn (`turn` field); each nation has **one attempt per question**. Correct: `reward_amount` of `reward_resource`. Wrong: the same resource and amount is lost, and the question locks for that nation.
-- Answers never reach the browser before submission: `GET /api/quiz/<realm_id>` (delegation login required) omits `correct_index`/`explanation` for unanswered questions; `POST /api/lore/quiz` checks the answer on the server.
-- Every question names the article that contains its answer; `pytest` checks slugs, option counts and links.
+- **Quiz** (phone **Quiz** tab) is a **timed run, one question at a time**:
+  1. The nation sees only the **stake** and the topic, and presses **Start the clock** when it is ready (no further dialog: the next question never starts by itself). The stake is **random for every question, 1 to 9 Grain, Cores or Silk (average 5)**; `quiz.stake_min` / `stake_max` in `scenario_config.json`.
+  2. The clock starts on the server (`quiz_seconds`, default 15, set on the setup screen). The phone shows the question, the shuffled options and a countdown. Tapping an option answers at once. Leaving the page does not stop the clock; a question that runs out of time counts as wrong (the server settles it on the next poll).
+  3. Correct: the stake is added in the question's resource. Wrong or out of time: **the same resource and amount is lost** and the question is locked. The result shows the explanation and a link to the article; "Next question" leads back to the start card with the next stake.
+  - The bank (`lore_quiz.json`) has 62 questions: 32 `standard` and 30 `hard` ones that ask for details (numbers, names, who did what). Every nation gets its questions in its **own random order** (a refresh shows the same next question and stake until it is started). A delegation shares one open question, so teammates see the same clock.
+  - There is no pointer to the article while a question is open, and the options are shuffled for every question.
+  - **News:** answers are not announced one by one. Every five minutes (and at the end of each turn and of the summit) one item sums up the quiz ("3 of 6 nations answered 11 questions: 8 correct, 3 wrong…"), without names or resources. The results report still lists every nation's correct and wrong answers.
+  - API: `GET /api/quiz/<realm_id>` (progress, the open question, what comes next, history), `POST /api/quiz/start` (start the next question), `POST /api/lore/quiz` (answer; the correct answer is only revealed afterwards). `pytest` checks slugs, option counts and links.
 
 ## 📜 Motions
 
-Players propose motions from **templates** (`resolution_types` in `scenario_config.json`): each template is shown written out with its plain-language effect ("If passed: …"), ready-made title and terms. The player picks one, edits the title and terms, chooses a target nation if the template needs one (e.g. the Frontier Watch cordon), and optionally limits who may co-sponsor. A motion needs a second nation's co-sponsorship to reach the ballot.
+Players propose motions from **templates** (`resolution_types` in `scenario_config.json`). They pick one, **set its numbers**, rewrite the title and terms in their own words and optionally limit who may co-sponsor. A motion needs a second nation's co-sponsorship to reach the ballot.
 
-- **Who sees what:** an open motion is visible to everyone, but co-sponsors stay anonymous — other nations only see *that* it has a co-sponsor ("On the ballot"), not who. A motion offered to one nation only ("Who may co-sponsor?") is visible just to the proposer and that nation until it reaches the ballot.
-- **Question to the Game Masters** (template `gm_question`): a motion like the others: it needs a co-sponsor and must pass the Assembly vote. Once passed it appears in the admin's **Resolutions & Questions** tab (badge and chime), the facilitator types an answer, and everyone sees it on the motion card and as news. Questions don't count as resolutions for missions.
-- **Limit:** each nation may table **2 motions per turn** (questions included); set on the setup screen. Phones show how many are left.
-- **Templates are starting points:** the phone says so above the list and on the form (dashed, "edit me" fields); only the "If passed" effect is fixed.
+**Motions apply themselves.** A motion carries structured effect lines (`motions.py`), and the sentence under "If passed" is generated from those lines by the server (`POST /api/proposal/preview` shows it live while the player edits). When the motion passes, the game carries the lines out and records what really happened ("Carried out: Sylvan −12 Grain; Umbral Enclave +12 Grain"), which also goes into the news and the report. The free-text terms are for explaining the deal; the facilitator no longer carries anything out by hand.
 
-Decided motions show how each nation voted (votes and nation count). Continental Food Acts A/B are facilitator-only (`player_selectable: false`) and are tabled automatically in Round 3.
+| Template | What the player sets | Effect |
+| :--- | :--- | :--- |
+| Resource Redistribution | resource, upper and lower limit, amount given and received | nations above the upper limit give; what is collected goes to nations below the lower one. Nothing is created |
+| Sanction or Embargo | the nation (or "the richest / poorest / strongest / weakest"), what it loses, how much | the nation loses up to that amount |
+| Resource Pact | up to 3 lines: transfer (who gives, how much, who shares it) or penalty | exactly the lines; value-conserving transfers and fines |
+| Open Motion (no template) | free text only | nothing happens automatically: if it passes, it waits in the facilitator's **Resolutions & Questions** tab until they carry it out (bulk editor, modifiers or in the room) and mark it as carried out |
+| Sovereign Relief Mission, Concordat | nothing (fixed) | +10 Standing, or +5 Standing and +5 Stability, for the proposer |
+| Frontier Cordon | the nation | +10 Stability, shielded from plague, border surges and tsunamis, and a stronger defence in battle |
+| Question to the Game Masters | the text | the facilitators answer it for everyone |
+
+Players cannot make value out of nothing: transfers only move what exists, and fixed templates are the only ones that create anything. **There is no cap on the amounts a motion may name**, but the automatic part takes at most what a nation really has, and receivers only get what was actually taken (a pact asking Sylvan for 500 Grain moves the 100 it has). Inactive nations are skipped when a motion passes.
+
+- **Who sees what:** an open motion is visible to everyone, but co-sponsors stay anonymous: other nations only see *that* it has a co-sponsor ("On the ballot"). A motion offered to one nation only ("Who may co-sponsor?") is visible just to the proposer and that nation until it reaches the ballot.
+- **Question to the Game Masters** (`gm_question`): like any motion it needs a co-sponsor and a passing vote. Once passed it appears in the admin's **Resolutions & Questions** tab, the facilitator types an answer, and everyone sees it on the motion card and as news. Questions don't count as resolutions for missions.
+- **No limit** on how many motions a nation may table.
+- The facilitator sees the same "If passed" text on every motion card and a reference list of all templates at the bottom of the Resolutions tab. Continental Food Acts A/B are facilitator-only and are tabled automatically in Round 3.
+
+## 🛠️ Facilitator corrections: modifiers and the action log
+
+Both live in the **Resource Overrides** tab.
+
+- **Modifiers of each nation:** one card per nation lists the automatic modifiers with their reasons (+1 vote for the richest, Grain use −25 % with Efficient Cores, +8 % defence while cordoned, home-ground defence, strike, starvation) and lets you set adjustments by hand, for example when the players rewrote a motion: **extra Assembly votes** (−3 to +5), **Grain eaten each turn** (−100 % to +200 %), **army strength in every battle** and **extra strength when attacked** (−80 % to +200 %), and the flags *Cordoned*, *General strike* and *Efficient Cores* (switching Efficient Cores off stays off even with 75+ Cores). The war adjustments are never shown to the players, and the scouts never reveal them. API: `GET/POST /api/admin/modifiers`.
+- **Action log:** every request that changed a nation's numbers (your own edits, trades, quiz answers, battles, motion effects, events) is listed with what changed ("Umbral Enclave: Grain 40 → 65"). **Reverse this change** (with a confirmation) applies the opposite change, so later changes to the same nation are kept. Battles and decided motions stay on record; only their resource changes are undone. Ending a turn, concluding the summit and crisis rounds are listed but cannot be reversed here. A new game clears the log. API: `GET /api/admin/journal`, `POST /api/admin/journal/undo`.
+
+## ⚔️ War
+
+From the turn set on the setup screen (Turn 2 by default) a nation can attack another from the **War room** on the Realm tab, once per turn (setting). No nation can be attacked more than twice a turn.
+
+**Strength = Military × readiness × (1 + ground, weather and the facilitators' adjustments + luck)**
+
+- **Readiness** (about 0.35 to 1.9) multiplies the army by how ready the nation is: Stability (weight 0.22), Grain (0.20), Cores (0.14), Vitality (0.10), Standing (0.06) and Silk (0.04). Each value's pull is `sign(v−50)·(|v−50|/50)^1.6`, so values near 50 hardly matter and the effect grows quickly with the distance from 50. A starving, unstable nation fights far worse; a fed, calm one far better.
+- **Ground and weather** (a few percent): the defender's terrain (mountains +10 %, islands +8 %, open fields −4 to −5 % …), a cordon (+8 %), and the weather of the turn (rolled when the turn starts and shown to everyone: rain and storms hamper attackers, fog and heat hurt both, a tailwind or a moonless night helps attackers). **Luck** is up to ±12 % per side, well under the readiness range, and is **never shown to the players** (only the facilitator's war log lists it).
+- **Result** by the margin |A−D|/(A+D): stalemate (< 0.04), narrow, normal, crushing (> 0.40). The loser loses soldiers (8 % to 40 % of its Military), Stability (3 to 20) and Vitality, and a share (5 % to 35 %) of its Grain, Cores and Silk, of which the winner keeps 75 %. The winner also loses a few soldiers and 2 Stability. The attacker always loses 6 Standing (10 for a crushing win over a weak nation, and for a defeat), the defender gains 3 if it wins. Supplies cost the attacker 10 Grain.
+- **Fog of war:** before attacking, the scouts give a blurred estimate of the odds ("Favourable"…) and a list of **modifiers** (readiness factors of both sides, the defender's home ground, a cordon), the weather in words, and the target's Military tier. How much the scouts find out depends on the attacker's resources: **wealth (Grain + Cores + Silk) decides how many modifiers are revealed** (about one per 28; the biggest first) and **Silk and Cores decide how accurate they are** (rough words such as "slightly helps" for poor nations, ranges such as "between +5% and +20%" for fair ones, "about +12%" for rich ones; never exact, and your own side is known better than the enemy's). The same seed gives the same report, so asking again learns nothing. The random roll and the facilitators' adjustments are never revealed. After the battle both nations see their own losses and spoils and the same kind of scouted modifier list; everyone sees the outcome and the spoils. Tune in `battle.intel`.
+- **Show:** the battle is announced in the news, sounds a war horn, pops up on the projector with an animation (two armies of soldiers march onto a field drawn from the battle's ground and weather, clash under the nations' banners, soldiers fall in proportion to the losses, the line of battle shifts towards the weaker side, the beaten army routs and the winner cheers; then the result, spoils and losses appear), draws a burning arc between the two capitals on the map, and opens as an animation on the two nations' phones. The facilitator's **War log** (Events tab) shows both sides' numbers.
+- Everything is tunable in the `battle` section of `scenario_config.json` (weights, curve, luck, terrain, weather table, plunder). Attacks can be switched off on the setup screen. `tools/simulate.py --war` shows what attacks do to the continent: a peaceful, cooperative group wins as before; opportunistic attackers (3 battles a game) cut the share of "Stable Continent" endings sharply.
 
 ## 👥 Fewer than six nations
 
@@ -228,16 +265,25 @@ Untick a nation on the setup screen and the game adapts:
 Logging in before a game has started opens this page first; afterwards the **Setup** banner at the top of the command deck (and the header link) leads back to it. The facilitator login lasts 24 hours in that browser; **Lock** logs out. The page covers everything decided before the session:
 
 1. **Scenario** — *The Great Famine* (the MGV 2026 storyline: Round 2 border incident, Round 3 famine and Continental Food Acts), *Open Summit* (same nations and missions, no scripted crises) or *Armageddon* (the famine storyline plus 3 large disasters and 10 larger small events per turn). Choosing a scenario fills in its suggested event numbers.
-2. **Difficulty** — grain eaten per turn and the share of good small events: Gentle 15 / 65 %, Standard 20 / 50 %, Harsh 25 / 35 %.
-3. **Nations** — which nations play, delegates per nation (sets seats and how many secret missions it gets), and passcodes (edit one, or **Shuffle passcodes**).
-4. **Clocks** — working session, Assembly vote, Grand Plenary debate and vote per motion, and the pause before the next turn.
-5. **Random events** — small news items per turn (0–30, default 6), the largest change per small item (1–50, decimals allowed, default 5) and large disasters per turn (0–10). A change made mid-turn applies to the rest of that working session.
+2. **Difficulty** — grain eaten per turn and the share of good small events: Gentle 15 / 65 %, Standard 20 / 50 %, Harsh 25 / 35 %. With careful sharing a group can win Gentle without touching the quiz; Standard needs good cooperation and some success in the quiz; Harsh needs a strong quiz as well.
+3. **Nations** — which nations play, **how hard each nation is to play** (Easy, Medium or Hard with the reason; see below), delegates per nation (sets seats and how many secret missions it gets), and passcodes (edit one, or **Shuffle passcodes**).
+4. **Clocks and limits** — working session, Assembly vote, Grand Plenary debate and vote per motion, the pause before the next turn and the time per quiz question.
+5. **War** — allow attacks, the turn they unlock in and how many attacks a nation may make per turn.
+6. **Random events** — small news items per turn (0–30, default 6), the largest change per small item (1–50, decimals allowed, default 5) and large disasters per turn (0–10). A change made mid-turn applies to the rest of that working session.
 
 **Save settings** changes the running game from now on; **Start a new summit with these settings** begins a fresh game (the old one is kept on the Saves tab). Defaults live in `game_settings_defaults` in `scenario_config.json`.
 
 **When time runs out** a bell sounds on every screen and, with *Move on automatically* ticked (default), the game advances by itself: working session → Assembly vote (or straight to the next turn when no motion is on the ballot) → short pause → next turn … → results after Turn 3. In the Grand Plenary each motion's debate rolls into its vote and then into the next motion. Untick it to only sound the bell and move on by hand.
 
+## 🎚️ Easy and hard nations
+
+Every nation is rated from 1 (easiest) to 5 (hardest) with a short reason (`difficulty` and `difficulty_note` in `scenario_config.json`). The rating is shown on the lobby cards, on the setup screen, in the Guide and on each nation's own phone, so the facilitator can give the hard nations to experienced participants and the easy ones to newcomers. Easy ★–★★: **Solaris** (rich, respected, missions fit a cooperative game; the challenge is coordinating 4 delegates) and **Aethelgard** (the strongest army and a calm people). Medium ★★★: **Aquila** (an easy public mission, but "wealthiest by 25" means hoarding while trading with everyone). Hard ★★★★–★★★★★: **Umbra** (one delegate, one vote, the lowest Standing), **Sylvan** (everyone needs its grain but its secret mission wants 70 kept at home) and **Val-Khor** (starts with 30 Grain and three secret missions that pull against each other). `venv/bin/python tools/simulate.py --nations` plays many games and prints the share of its missions each nation meets.
+
 ## 🧭 Running a session: saves, debrief and results
+
+- **Clock console** (Pacing tab; the header clock opens it): one set of controls for whichever clock the phase has: the working session, the pause before a turn, the Grand Plenary debate, the Assembly vote, and, between turns and after the summit, a free countdown for a break or the debrief. Type minutes and seconds, nudge by ±10 s, ±1 min, ±5 min, pause, resume or reset to the default length.
+- **Resources** (Resource Overrides tab): change several nations and several resources at once (add, take away or set to an exact number, typed), see exactly what each nation would end up with, and optionally tell the nations (news and a sound). Silent changes are written to the results report. In the table every value can also be typed (Enter, then confirm) or nudged with +/−.
+- **Confirmations:** almost every action asks first, on the facilitator's deck and on the phones (decrees, offers, accepting a trade, motions, co-sponsoring, votes, taking a quiz question, attacking). A dialog ignores clicks and key presses for a third of a second after it opens, so the key or tap that opened it cannot also answer it.
 
 - **Every server start is a fresh game** straight from `scenario_config.json` (settings, roster, delegates and passcodes), so config changes always take effect and the facilitator lands on the setup screen. A game that was under way is kept on the Saves tab as "Before server restart" (restore it if the restart was an accident). Set `FRESH_START=0` to keep the game across restarts instead. For gunicorn (Render) this runs once at server start from `gunicorn.conf.py`, never when a worker restarts.
 - **Logins belong to one game:** a new game (server start, Reset, or "Start a new summit") logs every phone out; open phones return to the passcode screen by themselves. The facilitator login is kept.

@@ -140,23 +140,90 @@ def enforce_api_auth():
                 return jsonify({"success": False, "message": "Your nation is not taking part in this summit."}), 403
     return None
 
+# What the action journal may reverse with one click, and what it calls each request.
+_JOURNAL_LABELS = {
+    "/api/admin/resources/bulk": "Resources changed by hand", "/api/admin/realm/override": "Nation edited by hand",
+    "/api/admin/modifiers": "Modifiers edited", "/api/admin/event/trigger": "Catalogue event", "/api/admin/event/minor": "News event",
+    "/api/admin/event/large": "Large disaster", "/api/admin/plenary/call_vote": "Motion decided", "/api/admin/plenary/next": "Motion decided",
+    "/api/admin/plenary/conclude_quick": "Quick plenary decided (motion effects only)", "/api/trade/<trade_id>/respond": "Trade answered",
+    "/api/lore/quiz": "Quiz answer", "/api/war/attack": "Battle (resources only; the battle stays on record)",
+    "/api/admin/turn/next": "End of turn (cannot be reversed here)", "/api/admin/summit/conclude": "Summit concluded (cannot be reversed here)",
+    "/api/admin/crisis/round": "Crisis round (cannot be reversed here)", "/api/realm/action": "Nation action",
+}
+_JOURNAL_REVERSIBLE = {"/api/admin/resources/bulk", "/api/admin/realm/override", "/api/admin/modifiers", "/api/admin/event/trigger",
+                       "/api/admin/event/minor", "/api/admin/event/large", "/api/admin/plenary/call_vote", "/api/admin/plenary/next",
+                       "/api/admin/plenary/conclude_quick", "/api/trade/<trade_id>/respond", "/api/lore/quiz", "/api/war/attack",
+                       "/api/realm/action"}
+
+_JOURNAL_SKIP = {"/api/admin/reset", "/api/admin/setup/new", "/api/admin/save/restore", "/api/admin/realm/add",
+                 "/api/admin/realm/remove", "/api/admin/realm/delete", "/api/admin/realms/set_count"}
+
+@app.before_request
+def journal_before():
+    if request.method == "POST" and request.url_rule and request.path.startswith("/api/") and \
+            not request.path.startswith(("/api/auth/", "/api/admin/journal")) and request.path not in _JOURNAL_SKIP:
+        request.environ["summit.journal"] = engine.journal_snapshot()
+
+@app.after_request
+def journal_after(resp):
+    before = request.environ.pop("summit.journal", None)
+    if before is not None and resp.status_code < 400:
+        rule = request.url_rule.rule if request.url_rule else request.path
+        data = request.get_json(silent=True) or {}
+        if rule.startswith("/api/admin/"):
+            actor = "Facilitator"
+        else:
+            who = next((data[k] for k in _ACTOR_KEYS if data.get(k)), None)
+            actor = next((r["name"] for r in engine.db.get_state("realms", []) if r["id"] == who), "A nation")
+        try:
+            engine.journal_record(before, _JOURNAL_LABELS.get(rule, rule.rsplit("/", 1)[-1].replace("_", " ").capitalize()),
+                                  actor, rule, rule in _JOURNAL_REVERSIBLE)
+        except Exception:                                        # the journal must never break a game action
+            app.logger.exception("journal_record failed")
+    return resp
+
+@app.route("/api/admin/journal", methods=["GET"])
+def api_admin_journal():
+    if not is_admin() and not app.config.get("TESTING", False):
+        return jsonify({"success": False, "message": "Facilitator authentication required."}), 401
+    return jsonify({"success": True, "entries": engine.journal_view()})
+
+@app.route("/api/admin/journal/undo", methods=["POST"])
+def api_admin_journal_undo():
+    data = request.get_json(silent=True) or {}
+    ok, msg = engine.undo_journal(data.get("id"))
+    return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
+
 def sanitize_state(state: Dict[str, Any]) -> Dict[str, Any]:
     """Per-viewer filtering: no PINs, secret missions, other realms' exact stocks or quiz answers."""
     if is_admin() or app.config.get("TESTING", False):
         return state
     hidden = ("pin", "secret_missions_pool", "active_secret_missions", "claimed_lore", "failed_lore", "quiz_answers",
-              "alchemical_grain", "aether_cores", "echo_silk", "military_power", "total_wealth")
+              "quiz_active", "quiz_log", "alchemical_grain", "aether_cores", "echo_silk", "military_power", "total_wealth",
+              "modifiers")
     realms = []
     for r in state["realms"]:
         if is_realm_authed(r["id"]):
-            r = {k: v for k, v in r.items() if k not in ("pin", "secret_missions_pool")}
+            r = {k: v for k, v in r.items() if k not in ("pin", "secret_missions_pool", "modifiers")}
         else:
             r = {k: v for k, v in r.items() if k not in hidden}
         realms.append(r)
     out = dict(state, realms=realms)
+    if (out.get("meta") or {}).get("weather"):
+        out["meta"] = dict(out["meta"], weather=engine._public_weather(out["meta"]["weather"]))
     out.pop("simulation_settings", None)
+    out.pop("catastrophes_catalog", None)          # facilitator only; keeps the one-second poll light
     viewers = {r["id"] for r in state["realms"] if is_realm_authed(r["id"])}
     out["proposals"] = [p for p in (_private_view(p, viewers) for p in state.get("proposals", [])) if p]
+    out["battles"] = [_battle_view(b, viewers) for b in state.get("battles", [])]
+    return out
+
+def _battle_view(b: Dict[str, Any], viewers: set) -> Dict[str, Any]:
+    """Everyone sees who fought, the outcome and the spoils. Only the two nations see how their own side fared."""
+    out = {k: v for k, v in b.items() if k not in ("private", "report")}
+    for side in ("attacker", "defender"):
+        if b.get(f"{side}_id") in viewers and b.get("report"):
+            out["private"] = {"side": side, "mine": b["report"][side]}
     return out
 
 def _private_view(p: Dict[str, Any], viewers: set):
@@ -262,6 +329,7 @@ def realm_view(realm_id: str):
         trades=state["trades"],
         proposals=state["proposals"],
         news_feed=state["news_feed"],
+        game_settings=state.get("game_settings", {}),
         world_lore=state.get("world_lore", {})
     ))
     if not request.cookies.get("summit_session_id"):
@@ -311,6 +379,17 @@ def admin_view():
 # -----------------------------------------------------------------------------
 
 app.jinja_env.globals["realm_article"] = wiki.realm_article
+
+def difficulty_info(level) -> Dict[str, Any]:
+    """1 (easiest) to 5 (hardest) as a label, a style name and stars, for the lobby, setup, Guide and phones."""
+    try:
+        level = max(1, min(5, int(level)))
+    except (TypeError, ValueError):
+        level = 3
+    label, css = ("Easy", "easy") if level <= 2 else (("Medium", "medium") if level == 3 else ("Hard", "hard"))
+    return {"level": level, "label": label, "css": css, "stars": "★" * level + "☆" * (5 - level)}
+
+app.jinja_env.globals["difficulty_info"] = difficulty_info
 
 def _in_game_viewer() -> bool:
     """Any logged-in delegation or the facilitator may read the encyclopedia."""
@@ -520,10 +599,16 @@ def api_realm_action():
 def api_quiz(realm_id: str):
     if not (app.config.get("TESTING", False) or is_realm_authed(realm_id) or is_admin()):
         return jsonify({"success": False, "message": "Delegation authentication required."}), 401
-    quiz = engine.get_quiz_for_realm(realm_id)
-    if quiz is None:
+    status = engine.get_quiz_status(realm_id)
+    if status is None:
         return jsonify({"success": False, "message": "Realm not found."}), 404
-    return jsonify({"success": True, **quiz})
+    return jsonify(status)
+
+@app.route("/api/quiz/start", methods=["POST"])
+def api_quiz_start():
+    """The delegation takes its next question; the clock starts now."""
+    ok, msg, question = engine.quiz_start((request.get_json(silent=True) or {}).get("realm_id"))
+    return jsonify({"success": ok, "message": msg, "question": question}), (200 if ok else 400)
 
 @app.route("/api/lore/quiz", methods=["POST"])
 def api_lore_quiz():
@@ -577,8 +662,40 @@ def api_proposal_create():
 
     target_realm_id = data.get("target_realm_id")
     success, msg, prop_id = engine.draft_proposal(proposer_id, title, description, effect_type,
-                                                  target_seconder_id, target_realm_id)
+                                                  target_seconder_id, target_realm_id, data.get("params"))
     return jsonify({"success": success, "message": msg, "proposal_id": prop_id}), (200 if success else 400)
+
+@app.route("/api/proposal/preview", methods=["POST"])
+def api_proposal_preview():
+    """The 'If passed' sentences for a motion as it is being written (exactly what the game will carry out)."""
+    data = request.get_json(silent=True) or {}
+    ok, msg, text = engine.preview_proposal(data.get("proposer_id"), data.get("effect_type", ""), data.get("params"),
+                                            data.get("target_realm_id"))
+    return jsonify({"success": ok, "message": msg, "effect_text": text}), (200 if ok else 400)
+
+# -----------------------------------------------------------------------------
+# War: weather, rules and targets; a preview with the scouts' report; the attack itself
+# -----------------------------------------------------------------------------
+@app.route("/api/war/<realm_id>")
+def api_war_status(realm_id: str):
+    if not (app.config.get("TESTING", False) or is_realm_authed(realm_id) or is_admin()):
+        return jsonify({"success": False, "message": "Delegation authentication required."}), 401
+    status = engine.get_war_status(realm_id)
+    if status is None:
+        return jsonify({"success": False, "message": "Realm not found."}), 404
+    return jsonify(status)
+
+@app.route("/api/war/preview", methods=["POST"])
+def api_war_preview():
+    data = request.get_json(silent=True) or {}
+    ok, msg, info = engine.battle_preview(data.get("realm_id"), data.get("target_id"))
+    return jsonify({"success": ok, "message": msg, "preview": info}), (200 if ok else 400)
+
+@app.route("/api/war/attack", methods=["POST"])
+def api_war_attack():
+    data = request.get_json(silent=True) or {}
+    ok, msg, battle = engine.declare_attack(data.get("realm_id"), data.get("target_id"))
+    return jsonify({"success": ok, "message": msg, "battle": _battle_view(battle, {data.get("realm_id")}) if battle else None}), (200 if ok else 400)
 
 @app.route("/api/proposal/<prop_id>/support", methods=["POST"])
 def api_proposal_support(prop_id: str):
@@ -628,6 +745,21 @@ def api_admin_timer_adjust():
     delta = int(data.get("delta_seconds", 60))
     engine.admin_adjust_timer(delta)
     return jsonify({"success": True})
+
+@app.route("/api/admin/clock", methods=["POST"])
+def api_admin_clock():
+    """The clock console: works on whichever clock the current phase has (working, debate, vote, pause, or a free timer)."""
+    data = request.get_json(silent=True) or {}
+    ok, msg = engine.admin_clock(data.get("action", ""), data.get("value"))
+    meta = engine.get_full_state()["meta"]
+    return jsonify({"success": ok, "message": msg, "clock": meta.get("display_timer")}), (200 if ok else 400)
+
+@app.route("/api/admin/resources/bulk", methods=["POST"])
+def api_admin_resources_bulk():
+    data = request.get_json(silent=True) or {}
+    ok, msg, report = engine.admin_bulk_adjust(data.get("realm_ids") or [], data.get("changes") or [],
+                                               bool(data.get("announce")), str(data.get("reason") or "")[:200])
+    return jsonify({"success": ok, "message": msg, "report": report}), (200 if ok else 400)
 
 @app.route("/api/admin/plenary/start", methods=["POST"])
 def api_admin_plenary_start():
@@ -704,6 +836,19 @@ def api_admin_realm_override():
     updates = data.get("updates", {})
     success, msg = engine.admin_override_realm(realm_id, updates)
     return jsonify({"success": success, "message": msg}), (200 if success else 400)
+
+@app.route("/api/admin/modifiers", methods=["GET"])
+def api_admin_modifiers():
+    if not is_admin() and not app.config.get("TESTING", False):
+        return jsonify({"success": False, "message": "Facilitator authentication required."}), 401
+    realms = engine.db.get_state("realms", [])
+    return jsonify({"success": True, "nations": [engine.modifier_sheet(r) for r in realms if r.get("active", True)]})
+
+@app.route("/api/admin/modifiers", methods=["POST"])
+def api_admin_modifiers_set():
+    data = request.get_json(silent=True) or {}
+    ok, msg = engine.admin_set_modifiers(data.get("realm_id"), data.get("manual"), data.get("flags"))
+    return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
 
 @app.route("/api/admin/assembly/control", methods=["POST"])
 def api_admin_assembly_control():
@@ -840,6 +985,12 @@ def api_admin_event_auto():
 def api_admin_question_answer():
     data = request.get_json(silent=True) or {}
     ok, msg = engine.answer_question(data.get("id"), data.get("answer"))
+    return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
+
+@app.route("/api/admin/motion/complete", methods=["POST"])
+def api_admin_motion_complete():
+    data = request.get_json(silent=True) or {}
+    ok, msg = engine.complete_open_motion(data.get("id"), data.get("note", ""))
     return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
 
 @app.route("/api/admin/event/minor", methods=["POST"])

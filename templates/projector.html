@@ -85,6 +85,7 @@
 
       <h2 id="proj-grand-title" style="font-size: 1.6rem; font-weight: 900; margin-bottom: 6px; flex-shrink: 0;">-</h2>
       <div id="proj-grand-sponsors" style="font-size: 0.82rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 10px; flex-shrink: 0;"></div>
+      <div id="proj-grand-effect" class="motion-effect" style="margin-bottom: 10px;"></div>
       <div id="proj-grand-desc" style="font-size: 1rem; line-height: 1.4; background: var(--bg-surface-sunken); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-bottom: 12px; flex-shrink: 0;"></div>
 
       <div id="proj-grand-voting-floor" style="display: none; border-top: 2px solid var(--border-subtle); padding-top: 12px; flex: 1; min-height: 0;">
@@ -313,7 +314,11 @@
     </div>
   </div>
 
+  <!-- Battle pop-up (battle.js plays the animation here whenever nations fight) -->
+  <div id="battle-pop" aria-live="polite"></div>
+
   <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/battle.js') }}"></script>
   <script src="{{ url_for('static', filename='js/map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/projector.js') }}"></script>
   <script>

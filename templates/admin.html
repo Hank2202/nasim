@@ -24,7 +24,7 @@
     </div>
     <div class="row">
       <span id="admin-turn-display" class="turn-pill" style="font-size: 0.85rem; padding: 6px 12px;">TURN {{ state.meta.current_turn }}</span>
-      <span id="admin-timer-display" class="timer-pill" style="font-size: 0.85rem; padding: 6px 12px;">05:00</span>
+      <span id="admin-timer-display" class="timer-pill" style="font-size: 0.85rem; padding: 6px 12px; cursor: pointer;" title="Open the clock console" onclick="document.querySelector('[data-tab=tab-pacing]').click()">05:00</span>
       <button onclick="adminApp.openResetModal()" class="btn btn-danger btn-sm">Reset Sim</button>
     </div>
   </div>
@@ -66,8 +66,9 @@
         <div>
           <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase;">Current Simulation Phase</div>
           <div id="admin-phase-display" style="font-size: 1.25rem; font-weight: 900; font-family: var(--font-mono); color: var(--text-primary); margin-top: 2px;">
-            WORKING SESSION (5 MINUTES)
+            WORKING SESSION
           </div>
+          <div id="admin-weather" class="section-sub" style="margin: 2px 0 0;"></div>
         </div>
         <div id="admin-plenary-controls" style="display: flex; gap: 8px; flex-wrap: wrap;">
           <!-- Injected via JS -->
@@ -76,39 +77,34 @@
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-      <!-- Precise Time Editing Card -->
-      <div class="card">
-        <div class="card-title">Precise Timer Controls</div>
-        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
-          Set exact custom remaining time or adjust ongoing clocks on the fly:
-        </p>
+      <!-- Clock console: acts on the clock of whatever phase the game is in -->
+      <div class="card clock-console">
+        <div class="card-title">Clock console</div>
+        <p class="section-sub">Works in every phase: the working session, the pause before a turn, debate, voting, between turns and after the summit
+          (then it is a free countdown for a break or the debrief).</p>
 
-        <!-- Direct Time Input Form -->
-        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 14px; border-radius: var(--radius-sm); margin-top: 12px;">
-          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 6px;">EDIT TIMER DIRECTLY:</div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <input type="number" id="input-custom-mins" class="form-input" min="0" max="120" value="5" style="width: 75px; text-align: center; font-family: var(--font-mono); font-weight: 700;">
-            <span style="font-family: var(--font-mono); font-size: 0.85rem;">min</span>
-            <input type="number" id="input-custom-secs" class="form-input" min="0" max="59" value="0" style="width: 75px; text-align: center; font-family: var(--font-mono); font-weight: 700;">
-            <span style="font-family: var(--font-mono); font-size: 0.85rem;">sec</span>
-            <button class="btn btn-primary btn-sm" onclick="adminApp.setCustomTimer()">Apply Time</button>
-          </div>
+        <div class="clock-label mt-2"><span id="clock-label">Working session</span><span id="clock-state" class="clock-state">stopped</span></div>
+        <div id="clock-big" class="clock-big stopped">00:00</div>
+
+        <div class="clock-set mt-2">
+          <input type="number" id="clock-min" class="form-input" min="0" max="360" value="5" inputmode="numeric" aria-label="Minutes"><span>min</span>
+          <input type="number" id="clock-sec" class="form-input" min="0" max="59" value="0" inputmode="numeric" aria-label="Seconds"><span>sec</span>
+          <button class="btn btn-primary btn-sm" onclick="adminApp.clockSet()">Set this time</button>
         </div>
 
-        <!-- Quick Adjustment Buttons -->
-        <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(60)">+1 Min</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(300)">+5 Min</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.adjustTimer(-60)">-1 Min</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.controlTimer('reset', 1200)">↺ 20m (Default)</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.controlTimer('reset', 1500)">↺ 25m</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.controlTimer('reset', 300)">↺ 5m</button>
+        <div class="row wrap mt-2">
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-300)">−5 min</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-60)">−1 min</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-10)">−10 s</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(10)">+10 s</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(60)">+1 min</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(300)">+5 min</button>
         </div>
 
-        <!-- Timer Run/Pause -->
-        <div style="display: flex; gap: 8px; margin-top: 12px;">
-          <button id="timer-start-btn" class="btn btn-primary btn-block" onclick="adminApp.controlTimer('start')">▶ Resume Timer</button>
-          <button id="timer-pause-btn" class="btn btn-secondary btn-block" onclick="adminApp.controlTimer('pause')">Pause Timer</button>
+        <div class="row mt-2">
+          <button id="clock-resume" class="btn btn-primary grow" onclick="adminApp.clockAction('resume')">▶ Start / resume</button>
+          <button id="clock-pause" class="btn btn-secondary grow" onclick="adminApp.clockAction('pause')">⏸ Pause</button>
+          <button class="btn btn-secondary grow" onclick="adminApp.clockAction('reset')" title="Back to the length on the setup screen">↺ Default length</button>
         </div>
 
         <!-- Room Sound Alerts -->
@@ -224,6 +220,14 @@
             <button type="submit" class="btn btn-secondary btn-block btn-sm">Broadcast Emergency Dispatch</button>
           </form>
         </div>
+
+        <!-- War room, facilitator view: every battle with both sides' numbers -->
+        <div class="card">
+          <div class="card-title">War log <span id="war-log-count" class="muted"></span></div>
+          <p class="section-sub">Nations attack from their phones (switch attacks on or off, and when they unlock, on the <a href="/admin/setup" style="text-decoration: underline;">setup screen</a>).
+            Here you see both sides' strength. The players only see their own.</p>
+          <div id="admin-war-log" class="stack mt-2"><p class="empty-state">No battles yet.</p></div>
+        </div>
       </div>
 
       <!-- Live Dispatch Audit Log -->
@@ -243,12 +247,35 @@
   <!-- TAB 3: RESOURCE OVERRIDES & TELEMETRY -->
   <!-- ========================================================================= -->
   <div id="tab-resources" class="admin-tab-content">
+    <div class="card" id="bulk-card">
+      <div class="card-title">Change resources for several nations at once</div>
+      <p class="section-sub">Choose what to change and by how much (type the numbers), then tick the nations it should affect. Nothing happens until you confirm.</p>
+      <div id="bulk-rows"></div>
+      <button class="btn btn-secondary btn-sm mt-1" onclick="adminApp.bulkAddRow()">+ Another resource</button>
+
+      <div class="row-between mt-2">
+        <div class="form-label" style="margin:0;">Which nations?</div>
+        <div class="row">
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.bulkSelect('all')">All playing</button>
+          <button class="btn btn-secondary btn-sm" onclick="adminApp.bulkSelect('none')">None</button>
+        </div>
+      </div>
+      <div id="bulk-nations" class="bulk-nations"></div>
+
+      <label class="check mt-2"><input type="checkbox" id="bulk-announce" onchange="adminApp.bulkPreview()">
+        <span><b>Tell the nations</b><em>Adds a news item and a sound. Leave it off to correct something quietly (it is still written to the results report).</em></span></label>
+      <input type="text" id="bulk-reason" class="form-input mt-1" maxlength="160" placeholder="Reason shown in the news (optional), e.g. Relief convoys arrive">
+
+      <div id="bulk-preview" class="bulk-preview"></div>
+      <button class="btn btn-primary mt-2" onclick="adminApp.bulkApply()">Apply these changes…</button>
+    </div>
+
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
         <div>
           <div class="card-title">Continental Telemetry & Direct Overrides</div>
           <p style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:2px;">
-            CLICK +/- TO ADJUST RESERVES BY 5 • CLICK 'EDIT' FOR STATUS PROTOCOLS
+            TYPE A NUMBER AND PRESS ENTER • +/- ADJUST BY 5 • 'EDIT' FOR STATUS PROTOCOLS
           </p>
         </div>
       </div>
@@ -275,6 +302,18 @@
         </table>
       </div>
     </div>
+
+    <div class="card" id="journal-card">
+      <div class="card-title">Action log: reverse a mistake <button class="btn btn-secondary btn-sm" style="float:right;" onclick="adminApp.loadJournal()">Refresh</button></div>
+      <p class="section-sub">Every change to a nation's numbers (yours, trades, quiz answers, battles, motion effects) is listed here. Reversing adds the opposite change, so later changes are kept. Battles and motions stay on record; only their resource changes are undone.</p>
+      <div id="journal-list" class="stack mt-2"><p class="empty-state">Nothing yet.</p></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Modifiers of each nation <button class="btn btn-secondary btn-sm" style="float:right;" onclick="adminApp.loadModifiers(true)">Refresh</button></div>
+      <p class="section-sub">Everything that bends the rules for one nation: automatic effects (read-only reasons) and adjustments you can set by hand, for example when the players have rewritten a motion. The war adjustments are never shown to the players.</p>
+      <div id="modifiers-list" class="stack mt-2"><p class="empty-state">Loading…</p></div>
+    </div>
   </div>
 
   <!-- ========================================================================= -->
@@ -282,8 +321,8 @@
   <!-- ========================================================================= -->
   <div id="tab-resolutions" class="admin-tab-content">
     <div class="card" id="gm-inbox-card">
-      <div class="card-title">Questions to the game masters <span id="gm-inbox-count" class="muted"></span></div>
-      <p class="section-sub">Questions are motions: they need a co-sponsor and a passing Assembly vote. Once passed, answer here; the answer goes to everyone as news.</p>
+      <div class="card-title">Questions and open motions <span id="gm-inbox-count" class="muted"></span></div>
+      <p class="section-sub">Questions and open motions (no template) need a co-sponsor and a passing Assembly vote. A passed question is answered here and the answer goes to everyone as news. A passed open motion has no automatic effect: carry it out yourself (bulk editor, modifiers or in the room), then mark it as carried out.</p>
       <div id="gm-inbox" class="stack mt-2"><p class="empty-state">No questions yet.</p></div>
     </div>
     <div class="card">
@@ -297,6 +336,13 @@
       <div id="admin-resolutions-list" style="display: flex; flex-direction: column; gap: 10px;">
         <!-- Injected via JS -->
       </div>
+    </div>
+
+    <!-- What each motion template does if it passes (the players see this on their phones) -->
+    <div class="card">
+      <div class="card-title">Motion templates: what happens if they pass</div>
+      <p class="section-sub">Players start from one of these and may rewrite the title and terms; only the effect below is fixed.</p>
+      <div id="admin-motion-templates" class="stack mt-2"></div>
     </div>
   </div>
 
@@ -487,7 +533,7 @@
 </div>
 {% endblock %}
 
-{% block page_scripts %}<script src="{{ url_for('static', filename='js/admin.js') }}"></script>{% endblock %}
+{% block page_scripts %}<script src="{{ url_for('static', filename='js/battle.js') }}"></script><script src="{{ url_for('static', filename='js/admin.js') }}"></script>{% endblock %}
 
 {% block scripts %}
 <script>
@@ -506,6 +552,7 @@
       const tabId = btn.dataset.tab;
       const target = document.getElementById(tabId);
       if (target) target.classList.add('active');
+      if (tabId === 'tab-resources') { adminApp.loadModifiers(true); adminApp.loadJournal(); }
     });
   });
 
@@ -529,6 +576,7 @@
   adminApp.handleSaveRealmEdit = async function(e) {
     e.preventDefault();
     const rid = document.getElementById('edit-realm-id').value;
+    if (!(await confirmAction({ title: 'Save these changes?', message: 'The flags and texts of this delegation are replaced at once.', confirmLabel: 'Save changes' }))) return;
     const updates = {
       ethos: document.getElementById('edit-realm-ethos').value,
       private_agenda: document.getElementById('edit-realm-agenda').value,
@@ -554,7 +602,7 @@
 
   adminApp.deleteCurrentEditingRealm = async function() {
     const rid = document.getElementById('edit-realm-id').value;
-    if (!confirm(`Permanently remove this delegation from the summit?`)) return;
+    if (!(await confirmAction({ title: 'Remove this delegation?', message: 'It leaves the summit for good. Missions and quotas are recalculated.', confirmLabel: 'Remove it', tone: 'danger' }))) return;
     try {
       const resp = await fetch('/api/admin/realm/delete', {
         method: 'POST',
@@ -576,6 +624,7 @@
 
   adminApp.handleAddRealm = async function(e) {
     e.preventDefault();
+    if (!(await confirmAction({ title: 'Register this delegation?', message: document.getElementById('new-realm-name').value, confirmLabel: 'Register' }))) return;
     const data = {
       id: document.getElementById('new-realm-id').value,
       name: document.getElementById('new-realm-name').value,

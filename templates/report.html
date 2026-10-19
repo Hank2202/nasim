@@ -112,12 +112,25 @@
     <b>{{ m.title }}</b> <span class="pill">{{ m.type }}</span> <span class="pill">{{ m.status }}</span> <span class="pill">turn {{ m.turn }}</span>
     <div class="sub">Tabled by {{ m.tabled_by }} · sponsors: {{ m.sponsors | join(', ') }}</div>
     <div>{{ m.terms }}</div>
+    {% for line in m.effect %}<div class="sub">If passed: {{ line }}</div>{% endfor %}
+    {% if m.result %}<div class="sub">Carried out: {{ m.result }}</div>{% endif %}
     {% if m.answer %}<div><b>Game masters' answer:</b> {{ m.answer }}</div>{% endif %}
     {% if m.votes %}
     <div>{% for v in m.votes %}<span class="pill">{{ v.nation }}: {{ v.choice }}{% if v.choice != 'abstain' %} ({{ v.weight }}){% endif %}</span> {% endfor %}</div>
     {% endif %}
   </div>
   {% else %}<p class="sub">No motions were tabled.</p>{% endfor %}
+
+  {% if r.battles %}
+  <h2>Battles ({{ r.battles | length }})</h2>
+  <table>
+    <tr><th>Turn</th><th>Attacker</th><th>Defender</th><th>Outcome</th><th>Winner</th><th>Spoils</th><th>Power (attacker / defender)</th><th>Weather · ground</th></tr>
+    {% for b in r.battles %}
+    <tr><td>{{ b.turn }}</td><td>{{ b.attacker }}</td><td>{{ b.defender }}</td><td>{{ b.outcome | replace('_', ' ') }}</td><td>{{ b.winner or '—' }}</td>
+      <td>{{ b.spoils }}</td><td class="num">{{ b.attacker_power }} / {{ b.defender_power }}</td><td>{{ b.weather }} · {{ b.terrain }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
 
   <h2>Timeline</h2>
   <table class="timeline">

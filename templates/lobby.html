@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_difficulty.html" as diff %}
 
 {% block title %}The Summit of Realms - Sovereign Login{% endblock %}
 
@@ -39,7 +40,8 @@
           <h3 class="lobby-realm-name"><span class="crest small">{{ r.emoji or '🏛️' }}</span>{{ r.name }}</h3>
           <span class="badge">{{ r.assembly_votes }} VOTE{{ 'S' if r.assembly_votes != 1 else '' }}</span>
         </div>
-        <p class="small" style="color: var(--text-secondary); line-height: 1.4; margin-bottom: 12px;">{{ r.ethos }}</p>
+        <p class="small" style="color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">{{ r.ethos }}</p>
+        <div style="margin-bottom: 10px;">{{ diff.badge(r) }}{{ diff.note(r) }}</div>
       </div>
 
       <div class="lobby-card-foot">
