@@ -7,6 +7,7 @@ to check that the game is playable and winnable.
     venv/bin/python tools/simulate.py --rosters       # every 5-nation roster (one nation left out)
     venv/bin/python tools/simulate.py --nations       # how each nation fares (to rate easy and hard nations)
     venv/bin/python tools/simulate.py --war           # what attacks do to the continent
+    venv/bin/python tools/simulate.py --simplified    # the simplified game: what happens without the quiz
 
 Kinds of delegations:
   cooperative  - share grain so nobody starves, trade widely, table and back broad motions,
@@ -17,7 +18,7 @@ Kinds of delegations:
   warlike      - like devoted, but opportunistic: attacks whenever the scouts report favourable odds
 
 The quiz: one question at a time, the nation chooses whether to take the next one. `skill` is the chance of knowing
-a standard question; hard ones are known with skill x 0.65.
+a standard question; hard ones are known with skill x 0.65. The simplified game has no quiz, so `skill` does nothing there.
 
 The numbers are an estimate of what is *possible* with sensible play, not a prediction of a real group.
 """
@@ -50,6 +51,13 @@ def _fast_conn(self):
 models.Database._get_conn = _fast_conn
 
 ARMAGEDDON = dict(scenario="armageddon", **load_scenario_config()["scenarios"]["armageddon"]["suggested"])
+OPEN = dict(scenario="open", **load_scenario_config()["scenarios"]["open"]["suggested"])
+# Famine with other numbers, typed on the setup screen (what used to be the "gentle" and "harsh" difficulty)
+EASIER_NUMBERS = {"grain_consumption": 15, "good_news_percent": 65}
+HARDER_NUMBERS = {"grain_consumption": 25, "good_news_percent": 35}
+SIMPLIFIED = {"complexity": "simplified"}
+# The delegations' plans name the motions of the full game; this is what they table in the simplified one.
+SIMPLE_MOTION = {"aid": "relief_mission", "custom": "guard_borders", "embargo": "sanction_richest", "tax": "share_grain"}
 FIELDS = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk", "military": "military_power"}
 HARD_FACTOR = 0.65
 QUIZ_PER_TURN = 6               # a nation has time for about this many 15-second questions between negotiations
@@ -59,6 +67,10 @@ class Game:
     def __init__(self, engine, policy, quiz_skill, rng):
         self.e, self.policy, self.skill, self.rng = engine, policy, quiz_skill, rng
         self.bank = {q["id"]: q for q in load_quiz()["questions"]}
+        self.simple = not engine.rules()["free_motions"]
+
+    def motion(self, kind):
+        return SIMPLE_MOTION.get(kind, kind) if self.simple else kind
 
     # ------------------------------------------------------------------ helpers
     def realms(self):
@@ -77,6 +89,8 @@ class Game:
 
     # ------------------------------------------------------------------ phases
     def quiz(self, turn):
+        if not self.e.rules()["quiz"]:
+            return
         for rid in self.realms():
             for _ in range(QUIZ_PER_TURN):
                 status = self.e.get_quiz_status(rid)
@@ -101,6 +115,14 @@ class Game:
         for rid, r in R.items():
             if self.policy == "selfish":
                 self.decree(rid, self.rng.choice(["relief", "forge", "gala", "security", "muster"]))
+                continue
+            if self.simple:                                      # one secret mission each: no arms race, no standing contest
+                if rid == "sylvan" and r["military_power"] < 40:
+                    self.decree(rid, "muster")                   # independent defence
+                if rid in ("solaria", "aquila") and turn < 3 and r["aether_cores"] < 70 and r["echo_silk"] >= 70:
+                    self.decree(rid, "forge")                    # Val-Khor's modernisation, paid for in silk
+                if r["civil_stability"] < 60 and r["aether_cores"] >= 30:
+                    self.decree(rid, "security")
                 continue
             if rid == "aethelgard" and r["aether_cores"] >= 45 and r["alchemical_grain"] >= 45:
                 self.decree(rid, "muster")                       # military lead, keeping reserves ≥35
@@ -127,7 +149,7 @@ class Game:
         turns_left = 4 - turn
         eat = self.e.settings()["grain_consumption"]
         famine_hit = 15 if (turn <= 2 and self.e.settings()["famine_storyline"]) else 0
-        reserve = {"sylvan": 75, "val_khor": 35, "aethelgard": 40}
+        reserve = {"val_khor": 35, "aethelgard": 40} if self.simple else {"sylvan": 75, "val_khor": 35, "aethelgard": 40}
         # grain flows from nations with a surplus to nations that would otherwise starve
         need = {}
         for rid, r in R.items():
@@ -167,18 +189,20 @@ class Game:
         if self.policy == "selfish":
             for _ in range(2):
                 a, b = self.rng.sample(ids, 2)
-                ok, _, pid = self.e.draft_proposal(a, "Motion", "x", self.rng.choice(["tax", "aid", "custom", "embargo"]))
+                ok, _, pid = self.e.draft_proposal(a, "Motion", "x", self.motion(self.rng.choice(["tax", "aid", "custom", "embargo"])))
                 if ok and self.rng.random() < 0.6:
                     self.e.support_proposal(pid, b)
             return
         first = lambda *pref: next((x for x in pref if x in R), ids[0])
         leader = first("solaria", "aquila", "sylvan", "aethelgard", "val_khor", "umbra")
-        plan = {1: [(leader, "aid")], 2: [(leader, "custom")] + ([("solaria", "embargo")] if "solaria" in R else []), 3: []}[turn]
+        plan = {1: [(leader, "aid")], 2: [(leader, "custom")] + ([("solaria", "embargo")] if "solaria" in R and not self.simple else []), 3: []}[turn]
         # a redistribution helps when some nations run low while others hold a lot
         if any(r["alchemical_grain"] < 25 for r in R.values()) and any(r["alchemical_grain"] > 50 for r in R.values()):
             plan.append((first("aquila", "sylvan", "umbra", "val_khor"), "tax"))
+        if self.simple and turn < 3 and "val_khor" in R:
+            plan.append(("val_khor", "modernisation_fund"))      # Val-Khor's public mission needs other nations to reach 60 Cores
         for proposer, kind in plan:
-            ok, _, pid = self.e.draft_proposal(proposer, f"{kind} motion", "x", kind)
+            ok, _, pid = self.e.draft_proposal(proposer, f"{kind} motion", "x", self.motion(kind))
             if ok:
                 self.e.support_proposal(pid, next(x for x in ("aquila", "sylvan", "umbra", "val_khor", "aethelgard", "solaria")
                                                   if x in R and x != proposer))
@@ -188,7 +212,7 @@ class Game:
         for rid in R:
             if self.policy == "selfish":
                 choice = self.rng.choice(["support", "oppose", "abstain"])
-            elif prop.get("effect_type") == "embargo":
+            elif prop.get("effect_type") == "embargo" and not self.simple:
                 # a Solaris-backed motion the others defeat: Umbra's mission, harmless to Solaris' veto mission
                 choice = "support" if rid == "solaria" else "oppose"
             elif prop.get("effect_type") == "emergency_food_a":
@@ -345,6 +369,7 @@ def main():
     ap.add_argument("--rosters", action="store_true", help="play every 5-nation roster instead of the default sweep")
     ap.add_argument("--nations", action="store_true", help="how each nation fares, to rate easy and hard nations")
     ap.add_argument("--war", action="store_true", help="what attacks do to the continent")
+    ap.add_argument("--simplified", action="store_true", help="the simplified game: what happens without the quiz")
     args = ap.parse_args()
     engine = SummitEngine(models.Database(models.DB_PATH))
     if args.rosters:
@@ -353,17 +378,19 @@ def main():
         return nation_sweep(engine, args.games)
     if args.war:
         return war_sweep(engine, args.games)
+    if args.simplified:
+        return simplified_sweep(engine, args.games)
 
     no_war = {"attacks_enabled": False}
     scenarios = [
-        ("cooperative, good quiz (80%)", "cooperative", 0.8, dict(no_war, difficulty="standard")),
-        ("cooperative, weak quiz (45%)", "cooperative", 0.45, dict(no_war, difficulty="standard")),
-        ("cooperative, no quiz", "cooperative", 0.0, dict(no_war, difficulty="standard")),
-        ("selfish, random quiz (25%)", "selfish", 0.25, dict(no_war, difficulty="standard")),
-        ("cooperative, good quiz, gentle", "cooperative", 0.8, dict(no_war, difficulty="gentle")),
-        ("cooperative, good quiz, harsh", "cooperative", 0.8, dict(no_war, difficulty="harsh")),
-        ("Armageddon, cooperative, good quiz", "cooperative", 0.8, dict(ARMAGEDDON, attacks_enabled=False, difficulty="standard")),
-        ("Armageddon, cooperative, weak quiz", "cooperative", 0.45, dict(ARMAGEDDON, attacks_enabled=False, difficulty="standard")),
+        ("cooperative, good quiz (80%)", "cooperative", 0.8, dict(no_war)),
+        ("cooperative, weak quiz (45%)", "cooperative", 0.45, dict(no_war)),
+        ("cooperative, no quiz", "cooperative", 0.0, dict(no_war)),
+        ("selfish, random quiz (25%)", "selfish", 0.25, dict(no_war)),
+        ("cooperative, good quiz, 15 Grain", "cooperative", 0.8, dict(no_war, **EASIER_NUMBERS)),
+        ("cooperative, good quiz, 25 Grain", "cooperative", 0.8, dict(no_war, **HARDER_NUMBERS)),
+        ("Armageddon, cooperative, good quiz", "cooperative", 0.8, dict(ARMAGEDDON, attacks_enabled=False)),
+        ("Armageddon, cooperative, weak quiz", "cooperative", 0.45, dict(ARMAGEDDON, attacks_enabled=False)),
     ]
     d = engine.settings()
     print(f"{args.games} games per row · 6 nations · famine storyline · {d['minor_events_per_turn']} small events "
@@ -383,15 +410,47 @@ def main():
         print(f"  {key:34} {r.mission_hits[key] / r.mission_totals[key]:5.0%}")
 
 
+def simplified_sweep(engine, games):
+    """Complexity against scenario: every combination, with sensible and with selfish delegations."""
+    print(f"{games} games per row · 6 nations · no attacks in the full game either, for a fair comparison\n")
+    print(HEADER)
+    famine = {"scenario": "famine"}
+    rows = [
+        ("Simplified, Open, cooperative", "cooperative", 0, dict(OPEN, **SIMPLIFIED)),
+        ("Simplified, Famine, cooperative", "cooperative", 0, dict(famine, **SIMPLIFIED)),
+        ("Simplified, Famine, devoted", "devoted", 0, dict(famine, **SIMPLIFIED)),
+        ("Simplified, Famine, selfish", "selfish", 0, dict(famine, **SIMPLIFIED)),
+        ("Simplified, Armageddon, cooperative", "cooperative", 0, dict(ARMAGEDDON, **SIMPLIFIED)),
+        ("Simplified, Armageddon, devoted", "devoted", 0, dict(ARMAGEDDON, **SIMPLIFIED)),
+        ("Full, Open, cooperative, good quiz", "cooperative", 0.8, dict(OPEN, attacks_enabled=False)),
+        ("Full, Famine, cooperative, good quiz", "cooperative", 0.8, dict(famine, attacks_enabled=False)),
+        ("Full, Famine, cooperative, no quiz", "cooperative", 0, dict(famine, attacks_enabled=False)),
+        ("Full, Famine, devoted, good quiz", "devoted", 0.8, dict(famine, attacks_enabled=False)),
+        ("Full, Armageddon, devoted, good quiz", "devoted", 0.8, dict(ARMAGEDDON, attacks_enabled=False)),
+    ]
+    detail = None
+    for label, policy, skill, settings in rows:
+        if sys.stdout.isatty():
+            print(label, end="\r", flush=True)
+        r = run(engine, policy, skill, games, settings)
+        print(row(label, r))
+        if detail is None and label == "Simplified, Famine, cooperative":
+            detail = (label, r)
+    label, r = detail
+    print(f"\nHow often each mission was met ({label}):")
+    for key in sorted(r.mission_totals):
+        print(f"  {key:34} {r.mission_hits[key] / r.mission_totals[key]:5.0%}")
+
+
 def war_sweep(engine, games):
-    print(f"{games} games per row · 6 nations · famine storyline · standard difficulty\n")
+    print(f"{games} games per row · 6 nations · famine storyline\n")
     print(HEADER)
     rows = [
         ("peaceful, good quiz (80%)", "devoted", 0.8, {"attacks_enabled": False}),
         ("peaceful, weak quiz (45%)", "devoted", 0.45, {"attacks_enabled": False}),
         ("warlike, good quiz (80%)", "warlike", 0.8, {"attacks_enabled": True}),
         ("warlike, weak quiz (45%)", "warlike", 0.45, {"attacks_enabled": True}),
-        ("warlike, harsh difficulty", "warlike", 0.8, {"attacks_enabled": True, "difficulty": "harsh"}),
+        ("warlike, 25 Grain a turn", "warlike", 0.8, dict(HARDER_NUMBERS, attacks_enabled=True)),
         ("warlike, Armageddon", "warlike", 0.8, dict(ARMAGEDDON, attacks_enabled=True)),
         ("warlike from Turn 1", "warlike", 0.8, {"attacks_enabled": True, "attacks_from_turn": 1}),
         ("warlike, 3 marches per turn", "warlike", 0.8, {"attacks_enabled": True, "attacks_per_turn": 3}),
@@ -399,30 +458,34 @@ def war_sweep(engine, games):
     for label, policy, skill, settings in rows:
         if sys.stdout.isatty():
             print(label, end="\r", flush=True)
-        print(row(label, run(engine, policy, skill, games, dict({"difficulty": "standard"}, **settings))))
+        print(row(label, run(engine, policy, skill, games, settings)))
 
 
 def nation_sweep(engine, games):
-    """Average share of its missions each nation meets, with cooperative and with warlike delegations."""
-    names = {r["id"]: r["name"] for r in load_scenario_config()["realms"]}
-    stars = {r["id"]: r["difficulty"] for r in load_scenario_config()["realms"]}
-    print(f"{games} games per row · famine storyline · standard difficulty\n")
-    print(f"{'Nation':26} {'Rated':>6}  " + "".join(f"{label:>22}" for label in ("devoted, quiz 80%", "devoted, quiz 45%", "warlike, quiz 80%")))
-    results = [run(engine, p, s, games, dict(difficulty="standard", attacks_enabled=(p == "warlike")))
-               for p, s in (("devoted", 0.8), ("devoted", 0.45), ("warlike", 0.8))]
+    """Average share of its missions each nation meets, in the full game and in the simplified one."""
+    realms = load_scenario_config()["realms"]
+    names = {r["id"]: r["name"] for r in realms}
+    stars = {r["id"]: r["difficulty"] for r in realms}
+    simple_stars = {r["id"]: r.get("simple_difficulty", r["difficulty"]) for r in realms}
+    print(f"{games} games per row · famine storyline\n")
+    print(f"{'Nation':26} {'Rated':>6}  " + "".join(f"{label:>22}" for label in ("devoted, quiz 80%", "devoted, quiz 45%", "warlike, quiz 80%"))
+          + f" {'Rated':>7}" + "".join(f"{label:>22}" for label in ("simplified, devoted", "simplified, cooperat.")))
+    full = [run(engine, p, s, games, dict(attacks_enabled=(p == "warlike")))
+            for p, s in (("devoted", 0.8), ("devoted", 0.45), ("warlike", 0.8))]
+    simple = [run(engine, p, 0, games, SIMPLIFIED) for p in ("devoted", "cooperative")]
+    share = lambda r, rid: f"{r.nation_hits[rid] / max(1, r.nation_totals[rid]):>22.0%}"
     for rid in names:
-        cells = "".join(f"{r.nation_hits[rid] / max(1, r.nation_totals[rid]):>22.0%}" for r in results)
-        print(f"{names[rid]:26} {stars[rid]:>6}  {cells}")
+        print(f"{names[rid]:26} {stars[rid]:>6}  " + "".join(share(r, rid) for r in full) + f" {simple_stars[rid]:>7}" + "".join(share(r, rid) for r in simple))
 
 
 def roster_sweep(engine, games):
-    print(f"{games} games per row · famine storyline · standard difficulty · cooperative delegations · no attacks\n")
+    print(f"{games} games per row · famine storyline · cooperative delegations · no attacks\n")
     print(f"{'Left out':12} {'Quiz':>5} {'Stable':>7} {'Fragile':>8} {'Crisis':>7} {'Missions met':>13} {'Starving':>9}  Missions met least often")
     for drop in (None, "sylvan", "val_khor", "solaria", "umbra", "aquila", "aethelgard"):
         for skill in (0.8, 0.45):
             if sys.stdout.isatty():
                 print(drop or "nobody", end="\r", flush=True)
-            r = run(engine, "cooperative", skill, games, {"difficulty": "standard", "attacks_enabled": False}, drop=drop)
+            r = run(engine, "cooperative", skill, games, {"attacks_enabled": False}, drop=drop)
             hardest = sorted(r.mission_totals, key=lambda k: r.mission_hits[k] / r.mission_totals[k])[:3]
             hard = ", ".join(f"{k.replace('public:', 'public ').replace('secret:', '')} {r.mission_hits[k] / r.mission_totals[k]:.0%}" for k in hardest)
             print(f"{drop or 'nobody':12} {skill:5.0%} {r.share('STABLE CONTINENT'):7.0%} {r.share('FRAGILE PEACE'):8.0%} "

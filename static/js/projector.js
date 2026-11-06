@@ -35,8 +35,10 @@ class ProjectorApp {
       const resp = await fetch('/api/state');
       if (!resp.ok) throw new Error('State fetch failed');
       const state = await resp.json();
+      connectionWatch.ok();
       this.renderState(state);
     } catch (err) {
+      connectionWatch.failed();
       console.warn('Projector polling error:', err);
     } finally {
       this.isPolling = false;
@@ -45,6 +47,8 @@ class ProjectorApp {
 
   renderState(state) {
     const { meta, realms, proposals, news_feed } = state;
+    this.settings = state.game_settings || {};
+    this.rules = this.settings.rules || {};
 
     if (this.map) this.map.update(state);
     this.watchBattles(state.battles || []);
@@ -57,7 +61,7 @@ class ProjectorApp {
     const turnEl = document.getElementById('proj-turn');
     if (turnEl) {
       let phaseLabel = 'WORKING SESSION';
-      if (meta.phase === 'plenary_quick') phaseLabel = 'BETWEEN-ROUNDS PLENARY';
+      if (meta.phase === 'plenary_quick') phaseLabel = meta.current_turn >= (this.settings.max_turns || 3) ? 'FINAL ASSEMBLY VOTE' : 'BETWEEN-ROUNDS PLENARY';
       else if (meta.phase === 'grand_plenary_discussion') phaseLabel = 'GRAND PLENARY: DEBATE';
       else if (meta.phase === 'grand_plenary_voting') phaseLabel = 'GRAND PLENARY: VOTE';
       else if (meta.phase === 'turn_summary') phaseLabel = 'PLENARY CONCLUDED';
@@ -74,12 +78,7 @@ class ProjectorApp {
 
     // Audio cues
     if (meta.audio_cue && meta.audio_cue.seq !== undefined) {
-      if (this.lastAudioSeq !== null && meta.audio_cue.seq > this.lastAudioSeq) {
-        if (meta.audio_cue.type === 'gong' || meta.audio_cue.type === 'turn') synth.playGong();
-        else if (meta.audio_cue.type === 'chime' || meta.audio_cue.type === 'trade') synth.playChime();
-        else if (meta.audio_cue.type === 'alert') synth.playAlert();
-        else if (meta.audio_cue.type === 'battle') synth.playBattle();
-      }
+      if (this.lastAudioSeq !== null && meta.audio_cue.seq > this.lastAudioSeq) synth.playCue(meta.audio_cue.type);
       this.lastAudioSeq = meta.audio_cue.seq;
     }
 
@@ -242,12 +241,12 @@ class ProjectorApp {
           pubHtml = `
             <div style="background:rgba(120, 90, 40, 0.06); border:1px solid var(--border-subtle); padding:6px 8px; border-radius:3px; margin-top:4px;">
               <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:0.75rem; color: var(--text-primary);"><strong>Public:</strong> ${pm.title}</span>
+                <span style="font-size:0.75rem; color: var(--text-primary);"><strong>Public:</strong> ${escapeHtml(pm.title)}</span>
                 ${pm.achieved ? 
                   '<span class="badge" style="background:#10b981; color:#fff; font-size:0.62rem; padding:1px 6px;">✓ ACHIEVED</span>' : 
                   '<span class="badge" style="background:#ef4444; color:#fff; font-size:0.62rem; padding:1px 6px;">✗ FAILED</span>'}
               </div>
-              <div style="font-size:0.68rem; color:var(--text-muted); font-family:var(--font-mono);">${pm.explanation}</div>
+              <div style="font-size:0.68rem; color:var(--text-muted); font-family:var(--font-mono);">${escapeHtml(pm.explanation)}</div>
             </div>
           `;
         }
@@ -257,12 +256,12 @@ class ProjectorApp {
           secretsHtml = r.secret_missions_eval.map((sm, i) => `
             <div style="background:rgba(120, 90, 40, 0.06); border:1px solid var(--border-subtle); padding:6px 8px; border-radius:3px; margin-top:3px;">
               <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:0.75rem; color: var(--text-primary);"><strong>Secret #${i+1}:</strong> ${sm.title}</span>
+                <span style="font-size:0.75rem; color: var(--text-primary);"><strong>Secret #${i+1}:</strong> ${escapeHtml(sm.title)}</span>
                 ${sm.achieved ? 
                   '<span class="badge" style="background:#10b981; color:#fff; font-size:0.62rem; padding:1px 6px;">✓ ACHIEVED</span>' : 
                   '<span class="badge" style="background:#ef4444; color:#fff; font-size:0.62rem; padding:1px 6px;">✗ FAILED</span>'}
               </div>
-              <div style="font-size:0.68rem; color:var(--text-muted); font-family:var(--font-mono);">${sm.explanation}</div>
+              <div style="font-size:0.68rem; color:var(--text-muted); font-family:var(--font-mono);">${escapeHtml(sm.explanation)}</div>
             </div>
           `).join('');
         }
@@ -272,7 +271,7 @@ class ProjectorApp {
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-family:var(--font-mono); font-weight:900; font-size:1rem; color:var(--text-muted);">#${idx + 1}</span>
-              <strong style="font-size:0.95rem; text-transform:uppercase;">${r.name}</strong>
+              <strong style="font-size:0.95rem; text-transform:uppercase;">${escapeHtml(r.name)}</strong>
               <span class="badge" style="font-size:0.72rem; background:rgba(120, 90, 40, 0.12);">${r.success_ratio || ''} MANDATES (${r.score}%)</span>
             </div>
             ${r.directive_achieved ? 
@@ -282,7 +281,7 @@ class ProjectorApp {
           ${pubHtml}
           ${secretsHtml}
           <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:6px; line-height:1.35; font-style:italic;">
-            "${r.epilogue}"
+            "${escapeHtml(r.epilogue)}"
           </p>
         </div>
       `;
@@ -318,8 +317,8 @@ class ProjectorApp {
       } else {
         accordsEl.innerHTML = passed.map(p => `
           <div style="border-left:2px solid #fff; padding-left:8px; margin-bottom:6px;">
-            <strong style="font-size:0.82rem;">${p.title}</strong>
-            <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted);">SPONSORS: ${p.proposer_name} • ${p.effect_type.toUpperCase()}</div>
+            <strong style="font-size:0.82rem;">${escapeHtml(p.title)}</strong>
+            <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted);">SPONSORS: ${escapeHtml(p.proposer_name)} • ${escapeHtml(p.effect_type.toUpperCase())}</div>
           </div>
         `).join('');
       }
@@ -357,13 +356,13 @@ class ProjectorApp {
         <p>${esc(r.public_mission ? r.public_mission.description : '')}</p></div>
       <div class="spot-stats">
         ${row('🌾', 'Grain', r.grain_tier)}${row('⚙️', 'Cores', r.cores_tier)}${row('🧵', 'Silk', r.silk_tier)}${row('⚔️', 'Military', r.military_tier)}
-        ${row('❤️', 'Vitality', r.vitality_tier)}${row('🤝', 'Standing', r.standing_tier)}${row('🏛️', 'Stability', r.stability_tier)}
+        ${this.rules && this.rules.hide_vitality ? '' : row('❤️', 'Vitality', r.vitality_tier)}${row('🤝', 'Standing', r.standing_tier)}${row('🏛️', 'Stability', r.stability_tier)}
       </div>
       ${flags.length ? `<div class="spot-flags">${flags.join('')}</div>` : ''}`;
     const chips = document.getElementById('projector-realms-list');
-    if (chips) chips.innerHTML = active.map(x => `
+    if (chips) setHtml(chips, active.map(x => `
       <button type="button" class="spot-chip ${x.id === r.id ? 'on' : ''}" style="--nc:${esc(x.theme_color || '#8c7a5e')}"
-        title="${esc(x.name)}" onclick="projApp.showRealm('${esc(x.id)}')">${esc(x.emoji || '🏛️')}</button>`).join('');
+        title="${esc(x.name)}" onclick="projApp.showRealm('${esc(x.id)}')">${esc(x.emoji || '🏛️')}</button>`).join(''));
   }
 
   showRealm(id) {
@@ -437,11 +436,12 @@ class ProjectorApp {
   renderTimeline(meta) {
     const el = document.getElementById('proj-timeline');
     if (!el) return;
-    const turns = meta.max_turns || 3;
+    const turns = (this.settings || {}).max_turns || 3;
+    const grand = !this.rules || this.rules.grand_plenary !== false;
     const steps = [];
     for (let t = 1; t <= turns; t++) {
       steps.push({ key: `turn-${t}`, label: `Turn ${t}` });
-      steps.push({ key: `vote-${t}`, label: t === turns ? 'Grand Plenary' : 'Assembly vote' });
+      steps.push({ key: `vote-${t}`, label: t === turns && grand ? 'Grand Plenary' : 'Assembly vote' });
     }
     steps.push({ key: 'end', label: 'Debrief' });
     const voting = ['plenary_quick', 'grand_plenary_discussion', 'grand_plenary_voting', 'turn_summary'].includes(meta.phase);
@@ -476,7 +476,7 @@ class ProjectorApp {
     const types = Object.fromEntries((this.resolutionTypes || []).map(t => [t.id, t]));
     const playing = (realms || []).filter(r => r.active !== false);
 
-    list.innerHTML = docketProps.map((p, idx) => {
+    setHtml(list, docketProps.map((p, idx) => {
       const t = types[p.effect_type] || {};
       const tallies = p.tallies || { support_weight: 0, oppose_weight: 0 };
       const total = tallies.support_weight + tallies.oppose_weight;
@@ -503,7 +503,7 @@ class ProjectorApp {
         </div>
         <div class="ballots">${ballots}</div>
       </article>`;
-    }).join('') || '<p class="empty-state">No motions qualified for this vote.</p>';
+    }).join('') || '<p class="empty-state">No motions qualified for this vote.</p>');
   }
 
   renderGrandPlenary(meta, proposals, realms) {

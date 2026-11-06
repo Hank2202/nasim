@@ -2,20 +2,22 @@
 Socioeconomic simulation engine for The Summit of Realms.
 Driven by scenario_config.json for 100% AI and Facilitator configurability.
 Handles:
+  - Two difficulty settings: the game's complexity (rules(): which mechanics it has) and the scenario (how hard the world is)
   - Exact Wall-Clock Timer Synchronization (zero polling-induced speedups)
   - Dynamic Event Targeting Engine (e.g. 'highest 1 by alchemical_grain', 'lowest 3 by public_vitality')
-  - Automated Background Event Scheduling (triggers at turn start / mid-turn)
+  - Automated Background Event Scheduling (random moments of each working session)
   - Sovereign Domestic Governance Levers (Emergency Grain Relief, Arcane Forges, Gala, Guard)
   - Qualitative Fog of War indicators for rivals and public views
-  - Phase state machine: 5-minute Working Session -> Plenary Voting Session
-  - Grand Plenary sequential 5-minute discussion and voting for Round 3
+  - Phase state machine: Working Session -> Assembly vote -> next turn
+  - Grand Plenary for Round 3 in the full game: a debate and a vote per motion
   - Targeted and Open motion seconding/endorsements (>= 2 countries to qualify)
-  - Delegation 4-digit PIN authentication
-  - Direct Facilitator time editing (+1m, +2m, exact input)
+  - Delegation PIN authentication
+  - Direct Facilitator time editing (the clock console)
 """
 
 import copy
 import json
+import logging
 import os
 import random
 import time
@@ -27,15 +29,22 @@ import motions as motion_rules
 import wiki
 
 SCENARIO_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scenario_config.json")
+_config_cache: Dict[str, Any] = {"mtime": None, "data": {}}
 
 def load_scenario_config() -> Dict[str, Any]:
-    if os.path.exists(SCENARIO_CONFIG_FILE):
+    """The parsed config, read again only when the file changes (every screen polls once a second, so this adds up).
+    Callers must treat it as read-only."""
+    try:
+        mtime = os.path.getmtime(SCENARIO_CONFIG_FILE)
+    except OSError:
+        return {}
+    if _config_cache["mtime"] != mtime:
         try:
             with open(SCENARIO_CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                _config_cache.update(mtime=mtime, data=json.load(f))
         except Exception:
-            pass
-    return {}
+            return {}
+    return _config_cache["data"]
 
 def load_events_catalog() -> List[Dict[str, Any]]:
     config = load_scenario_config()
@@ -142,19 +151,59 @@ class SummitEngine:
         "intermission_seconds": (0, 600), "minor_events_per_turn": (0, 30), "large_events_per_turn": (0, 10),
         "quiz_seconds": (5, 60),
         "attacks_per_turn": (1, 3), "attacks_from_turn": (1, 3),
+        "grain_consumption": (5, 60), "good_news_percent": (0, 100),
     }
     FLOAT_SETTING_LIMITS = {"minor_event_max": (1, 50)}
 
-    def settings(self) -> Dict[str, Any]:
+    # Difficulty has two settings. The scenario says how hard the world is (storyline, Grain eaten, news, events).
+    # The complexity says which mechanics the game has; these are its rules, with "full" as the default for old saves.
+    FULL_RULES = {"name": "Full game", "quiz": True, "war": True, "free_motions": True, "grand_plenary": True,
+                  "one_secret_mission": False, "hide_vitality": False, "live_hints": False, "hidden_decrees": [], "starting_bonus": {}}
+
+    def rules(self, meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """The rules of the game being played. A game keeps the complexity it was dealt with (meta.complexity)."""
+        meta = meta if meta is not None else (self.db.get_state("meta", {}) or {})
+        key = meta.get("complexity") or "full"
+        known = load_scenario_config().get("complexities", {})
+        if key not in known:
+            key = "full"
+        return {**self.FULL_RULES, **known.get(key, {}), "id": key}
+
+    def settings(self, as_chosen: bool = False) -> Dict[str, Any]:
+        """The settings in force. `as_chosen` gives what the facilitator chose on the setup screen, before the rules of
+        the running game are applied (a simplified game has no attacks, whatever the War card says for the next game)."""
         cfg = load_scenario_config()
+        stored = self.db.get_state("settings", {}) or {}
         s = dict(cfg.get("game_settings_defaults", {}))
-        s.update(self.db.get_state("settings", {}) or {})
+        s.update(stored)
         s["max_turns"] = cfg.get("simulation_settings", {}).get("max_turns", 3)
-        diff = cfg.get("difficulties", {}).get(s.get("difficulty"), {})
-        s["grain_consumption"] = diff.get("grain_consumption", 20)
-        s["positive_share"] = diff.get("positive_share", 0.5)
-        s["famine_storyline"] = bool(cfg.get("scenarios", {}).get(s.get("scenario"), {}).get("famine_storyline", False))
+        scenario = cfg.get("scenarios", {}).get(s.get("scenario"), {})
+        s["scenario_name"] = scenario.get("name", s.get("scenario"))
+        s["famine_storyline"] = bool(scenario.get("famine_storyline", False))
+        # What the scenario brings along, unless the facilitator typed other numbers.
+        suggested = scenario.get("suggested", {})
+        s.setdefault("grain_consumption", suggested.get("grain_consumption", 20))
+        s.setdefault("good_news_percent", suggested.get("good_news_percent", 50))
+        s["positive_share"] = s["good_news_percent"] / 100
+        s["rules"] = self.rules()
+        if not as_chosen and not s["rules"]["war"]:
+            s["attacks_enabled"] = False
         return s
+
+    def _switch_complexity(self, complexity: str) -> None:
+        """Before play has begun the complexity can change without a new game: nations swap the old starting bonus for the new one."""
+        meta = self.db.get_state("meta", {}) or {}
+        old = self.rules(meta)
+        meta["complexity"] = complexity
+        self.db.set_state("meta", meta)
+        new = self.rules(meta)
+        realms = self.db.get_state("realms", [])
+        for r in realms:
+            for res in set(old["starting_bonus"]) | set(new["starting_bonus"]):
+                field = motion_rules.FIELDS[res]
+                r[field] = max(0, r.get(field, 0) - old["starting_bonus"].get(res, 0) + new["starting_bonus"].get(res, 0))
+        self._recalculate_all_realms(realms)
+        self.db.set_state("realms", realms)
 
     def update_settings(self, changes: Dict[str, Any]) -> Tuple[bool, str]:
         cfg = load_scenario_config()
@@ -176,9 +225,22 @@ class SummitEngine:
                 current[key] = bool(value)
             elif key == "scenario" and value in cfg.get("scenarios", {}):
                 current[key] = value
-            elif key == "difficulty" and value in cfg.get("difficulties", {}):
+                for number in ("grain_consumption", "good_news_percent"):     # the new scenario's own numbers, unless sent along
+                    if number not in changes:
+                        current.pop(number, None)
+            elif key == "complexity" and value in cfg.get("complexities", {}):
                 current[key] = value
         self.db.set_state("settings", current)
+        # The complexity is part of how a game is dealt: it takes effect at once before play begins, otherwise with the next new summit.
+        message = "Settings saved."
+        meta = self.db.get_state("meta", {}) or {}
+        chosen = current.get("complexity")
+        if chosen and chosen != (meta.get("complexity") or "full"):
+            if self.game_in_progress():
+                name = cfg.get("complexities", {}).get(chosen, {}).get("name", chosen)
+                message = f"Settings saved. The game in progress keeps its complexity; {name} starts with the next new summit."
+            else:
+                self._switch_complexity(chosen)
         # A changed working-session length applies straight away if the session has not started yet.
         meta = self.db.get_state("meta", {}) or {}
         if "working_session_seconds" in changes and meta.get("phase") == "working" and not meta.get("is_timer_running") \
@@ -200,7 +262,7 @@ class SummitEngine:
                 schedule[key] = {"times": left(s["minor_events_per_turn"], old.get("fired", 0)), "fired": 0,
                                  "large_times": left(s["large_events_per_turn"], old.get("large_fired", 0)), "large_fired": 0}
                 self.db.set_state("meta", meta)
-        return True, "Settings saved."
+        return True, message
 
     def _ensure_initial_state(self):
         if self.db.get_state("meta") is None:
@@ -217,6 +279,7 @@ class SummitEngine:
         meta = {
             # A new id for every game: nation logins belong to one game, so a new game logs every phone out.
             "game_id": uuid.uuid4().hex[:12],
+            "complexity": settings.get("complexity") or "full",     # fixed for this game
             "current_turn": 1,
             "phase": "working",
             "round_type": "quick",
@@ -252,12 +315,15 @@ class SummitEngine:
         
         raw_realms = config.get("realms") or DEFAULT_REALMS
         realms = [dict(r) for r in raw_realms]
+        starting_bonus = self.rules(meta)["starting_bonus"]
         for r in realms:
             r.setdefault("claimed_lore", [])
             r.setdefault("failed_lore", [])
             r["quiz_active"] = None
             r["quiz_next"] = None
             r["quiz_log"] = []
+            for res, amount in starting_bonus.items():      # the simplified game has no quiz: nations start with its worth
+                r[motion_rules.FIELDS[res]] = r.get(motion_rules.FIELDS[res], 0) + amount
         self._recalculate_all_realms(realms)
         self.db.set_state("realms", realms)
         self.db.set_state("battles", [])
@@ -328,8 +394,10 @@ class SummitEngine:
             else:
                 return "LOW"
 
-    def get_realm_missions(self, realm: Any, all_realms: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def get_realm_missions(self, realm: Any, all_realms: Optional[List[Dict[str, Any]]] = None,
+                           rules: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Returns public mission and active secret missions scaled to player_count and total active realm count."""
+        rules = rules or self.rules()
         if isinstance(realm, str):
             realms = all_realms or self.db.get_state("realms", [])
             realm_obj = next((r for r in realms if r["id"] == realm), None)
@@ -384,8 +452,14 @@ class SummitEngine:
             elif sm.get("stand_in"):
                 playable_pool.append(dict(sm["stand_in"], stands_in_for=sm.get("id")))
 
+        # One mission per delegate, or in the simplified game one for the whole delegation.
+        wanted = playable_pool[:player_count]
+        if rules.get("one_secret_mission"):
+            chosen = realm.get("simple_secret")
+            wanted = [sm for sm in playable_pool if chosen in (sm.get("id"), sm.get("stands_in_for"))] or playable_pool[:1]
+
         active_secrets = []
-        for sm in playable_pool[:player_count]:
+        for sm in wanted:
             sm_copy = {k: v for k, v in sm.items() if k not in ("requires", "stand_in")}
             sm_id = sm_copy.get("id", "")
             if sm_id == "aquila_trade_network":
@@ -482,6 +556,7 @@ class SummitEngine:
         return True, f"Modifiers of {realm['name']} saved."
 
     def _recalculate_all_realms(self, realms: List[Dict[str, Any]]):
+        rules = self.rules()
         for r in realms:
             if "ethos" not in r:
                 r["ethos"] = r.get("values", "")
@@ -523,8 +598,13 @@ class SummitEngine:
             r["assembly_votes"] = max(1, base_votes + self._modifier(r, "votes"))
             r["is_plutocrat"] = False
 
+            # How hard a nation is to play depends on the kind of game (shown in the lobby, on setup, in the Guide and on phones).
+            prefix = "" if rules["free_motions"] else "simple_"
+            r["play_difficulty"] = r.get(f"{prefix}difficulty", r.get("difficulty"))
+            r["play_difficulty_note"] = r.get(f"{prefix}difficulty_note", r.get("difficulty_note", ""))
+
             # Missions assignment scaled to player count and active nations
-            missions = self.get_realm_missions(r, all_realms=realms)
+            missions = self.get_realm_missions(r, all_realms=realms, rules=rules)
             r["public_mission"] = missions["public"]
             r["active_secret_missions"] = missions["secrets"]
 
@@ -552,32 +632,97 @@ class SummitEngine:
     # -------------------------------------------------------------------------
     # State Polling with Exact Wall-Clock Timer Math & Auto-Event Check
     # -------------------------------------------------------------------------
-    AUTOSAVE_INTERVAL = 300  # seconds
+    AUTOSAVE_INTERVAL = int(os.environ.get("AUTOSAVE_SECONDS", 300))
+    RESUME_OFFER_HOURS = 24  # how long after a restart the command deck offers the interrupted game back
 
-    def autosave(self, label: Optional[str] = None, force: bool = False) -> Optional[int]:
-        """Snapshot the whole game every AUTOSAVE_INTERVAL seconds (checked on each state poll)."""
+    def autosave(self, label: Optional[str] = None, force: bool = False, kind: Optional[str] = None) -> Optional[int]:
+        """Snapshot the whole game. Without `force` this runs on every state poll and saves at most once per
+        AUTOSAVE_INTERVAL, and only a game being played that has changed since the last save: an idle server
+        (a projector left open overnight, a game that has ended) must not push real games out of the list."""
         now = time.time()
         if not force and now - getattr(self, "_last_autosave", 0) < self.AUTOSAVE_INTERVAL:
             return None
         self._last_autosave = now
-        meta = self.db.get_state("meta", {}) or {}
+        snapshot = self.db.dump_all()
+        fingerprint = hash(json.dumps(snapshot, sort_keys=True))
+        if not force and (not self.game_in_progress() or fingerprint == getattr(self, "_last_autosave_print", None)):
+            return None
+        self._last_autosave_print = fingerprint
+        meta = snapshot.get("meta") or {}
         label = label or f"Autosave · Turn {meta.get('current_turn', 1)} · {meta.get('phase', 'working').replace('_', ' ')}"
-        return self.db.add_autosave(self.db.dump_all(), label)
+        return self.db.add_autosave(snapshot, label, kind or ("kept" if force else "auto"))
+
+    def save_status(self) -> Dict[str, Any]:
+        """For the facilitator's screens: when this game was last saved, and whether anything needs saving yet."""
+        meta = self.db.get_state("meta", {}) or {}
+        newest = next((s for s in self.db.list_autosaves() if s["game_id"] == str(meta.get("game_id") or "")), None)
+        return {"last_at": newest["created"] if newest else None, "last_label": newest["label"] if newest else "",
+                "interval": self.AUTOSAVE_INTERVAL, "in_progress": self.game_in_progress(), "game_id": meta.get("game_id", ""),
+                "error": getattr(self, "_autosave_error", None)}
+
+    def pins_are_default(self) -> bool:
+        """Are the passcodes still the ones in the config? Those are easy to guess, so the deck suggests shuffling them."""
+        config_pins = {r["id"]: str(r.get("pin")) for r in load_scenario_config().get("realms") or []}
+        return any(config_pins.get(r["id"]) == str(r.get("pin")) for r in self.db.get_state("realms", []))
+
+    def interrupted_game(self) -> Optional[Dict[str, Any]]:
+        """A game a server restart interrupted, to offer back on the command deck while no new game has begun."""
+        if self.game_in_progress():
+            return None
+        meta = self.db.get_state("meta", {}) or {}
+        save = self.db.newest_autosave(["restart", "setup"])
+        if not save or save["game_id"] == str(meta.get("game_id") or "") or save["id"] == self.db.get_state("resume_dismissed") \
+                or time.time() - save["created"] > self.RESUME_OFFER_HOURS * 3600:
+            return None
+        phase = save["phase"].replace("_", " ")
+        return dict(save, description=f"Turn {save['turn']}, {phase}" if save["kind"] == "restart" else "Your settings, nations and passcodes")
+
+    def dismiss_interrupted_game(self) -> None:
+        """The facilitator does not want it back: stop offering it (it stays on the Saves tab)."""
+        offer = self.interrupted_game()
+        if offer:
+            self.db.set_state("resume_dismissed", offer["id"])
 
     def restore_snapshot(self, snapshot: Dict[str, Any]) -> Tuple[bool, str]:
-        if not isinstance(snapshot, dict) or "realms" not in snapshot or "meta" not in snapshot:
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("realms"), list) or not isinstance(snapshot.get("meta"), dict):
             return False, "That is not a Summit of Realms save."
-        self.autosave(label="Before restore", force=True)   # so a mistaken restore can be undone
+        if self.game_in_progress():
+            self.autosave(label="Before restore", force=True)   # so a mistaken restore can be undone
         self.db.restore_all(snapshot)
         meta = snapshot.get("meta", {})
-        if meta.get("is_timer_running"):                       # resume the clock from the saved remaining time
-            meta["turn_timer_end"] = time.time() + meta.get("turn_timer_remaining", 0)
-            self.db.set_state("meta", meta)
+        # A save holds a moment in the past. Every clock waits, with the time it had left, until the facilitator resumes:
+        # nothing may run out while the room is getting back on its feet, and no vote or debate may be jumped over.
+        was_running = bool(meta.get("is_timer_running") or meta.get("is_discussion_timer_running") or meta.get("vote_timer_end") or meta.get("intermission_end"))
+        settings = self.settings()
+        if meta.get("is_timer_running"):
+            meta.update(is_timer_running=False, turn_timer_end=None)
+        if meta.get("is_discussion_timer_running"):
+            meta.update(is_discussion_timer_running=False, discussion_timer_end=None)
+        if meta.get("vote_timer_end"):
+            meta["vote_timer_remaining"] = meta.get("vote_timer_remaining") or meta.get("vote_timer_total") or settings.get("plenary_vote_seconds", 180)
+            meta["vote_timer_end"] = None
+        meta["intermission_end"] = None
+        if meta.get("free_timer_running"):
+            meta.update(free_timer_running=False, free_timer_end=None)
+        self.db.set_state("meta", meta)
+        # A quiz question that was open goes back to being the nation's next one, instead of counting as wrong.
+        realms = snapshot.get("realms", [])
+        for r in realms:
+            if r.get("quiz_active"):
+                r["quiz_next"] = {"question_id": r["quiz_active"]["question_id"], "stake": r["quiz_active"].get("stake", 5)}
+                r["quiz_active"] = None
+        self.db.set_state("realms", realms)
         self.add_news("diplomacy", "SUMMIT RESTORED", "The facilitator restored the summit from a saved game.")
-        return True, f"Game restored (Turn {meta.get('current_turn', 1)})."
+        waiting = " The clock is paused: resume it when everyone is back." if was_running else ""
+        return True, f"Game restored (Turn {meta.get('current_turn', 1)}).{waiting}"
 
     def get_full_state(self) -> Dict[str, Any]:
-        self.autosave()
+        try:
+            self.autosave()
+            self._autosave_error = None
+        except Exception as err:          # the facilitator is told (save_status); the game itself must keep running
+            logging.getLogger(__name__).exception("autosave failed")
+            self._autosave_error = str(err)
         self._tick()
         meta = self.db.get_state("meta", {})
         realms = self.db.get_state("realms", [])
@@ -597,11 +742,18 @@ class SummitEngine:
         active_realms = [r for r in realms if r.get("active", True)]
         meta["active_realms_count"] = len(active_realms)
         meta["total_realms_count"] = len(realms)
+        meta["max_turns"] = load_scenario_config().get("simulation_settings", {}).get("max_turns", 3)
 
         self._add_display_timer(meta)
         self._recalculate_all_realms(realms)
 
         cfg = load_scenario_config()
+        rules = self.rules(meta)
+        if rules["live_hints"]:
+            self._attach_mission_status(realms, proposals, meta)
+        reflection = cfg.get("reflection_questions", [])
+        if rules["one_secret_mission"]:          # a delegation shares its one secret mission
+            reflection = [dict(q, text=q["text"].replace("your personal secret mission", "your secret mission")) for q in reflection]
         return {
             "meta": meta,
             "realms": realms,
@@ -610,15 +762,24 @@ class SummitEngine:
             "active_assembly": active_assembly,
             "news_feed": news_feed,
             "world_lore": cfg.get("world_lore", {}),
-            "resolution_types": cfg.get("resolution_types", []),
+            "resolution_types": self.motion_templates(rules),
             "simulation_settings": cfg.get("simulation_settings", {}),
             "catastrophes_catalog": cfg.get("catastrophes_catalog", []),
             "summit_outcome": self.db.get_state("summit_outcome", None),
             "battles": self.db.get_state("battles", [])[:12],
             "sieges": self.public_sieges(),
             "game_settings": self.settings(),
-            "reflection_questions": cfg.get("reflection_questions", [])
+            "reflection_questions": reflection
         }
+
+    def motion_templates(self, rules: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """The motions of this game: written by the players, or ready-made in the simplified game (the Food Acts are in both)."""
+        rules = rules or self.rules()
+        cfg = load_scenario_config()
+        types = cfg.get("resolution_types", [])
+        if rules["free_motions"]:
+            return types
+        return cfg.get("simple_motions", []) + [t for t in types if not t.get("player_selectable", True)]
 
     # -------------------------------------------------------------------------
     # Clock: timers, automatic phase changes and small events (runs on every state poll)
@@ -1009,6 +1170,9 @@ class SummitEngine:
         active = [r for r in realms if r.get("active", True)]
         if not events or not active:
             return False, "No events or nations."
+        hide_vitality = self.rules()["hide_vitality"]
+        if hide_vitality:                        # a game without Vitality has no news about it either
+            events = [ev for ev in events if set(ev.get("effects", {})) - {"vitality"}] or events
         tone = tone or ("good" if random.random() < s.get("positive_share", 0.5) else "bad")
         pool = [ev for ev in events if ev.get("tone") == tone] or events
         ev = random.choice(pool)
@@ -1020,6 +1184,8 @@ class SummitEngine:
                   "vitality": "Vitality", "standing": "Standing", "stability": "Stability"}
         parts = []
         for res, weight in ev.get("effects", {}).items():
+            if hide_vitality and res == "vitality":
+                continue
             amount = max(1, round(random.uniform(0, cap * abs(weight))))
             amount = amount if weight > 0 else -amount
             field = fields[res]
@@ -1055,6 +1221,8 @@ class SummitEngine:
         effects = dict(cat.get("effects", {}))
         for k, v in extra_damage.items():
             effects[k] = effects.get(k, 0) + v
+        if self.rules()["hide_vitality"]:
+            effects.pop("vitality", None)
 
         impact_summary = []
         for k, delta in effects.items():
@@ -1208,7 +1376,8 @@ class SummitEngine:
 
         realms = self.db.get_state("realms", [])
         target_query = event.get("target") or event.get("target_type") or "all"
-        target_realms = self._resolve_target_realms(realms, target_query)
+        # Only nations at the table: one that is not playing keeps its numbers and stays out of the news.
+        target_realms = self._resolve_target_realms([r for r in realms if r.get("active", True)] or realms, target_query)
 
         effects = event.get("effects", {})
         res_keys = {"grain": "alchemical_grain", "cores": "aether_cores", "silk": "echo_silk"}
@@ -1243,7 +1412,9 @@ class SummitEngine:
 
         meta = self.db.get_state("meta", {})
         if meta.get("phase") != "working":
-            return False, "Domestic policies can only be enacted during Working Sessions."
+            return False, "Decrees can only be enacted during a working session."
+        if action_type in self.rules(meta)["hidden_decrees"]:
+            return False, "This decree is not part of this summit."
 
         if action_type == "relief":
             # Emergency Grain Rationing: -15 Grain -> +15 Vitality
@@ -1258,7 +1429,7 @@ class SummitEngine:
                 f"CIVIC RELIEF DISPATCH: {realm['name'].upper()}",
                 f"{realm['name']} released 15 Alchemical Grain to feed domestic populations (+15 Vitality)."
             )
-            self.trigger_audio_cue("chime", f"{realm['name']}: Grain Rationing Enacted")
+            self.trigger_audio_cue("decree", f"{realm['name']}: Grain Rationing Enacted")
             return True, "Emergency grain distributed. Public vitality improved (+15 Vitality)."
 
         elif action_type == "forge":
@@ -1275,7 +1446,7 @@ class SummitEngine:
                 f"INDUSTRIAL SURGE IN {realm['name'].upper()}",
                 f"{realm['name']} mobilized heavy industrial forges (+15 Aether Cores)."
             )
-            self.trigger_audio_cue("chime", f"{realm['name']}: Forges Activated")
+            self.trigger_audio_cue("decree", f"{realm['name']}: Forges Activated")
             return True, "Industrial fabrication active (+15 Aether Cores)."
 
         elif action_type == "gala":
@@ -1292,7 +1463,7 @@ class SummitEngine:
                 f"GRAND CULTURAL GALA: {realm['name'].upper()}",
                 f"{realm['name']} celebrated international prestige (+10 Standing, +10 Stability)."
             )
-            self.trigger_audio_cue("chime", f"{realm['name']}: Grand Gala Hosted")
+            self.trigger_audio_cue("decree", f"{realm['name']}: Grand Gala Hosted")
             return True, "Grand Gala hosted successfully (+10 Standing, +10 Stability)."
 
         elif action_type == "security":
@@ -1308,7 +1479,7 @@ class SummitEngine:
                 f"SECURITY MOBILIZATION: {realm['name'].upper()}",
                 f"{realm['name']} deployed security wardens to stabilize domestic districts (+15 Stability)."
             )
-            self.trigger_audio_cue("chime", f"{realm['name']}: Civil Guard Mobilized")
+            self.trigger_audio_cue("decree", f"{realm['name']}: Civil Guard Mobilized")
             return True, "Civil order restored (+15 Stability)."
 
         elif action_type == "muster":
@@ -1325,7 +1496,7 @@ class SummitEngine:
                 f"MILITARY MOBILIZATION: {realm['name'].upper()}",
                 f"{realm['name']} levied knightly battalions and fortified territorial garrisons (+15 Military Power)."
             )
-            self.trigger_audio_cue("chime", f"{realm['name']}: Regiments Mustered")
+            self.trigger_audio_cue("decree", f"{realm['name']}: Regiments Mustered")
             return True, "Sovereign regiments mustered (+15 Military Power)."
 
         return False, "Unknown domestic action."
@@ -1358,8 +1529,10 @@ class SummitEngine:
     def admin_set_timer(self, seconds: int):
         meta = self.db.get_state("meta", {})
         secs = max(0, int(seconds))
+        not_started = not meta.get("is_timer_running") and meta.get("turn_timer_remaining") == meta.get("turn_timer_total")
         meta["turn_timer_remaining"] = secs
-        meta["turn_timer_total"] = max(meta.get("turn_timer_total", 300), secs)
+        # A clock that has not started yet simply gets another length; the session has not begun because of it.
+        meta["turn_timer_total"] = secs if not_started else max(meta.get("turn_timer_total", 300), secs)
         if meta.get("is_timer_running", False):
             meta["turn_timer_end"] = time.time() + secs
         else:
@@ -1370,6 +1543,8 @@ class SummitEngine:
         meta = self.db.get_state("meta", {})
         cur = meta.get("turn_timer_remaining", 0)
         new_val = max(0, cur + delta_seconds)
+        if not meta.get("is_timer_running") and cur == meta.get("turn_timer_total"):
+            meta["turn_timer_total"] = new_val           # not started yet: another length, not a session under way
         meta["turn_timer_remaining"] = new_val
         if meta.get("is_timer_running", False):
             meta["turn_timer_end"] = time.time() + new_val
@@ -1466,6 +1641,8 @@ class SummitEngine:
         meta["current_motion_index"] = 0
         meta["catastrophe_checked_minutes"] = []
         meta["latest_catastrophe"] = None
+        # Saved before the sound cue and the news below: a cue writes to the stored meta, and the news is stamped with the new turn.
+        self.db.set_state("meta", meta)
 
         if new_turn == 2 and famine:
             self.trigger_audio_cue("alert", "Round 2: Security Crisis")
@@ -1479,13 +1656,12 @@ class SummitEngine:
         else:
             self.trigger_audio_cue("turn", f"Turn {new_turn} Commenced")
 
-        self.db.set_state("meta", meta)
-
         self.add_news(
             "turn",
             f"OPERATIONAL TURN {new_turn} BEGINS",
             f"Background socioeconomic cycles processed for Turn {current_turn}. Continental reserves and stability updated."
         )
+        self.autosave(label=f"Start of Turn {new_turn}", force=True)        # a clean point to come back to
 
         return {
             "previous_turn": current_turn,
@@ -1506,6 +1682,7 @@ class SummitEngine:
         self._recalculate_all_realms(realms)
         self.db.set_state("realms", realms)
         meta["famine_applied"] = True
+        self.db.set_state("meta", meta)        # before the sound cue, which writes to the stored meta
 
         quota_b = max(20, (max(1, len(active_realms)) - 1) * 10)
         proposals = self.db.get_state("proposals", [])
@@ -1555,6 +1732,7 @@ class SummitEngine:
         efficient = round(base * 0.75)
         starv_vit = cfg.get("starvation_vitality_loss", 25)
         starv_stab = cfg.get("starvation_stability_loss", 20)
+        penalty = (f"-{starv_stab} Stability" if self.rules()["hide_vitality"] else f"-{starv_vit} Vitality, -{starv_stab} Stability")
         for r in active_realms:
             use = efficient if r.get("tech_efficiency_unlocked") else base
             use = max(0, round(use * (1 + self._modifier(r, "grain_use_pct") / 100)))
@@ -1564,7 +1742,7 @@ class SummitEngine:
                 r["public_vitality"] = max(0, r["public_vitality"] - starv_vit)
                 r["civil_stability"] = max(0, r["civil_stability"] - starv_stab)
                 self.add_news("crisis", f"FAMINE EMERGENCY IN {r['name'].upper()}",
-                              f"Silos ran dry this cycle. Populations are starving (-{starv_vit} Vitality, -{starv_stab} Stability)!")
+                              f"Silos ran dry this cycle. Populations are starving ({penalty})!")
             else:
                 r["is_starving"] = False
 
@@ -1776,6 +1954,11 @@ class SummitEngine:
                         realms: List[Dict[str, Any]], target_realm_id: Optional[str]) -> Tuple[Optional[List[Dict[str, Any]]], List[str], str]:
         """(lines, sentences, error) for a template and the player's choices. The sentences are what players read
         under 'If passed' and exactly what the game carries out."""
+        if template.get("lines") is not None and not template.get("builder"):      # a ready-made motion of the simplified game
+            filled = self._fill_simple_motion(template, params, next((r["name"] for r in realms if r["id"] == proposer_id), "This nation"))
+            if filled[0] is None:
+                return None, [], filled[1]
+            return filled[0], [filled[1]], ""
         if not template.get("builder"):                  # a question: no effect on resources
             return [], [template.get("effect_plain", "No change to resources.")], ""
         if template.get("builder") == "open":            # no template: the game masters carry it out as written
@@ -1788,13 +1971,39 @@ class SummitEngine:
         names = {r["id"]: r["name"] for r in realms}
         return lines, [motion_rules.describe(l, names, proposer_id) for l in lines], ""
 
+    @staticmethod
+    def _fill_simple_motion(template: Dict[str, Any], params: Optional[Dict[str, Any]], proposer_name: str) -> Tuple[Any, str, str, str]:
+        """A ready-made motion with the chosen amount: (lines, sentence, title, terms), or (None, error, '', '').
+        The amount is the only thing a player can change."""
+        spec, amount = template.get("amount"), None
+        if spec:
+            raw = (params or {}).get("amount", spec["default"]) if isinstance(params, dict) else spec["default"]
+            try:
+                amount = int(raw)
+            except (TypeError, ValueError):
+                return None, "The amount must be a whole number.", "", ""
+            if not spec["min"] <= amount <= spec["max"]:
+                return None, f"Choose an amount between {spec['min']} and {spec['max']}.", "", ""
+
+        def fill(value):
+            if isinstance(value, dict):
+                return {k: fill(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [fill(v) for v in value]
+            if value == "{amount}":
+                return amount
+            if isinstance(value, str):
+                return value.replace("{amount}", str(amount)).replace("{me}", proposer_name)
+            return value
+        return fill(template["lines"]), fill(template["effect_plain"]), fill(template["title"]), fill(template["terms"])
+
     def preview_proposal(self, proposer_id: str, effect_type: str, params: Optional[Dict[str, Any]] = None,
                          target_realm_id: Optional[str] = None) -> Tuple[bool, str, List[str]]:
         """What a motion would do, written out, before it is tabled (the phone shows this under 'If passed')."""
         realms = self.db.get_state("realms", [])
         if not any(r["id"] == proposer_id for r in realms):
             return False, "Proposer realm not found.", []
-        template = next((t for t in load_scenario_config().get("resolution_types", [])
+        template = next((t for t in self.motion_templates()
                          if t["id"] == effect_type and t.get("player_selectable", True)), None)
         if not template:
             return False, "Choose one of the motion templates.", []
@@ -1813,15 +2022,23 @@ class SummitEngine:
         if not proposer:
             return False, "Proposer realm not found.", None
 
-        # Players table motions from the templates in scenario_config.json (resolution_types).
-        template = next((t for t in load_scenario_config().get("resolution_types", [])
+        # Players table motions from the templates in scenario_config.json (resolution_types, or simple_motions
+        # in the simplified game, where the wording is fixed and only the amount can be chosen).
+        rules = self.rules()
+        template = next((t for t in self.motion_templates(rules)
                          if t["id"] == effect_type and t.get("player_selectable", True)), None)
         if not template:
             return False, "Choose one of the motion templates.", None
-        title = (title or "").strip()[:100]
-        description = (description or "").strip()[:1000]
-        if not title or not description:
-            return False, "Give the motion a title and terms.", None
+        if rules["free_motions"]:
+            title = (title or "").strip()[:100]
+            description = (description or "").strip()[:1000]
+            if not title or not description:
+                return False, "Give the motion a title and terms.", None
+        else:
+            _lines, error_or_text, title, description = self._fill_simple_motion(template, params, proposer["name"])
+            if _lines is None:
+                return False, error_or_text, None
+            target_seconder_id = target_realm_id = None     # any nation may co-sponsor; no motion names a target
 
         # Motions are tabled during the working session: the Assembly docket is fixed once the vote starts.
         meta = self.db.get_state("meta", {})
@@ -1994,18 +2211,20 @@ class SummitEngine:
         debate_secs = settings.get("debate_session_seconds", 300)
 
         current_turn = meta.get("current_turn", 1)
-        if current_turn < settings["max_turns"]:
+        if current_turn < settings["max_turns"] or not settings["rules"]["grand_plenary"]:
             meta["phase"] = "plenary_quick"
             meta["vote_timer_end"] = time.time() + settings.get("plenary_vote_seconds", 180)
             meta["vote_timer_total"] = settings.get("plenary_vote_seconds", 180)
             self.db.set_state("meta", meta)
+            final = current_turn >= settings["max_turns"]
+            count = f"{len(qualified)} motion{'' if len(qualified) == 1 else 's'}"
             self.add_news(
                 "assembly",
-                "BETWEEN-ROUNDS PLENARY CONVENED",
-                f"{len(qualified)} motions qualified for sovereign vote. Direct roll-call voting open on all qualified resolutions."
+                "FINAL ASSEMBLY CONVENED" if final else "THE ASSEMBLY IS CONVENED",
+                f"{count} on the ballot. Voting is open."
             )
-            self.trigger_audio_cue("gong", "Plenary Session Convened")
-            return True, f"Between-Rounds Plenary Convened with {len(qualified)} qualified motions."
+            self.trigger_audio_cue("gong", "Time for the final vote" if final else "Time to vote: the Assembly is convened")
+            return True, f"The {'final Assembly' if final else 'Assembly'} is convened with {count}."
         else:
             meta["phase"] = "grand_plenary_discussion"
             meta["discussion_timer_remaining"] = debate_secs
@@ -2063,11 +2282,11 @@ class SummitEngine:
             tallies = active_prop.get("tallies", {})
             outcome = "passed" if tallies.get("support_weight", 0) > tallies.get("oppose_weight", 0) else "rejected"
             active_prop["status"] = outcome
-            effect_msg = self._apply_proposal_effect(active_prop)
+            effect_msg = self._apply_proposal_effect(active_prop) if outcome == "passed" else ""   # a rejected motion changes nothing
             self.add_news(
                 "assembly",
                 f"RESOLUTION {outcome.upper()}: '{active_prop['title']}'",
-                f"Floor vote finalized: {tallies.get('support_weight', 0)} Support vs {tallies.get('oppose_weight', 0)} Oppose. {effect_msg}"
+                f"Floor vote finalized: {tallies.get('support_weight', 0)} Support vs {tallies.get('oppose_weight', 0)} Oppose. {effect_msg}".strip()
             )
 
         if idx + 1 < len(docket):
@@ -2121,8 +2340,10 @@ class SummitEngine:
         if phase not in ("plenary_quick", "grand_plenary_voting"):
             return False, f"Plenary voting is not currently open (current phase: {phase})."
 
+        docket = meta.get("plenary_docket", [])
+        if prop_id not in docket:
+            return False, "This motion is not on the ballot."
         if phase == "grand_plenary_voting":
-            docket = meta.get("plenary_docket", [])
             idx = meta.get("current_motion_index", 0)
             if idx < len(docket) and docket[idx] != prop_id:
                 return False, "This resolution is not currently on the plenary voting floor."
@@ -2159,7 +2380,8 @@ class SummitEngine:
             "total_cast": len(votes)
         }
         self.db.set_state("proposals", proposals)
-        return True, f"Sovereign ballot ({weight} Votes) recorded: {choice.upper()}."
+        word = {"support": f"for, with {weight} vote{'' if weight == 1 else 's'}", "oppose": f"against, with {weight} vote{'' if weight == 1 else 's'}"}.get(choice)
+        return True, f"Your vote is in: {word}." if word else "Your vote is in: you abstained."
 
     def conclude_quick_plenary(self) -> Tuple[bool, str]:
         meta = self.db.get_state("meta", {})
@@ -2189,13 +2411,14 @@ class SummitEngine:
         meta["vote_timer_end"] = None
         self.db.set_state("meta", meta)
 
+        final = meta.get("current_turn", 1) >= self.settings()["max_turns"]
         self.add_news(
             "assembly",
-            "BETWEEN-ROUNDS PLENARY CONCLUDED",
-            f"All qualified motions settled ({passed_count} ratified, {len(docket) - passed_count} rejected). Ready to process end of turn."
+            "FINAL ASSEMBLY CONCLUDED" if final else "THE ASSEMBLY HAS VOTED",
+            f"{passed_count} motion{'' if passed_count == 1 else 's'} passed, {len(docket) - passed_count} rejected."
         )
-        self.trigger_audio_cue("chime", "Plenary Concluded")
-        return True, f"Quick Plenary settled. {passed_count} of {len(docket)} motions passed."
+        self.trigger_audio_cue("chime", "The vote is over")
+        return True, f"The vote is settled. {passed_count} of {len(docket)} motions passed."
 
     def _apply_proposal_effect(self, prop: Dict[str, Any]) -> str:
         effect_type = prop.get("effect_type", "custom")
@@ -2389,25 +2612,44 @@ class SummitEngine:
         return {r["id"]: r["pin"] for r in realms}
 
     def game_in_progress(self) -> bool:
-        """True once play has begun (clock started, a trade or motion made, or past Turn 1)."""
+        """True once play has begun (clock started, a trade or motion made, an Assembly held or past Turn 1)."""
         meta = self.db.get_state("meta", {}) or {}
-        return bool(meta.get("current_turn", 1) > 1 or meta.get("is_timer_running")
+        return bool(meta.get("current_turn", 1) > 1 or meta.get("is_timer_running") or meta.get("phase", "working") != "working"
                     or meta.get("turn_timer_remaining") != meta.get("turn_timer_total")
                     or self.db.get_state("trades", []) or self.db.get_state("proposals", []))
 
     def fresh_start(self) -> None:
         """Called when the server starts: a brand-new game straight from scenario_config.json (settings,
         roster, delegates and passcodes included). A game that was under way is kept on the Saves tab."""
-        if self.db.get_state("meta") and self.game_in_progress():
-            meta = self.db.get_state("meta", {})
-            self.autosave(label=f"Before server restart · Turn {meta.get('current_turn', 1)}", force=True)
+        meta = self.db.get_state("meta")
+        if meta and self.game_in_progress():
+            kind = "kept" if meta.get("phase") == "summit_concluded" else "restart"     # a finished game needs no rescuing
+            self.autosave(label=f"Before server restart · Turn {meta.get('current_turn', 1)}", force=True, kind=kind)
+        elif meta and self._setup_differs_from_config():
+            self.autosave(label="Before server restart · prepared game", force=True, kind="setup")
         self.db.set_state("settings", {})
         self.reset_simulation()
         self.clear_realm_sessions()
 
+    def _setup_differs_from_config(self) -> bool:
+        """Has the facilitator prepared anything a restart would lose (settings, nations, delegates, passcodes)?"""
+        cfg = load_scenario_config()
+        defaults = dict(cfg.get("game_settings_defaults", {}))
+        defaults = {**cfg.get("scenarios", {}).get(defaults.get("scenario"), {}).get("suggested", {}), **defaults}
+        if any(defaults.get(key) != value for key, value in (self.db.get_state("settings", {}) or {}).items()):
+            return True
+        config_realms = {r["id"]: r for r in cfg.get("realms") or []}
+        for r in self.db.get_state("realms", []) or []:
+            c = config_realms.get(r.get("id"))
+            if c and (str(r.get("pin")) != str(c.get("pin")) or r.get("active", True) != c.get("active", True)
+                      or r.get("player_count") != c.get("player_count")):
+                return True
+        return False
+
     def start_new_summit(self) -> Tuple[bool, str]:
         """Fresh game with the current settings, keeping the roster, delegation sizes and passcodes."""
-        self.autosave(label="Before new summit", force=True)
+        if self.game_in_progress():
+            self.autosave(label="Before new summit", force=True)
         keep = {r["id"]: {k: r.get(k) for k in ("active", "player_count", "pin")} for r in self.db.get_state("realms", [])}
         self.reset_simulation()
         realms = self.db.get_state("realms", [])
@@ -2417,10 +2659,8 @@ class SummitEngine:
         self.db.set_state("realms", realms)
         self.clear_realm_sessions()
         s = self.settings()
-        cfg = load_scenario_config()
         self.add_news("turn", "A NEW SUMMIT IS PREPARED",
-                      f"Scenario: {cfg.get('scenarios', {}).get(s['scenario'], {}).get('name', s['scenario'])} · "
-                      f"difficulty {s['difficulty']} · {len([r for r in realms if r.get('active', True)])} nations.")
+                      f"{s['rules']['name']} · scenario: {s['scenario_name']} · {len([r for r in realms if r.get('active', True)])} nations.")
         return True, "New summit ready. Start the clock on the command deck when everyone has joined."
 
     def admin_toggle_realm(self, realm_id: str, active: Optional[bool] = None) -> Tuple[bool, str]:
@@ -2530,7 +2770,6 @@ class SummitEngine:
             if storyline and turn < 3:
                 return False, "In this scenario the Great Famine strikes automatically when Turn 3 begins."
             self._apply_great_famine(meta, realms, settings)
-            self.db.set_state("meta", meta)
             return True, "Round 3 Great Famine applied (-15 Grain to all nations, Food Acts on the ballot)."
 
         return False, f"Unknown round: {round_num}"
@@ -2586,7 +2825,7 @@ class SummitEngine:
         realms = [r for r in realms if r["id"] != realm_id]
 
         trades = self.db.get_state("trades", [])
-        trades = [t for t in trades if t.get("initiator_id") != realm_id and t.get("target_id") != realm_id]
+        trades = [t for t in trades if t.get("sender_id") != realm_id and t.get("receiver_id") != realm_id]
         self.db.set_state("trades", trades)
 
         self._recalculate_all_realms(realms)
@@ -2941,6 +3180,244 @@ class SummitEngine:
         expected = os.environ.get("ADMIN_PASSCODE") or config.get("simulation_settings", {}).get("admin_passcode", "admin2026")
         return str(passcode).strip() == str(expected).strip()
 
+    # -------------------------------------------------------------------------
+    # Missions: how a nation stands, for the final results and for the live hints of the simplified game
+    # -------------------------------------------------------------------------
+    # Secret missions whose explanation only quotes the nation's own numbers, so a phone may show it during the game.
+    SELF_CONTAINED_MISSIONS = {"sylvan_winter", "sylvan_defense", "sylvan_defense_home", "valkhor_grain", "solaris_silk",
+                               "umbra_autonomy", "aquila_trade_network", "aethelgard_reserves"}
+
+    def _mission_context(self, realms: List[Dict[str, Any]], proposals: List[Dict[str, Any]], meta: Dict[str, Any]) -> Dict[str, Any]:
+        active = [r for r in realms if r.get("active", True)] or realms
+        return {
+            "active": active,
+            "starving": sum(1 for r in active if r.get("is_starving") or r.get("alchemical_grain", 0) <= 0),
+            "low_stability": sum(1 for r in active if r.get("civil_stability", 0) < 50),
+            "zero_stability": sum(1 for r in active if r.get("civil_stability", 0) <= 0 or r.get("stability_hit_zero"))
+            or meta.get("any_stability_zero_reached", False),
+            # Questions to the game masters are not resolutions: they do not count towards missions.
+            "passed": [p for p in proposals if p.get("status") == "passed" and p.get("effect_type") != "gm_question"],
+            "failed": [p for p in proposals if p.get("status") == "rejected" and p.get("effect_type") != "gm_question"],
+            "trade_partners": self.db.get_state("trade_partners", {}),
+            "military_trades": self.db.get_state("military_trades", []),
+        }
+
+    def _attach_mission_status(self, realms: List[Dict[str, Any]], proposals: List[Dict[str, Any]], meta: Dict[str, Any]) -> None:
+        """Simplified game: where each nation's missions stand right now. Phones only get their own (see sanitize_state)."""
+        ctx = self._mission_context(realms, proposals, meta)
+        for r in ctx["active"]:
+            met, _explanation, hint, secrets = self._evaluate_missions(r, ctx)
+            r["mission_status"] = {
+                "public": {"met": met, "note": hint},
+                "secrets": [{"id": sm["id"], "met": sm["achieved"], "note": sm["explanation"] if sm["id"] in self.SELF_CONTAINED_MISSIONS else ""}
+                            for sm in secrets],
+            }
+
+    def _evaluate_missions(self, r: Dict[str, Any], ctx: Dict[str, Any]) -> Tuple[bool, str, str, List[Dict[str, Any]]]:
+        """(public mission met, explanation, a hint safe to show during the game, the secret missions)."""
+        active_realms = ctx["active"]
+        starving_count, low_stability_count, zero_stability_count = ctx["starving"], ctx["low_stability"], ctx["zero_stability"]
+        passed_proposals, failed_proposals = ctx["passed"], ctx["failed"]
+        trade_partners, military_trades = ctx["trade_partners"], ctx["military_trades"]
+        N = max(1, len(active_realms))
+        r_id = r["id"]
+
+        # -------------------------------------------------------------
+        # Public Mission Evaluation
+        # -------------------------------------------------------------
+        pub_achieved = False
+        pub_explanation = ""
+
+        if r_id == "sylvan":
+            # No nation may starve (0 Grain) at the end of the summit
+            pub_achieved = all(o.get("alchemical_grain", 0) > 0 for o in active_realms)
+            pub_explanation = "No nation ended with 0 Grain." if pub_achieved else f"Nations suffering famine: {starving_count}."
+
+        elif r_id == "val_khor":
+            target_req = scaled_targets(N)["modernised"]
+            reached_cores = sum(1 for o in active_realms if o.get("aether_cores", 0) >= 60)
+            pub_achieved = (reached_cores >= target_req)
+            pub_explanation = f"{reached_cores} of {N} nations reached ≥60 Cores (Target: ≥{target_req})."
+
+        elif r_id == "solaria":
+            # Broadly supported international resolutions passed
+            support_threshold = scaled_targets(N)["broad_support"]
+            passed_with_broad_support = 0
+            for p in passed_proposals:
+                supporter_count = sum(1 for v in p.get("votes", {}).values() if v.get("choice") == "support")
+                if supporter_count >= support_threshold:
+                    passed_with_broad_support += 1
+            pub_achieved = (passed_with_broad_support >= 3)
+            pub_explanation = f"{passed_with_broad_support} resolution{'' if passed_with_broad_support == 1 else 's'} passed with support from ≥{support_threshold} nations (Target: ≥3)."
+
+        elif r_id == "umbra":
+            # No nation may hold more than 90 Military
+            max_mil = max((o.get("military_power", 0) for o in active_realms), default=0)
+            pub_achieved = all(o.get("military_power", 0) <= 90 for o in active_realms)
+            pub_explanation = f"Highest military power on continent: {max_mil} (Target: ≤90)."
+
+        elif r_id == "aquila":
+            # Every active nation must trade with at least target_partners different nations
+            target_partners = scaled_targets(N)["partners"]
+            all_traded = all(len(trade_partners.get(o["id"], [])) >= target_partners for o in active_realms)
+            pub_achieved = all_traded
+            min_partners = min((len(trade_partners.get(o["id"], [])) for o in active_realms), default=0)
+            pub_explanation = f"All nations have ≥{target_partners} trade partners." if pub_achieved else f"Least connected nation has only {min_partners} trade partner{'' if min_partners == 1 else 's'} (Target: ≥{target_partners})."
+
+        elif r_id == "aethelgard":
+            # No nation may finish with Stability < 50 and none hit 0
+            pub_achieved = all(o.get("civil_stability", 0) >= 50 for o in active_realms) and not zero_stability_count
+            pub_explanation = "All nations maintained stability ≥50 and none collapsed to 0." if pub_achieved else f"Nations with stability <50: {low_stability_count}; collapsed to 0: {'Yes' if zero_stability_count else 'No'}."
+
+        else:
+            pub_achieved = r.get("public_vitality", 0) >= 50
+            pub_explanation = f"Vitality: {r.get('public_vitality')}/100."
+
+        # -------------------------------------------------------------
+        # Secret Missions Evaluation (scaled to active player count)
+        # -------------------------------------------------------------
+        active_secrets = r.get("active_secret_missions", [])
+        secret_evals = []
+
+        for sm in active_secrets:
+            sm_id = sm.get("id")
+            achieved = False
+            explanation = ""
+
+            # Sylvan
+            if sm_id == "sylvan_winter":
+                achieved = r.get("alchemical_grain", 0) >= 70
+                explanation = f"Grain reserves: {r.get('alchemical_grain')} (Target: ≥70)."
+            elif sm_id == "sylvan_defense":
+                mil = r.get("military_power", 0)
+                bought_from_aethelgard = any(
+                    mt.get("buyer") == "sylvan" and mt.get("seller") == "aethelgard" for mt in military_trades
+                )
+                achieved = (mil >= 40 and not bought_from_aethelgard)
+                explanation = f"Military: {mil} (Target: ≥40). Purchased from Aethelgard: {'Yes (Violated)' if bought_from_aethelgard else 'No (Honored)'}."
+
+            # Val-Khor
+            elif sm_id == "valkhor_tech":
+                other_max_cores = max((o.get("aether_cores", 0) for o in active_realms if o["id"] != "val_khor"), default=0)
+                achieved = r.get("aether_cores", 0) >= other_max_cores + 20
+                explanation = f"Val-Khor Cores: {r.get('aether_cores')}, second highest: {other_max_cores} (Lead: {r.get('aether_cores') - other_max_cores}, Target: ≥20)."
+            elif sm_id == "valkhor_grain":
+                achieved = r.get("alchemical_grain", 0) >= 30
+                explanation = f"Grain reserves: {r.get('alchemical_grain')} (Target: ≥30)."
+            elif sm_id == "valkhor_contain_military":
+                aethel = next((o for o in active_realms if o["id"] == "aethelgard"), None)
+                aethel_mil = aethel.get("military_power", 0) if aethel else 0
+                diff = aethel_mil - r.get("military_power", 0)
+                achieved = (diff <= 10)
+                explanation = f"Aethelgard Military: {aethel_mil}, Val-Khor: {r.get('military_power', 0)} (Difference: {diff}, Target: ≤10 ahead)."
+
+            # Solaris
+            elif sm_id == "solaris_veto":
+                solaris_opposed_passed = [p["title"] for p in passed_proposals if p.get("votes", {}).get("solaria", {}).get("choice") == "oppose"]
+                achieved = (len(solaris_opposed_passed) == 0)
+                explanation = "No resolution opposed by Solaris passed." if achieved else f"Resolutions passed over Solaris veto: {', '.join(solaris_opposed_passed)}."
+            elif sm_id == "solaris_standing":
+                other_max_standing = max((o.get("diplomatic_standing", 0) for o in active_realms if o["id"] != "solaria"), default=0)
+                achieved = (r.get("diplomatic_standing", 0) > other_max_standing)
+                explanation = f"Solaris Standing: {r.get('diplomatic_standing')}, second highest: {other_max_standing} (Target: strictly highest on continent)."
+            elif sm_id == "solaris_contain_valkhor":
+                vk = next((o for o in active_realms if o["id"] == "val_khor"), None)
+                if vk:
+                    max_c = max(o.get("aether_cores", 0) for o in active_realms)
+                    max_m = max(o.get("military_power", 0) for o in active_realms)
+                    both_top = (vk.get("aether_cores", 0) >= max_c and vk.get("military_power", 0) >= max_m)
+                    achieved = not both_top
+                    explanation = "Val-Khor did not dominate both sectors simultaneously." if achieved else "Val-Khor achieved supremacy in both Cores and Military!"
+                else:
+                    achieved = True
+                    explanation = "Val-Khor is not active."
+            elif sm_id == "solaris_silk":
+                achieved = r.get("echo_silk", 0) >= 50
+                explanation = f"Silk reserves: {r.get('echo_silk')} (Target: ≥50)."
+
+            # Umbra
+            elif sm_id == "umbra_challenge":
+                solaris_supported_failed = [p["title"] for p in failed_proposals if p.get("votes", {}).get("solaria", {}).get("choice") == "support"]
+                has_failed = (len(solaris_supported_failed) >= 1)
+                standing_ok = r.get("diplomatic_standing", 0) >= 50
+                achieved = (has_failed and standing_ok)
+                explanation = f"Solaris initiative defeated: {'Yes' if has_failed else 'No'}, Umbra Standing: {r.get('diplomatic_standing')}/100 (Target: ≥50)."
+            elif sm_id == "umbra_autonomy":
+                achieved = (r.get("aether_cores", 0) >= 60 and r.get("civil_stability", 0) >= 60)
+                explanation = f"Cores: {r.get('aether_cores')} (≥60), Stability: {r.get('civil_stability')} (≥60)."
+
+            # Aquila
+            elif sm_id == "aquila_wealth":
+                other_max_wealth = max((o.get("total_wealth", 0) for o in active_realms if o["id"] != "aquila"), default=0)
+                lead = r.get("total_wealth", 0) - other_max_wealth
+                achieved = (lead >= 25)
+                explanation = f"Aquila Total Wealth: {r.get('total_wealth')}, second wealthiest: {other_max_wealth} (Lead: {lead}, Target: ≥25)."
+            elif sm_id == "aquila_trade_network":
+                req_target = scaled_targets(N)["network"]
+                partners_count = len(trade_partners.get("aquila", []))
+                achieved = (partners_count >= req_target)
+                explanation = f"Aquila traded with {partners_count} nation{'' if partners_count == 1 else 's'} (Target: ≥{req_target} of {N - 1})."
+
+            # Aethelgard
+            elif sm_id == "aethelgard_superiority":
+                other_max_mil = max((o.get("military_power", 0) for o in active_realms if o["id"] != "aethelgard"), default=0)
+                lead = r.get("military_power", 0) - other_max_mil
+                achieved = (lead >= 20)
+                explanation = f"Aethelgard Military: {r.get('military_power')}, second strongest: {other_max_mil} (Lead: {lead}, Target: ≥20)."
+            elif sm_id == "aethelgard_contain_valkhor":
+                vk = next((o for o in active_realms if o["id"] == "val_khor"), None)
+                vk_mil = vk.get("military_power", 0) if vk else 0
+                achieved = (vk_mil <= 75)
+                explanation = f"Val-Khor Military: {vk_mil} (Target: ≤75)."
+            # Stand-ins used when the nation a mission is about is not playing
+            elif sm_id == "sylvan_defense_home":
+                mil = r.get("military_power", 0)
+                bought = [mt.get("seller") for mt in military_trades if mt.get("buyer") == r_id]
+                achieved = (mil >= 40 and not bought)
+                explanation = f"Military: {mil} (Target: ≥40). Bought Military from another nation: {'Yes (Violated)' if bought else 'No (Honored)'}."
+            elif sm_id == "valkhor_parity":
+                other_max = max((o.get("military_power", 0) for o in active_realms if o["id"] != r_id), default=0)
+                diff = other_max - r.get("military_power", 0)
+                achieved = (diff <= 10)
+                explanation = f"Strongest other Military: {other_max}, Val-Khor: {r.get('military_power', 0)} (Difference: {diff}, Target: ≤10 ahead)."
+            elif sm_id == "solaris_contain_rivals":
+                max_c = max(o.get("aether_cores", 0) for o in active_realms)
+                max_m = max(o.get("military_power", 0) for o in active_realms)
+                dominant = [o["name"] for o in active_realms if o["id"] != r_id
+                            and o.get("aether_cores", 0) >= max_c and o.get("military_power", 0) >= max_m]
+                achieved = not dominant
+                explanation = "No rival leads in both Cores and Military." if achieved else f"{', '.join(dominant)} leads in both Cores and Military!"
+            elif sm_id == "aethelgard_contain_rivals":
+                other_max = max((o.get("military_power", 0) for o in active_realms if o["id"] != r_id), default=0)
+                achieved = (other_max <= 60)
+                explanation = f"Strongest other Military: {other_max} (Target: ≤60)."
+
+            elif sm_id == "aethelgard_reserves":
+                g = r.get("alchemical_grain", 0)
+                c = r.get("aether_cores", 0)
+                achieved = (g >= 35 and c >= 35)
+                explanation = f"Grain: {g} (≥35), Cores: {c} (≥35)."
+
+            else:
+                achieved = (r.get("public_vitality", 0) >= 50)
+                explanation = "Standard sovereign survival."
+
+            secret_evals.append({
+                "id": sm_id,
+                "title": sm.get("title", "Secret Objective"),
+                "objective": sm.get("objective", ""),
+                "achieved": achieved,
+                "explanation": explanation
+            })
+
+        # The hint never quotes another nation's exact numbers: nations learn those from people, not the screen.
+        pub_hint = pub_explanation
+        if r_id == "sylvan":
+            pub_hint = "Every nation has Grain right now." if pub_achieved else f"Nations out of Grain right now: {starving_count}."
+        elif r_id == "umbra":
+            pub_hint = "No nation is above 90 Military right now." if pub_achieved else "A nation is above 90 Military right now."
+        return pub_achieved, pub_explanation, pub_hint, secret_evals
+
     def conclude_summit(self) -> Tuple[bool, str, Dict[str, Any]]:
         self.resolve_sieges(force=True)
         self._post_quiz_digest(force=True)
@@ -2961,23 +3438,13 @@ class SummitEngine:
 
         self._recalculate_all_realms(realms)
 
-        active_realms = [r for r in realms if r.get("active", True)]
-        if not active_realms:
-            active_realms = realms
-
-        starving_count = sum(1 for r in active_realms if r.get("is_starving") or r.get("alchemical_grain", 0) <= 0)
-        low_stability_count = sum(1 for r in active_realms if r.get("civil_stability", 0) < 50)
-        zero_stability_count = sum(1 for r in active_realms if r.get("civil_stability", 0) <= 0 or r.get("stability_hit_zero")) \
-            or meta.get("any_stability_zero_reached", False)
+        ctx = self._mission_context(realms, proposals, meta)
+        active_realms = ctx["active"]
+        starving_count, low_stability_count, zero_stability_count = ctx["starving"], ctx["low_stability"], ctx["zero_stability"]
+        passed_proposals = ctx["passed"]
         avg_vitality = sum(r.get("public_vitality", 0) for r in active_realms) / max(1, len(active_realms))
         avg_stability = sum(r.get("civil_stability", 0) for r in active_realms) / max(1, len(active_realms))
         avg_standing = sum(r.get("diplomatic_standing", 0) for r in active_realms) / max(1, len(active_realms))
-
-        # Questions to the game masters are not resolutions: they do not count towards missions.
-        passed_proposals = [p for p in proposals if p.get("status") == "passed" and p.get("effect_type") != "gm_question"]
-        failed_proposals = [p for p in proposals if p.get("status") == "rejected" and p.get("effect_type") != "gm_question"]
-        trade_partners = self.db.get_state("trade_partners", {})
-        military_trades = self.db.get_state("military_trades", [])
 
         # MGV 2026 Continental Outcome:
         # 🟢 STABLE CONTINENT: No nation starving, no nation Stability < 50, average Standing >= 50
@@ -2996,199 +3463,12 @@ class SummitEngine:
             verdict_desc = "The continent has plunged into crisis and instability due to widespread famine or domestic civil collapse."
             verdict_grade = "critical"
 
-        N = max(1, len(active_realms))
         realm_evaluations = []
         for r in active_realms:
             r_id = r["id"]
 
-            # -------------------------------------------------------------
-            # Public Mission Evaluation
-            # -------------------------------------------------------------
             pub_mission = r.get("public_mission") or {}
-            pub_achieved = False
-            pub_explanation = ""
-
-            if r_id == "sylvan":
-                # No nation may starve (0 Grain) at the end of the summit
-                pub_achieved = all(o.get("alchemical_grain", 0) > 0 for o in active_realms)
-                pub_explanation = "No nation ended with 0 Grain." if pub_achieved else f"Nations suffering famine: {starving_count}."
-
-            elif r_id == "val_khor":
-                target_req = scaled_targets(N)["modernised"]
-                reached_cores = sum(1 for o in active_realms if o.get("aether_cores", 0) >= 60)
-                pub_achieved = (reached_cores >= target_req)
-                pub_explanation = f"{reached_cores} of {N} nations reached ≥60 Cores (Target: ≥{target_req})."
-
-            elif r_id == "solaria":
-                # Broadly supported international resolutions passed
-                support_threshold = scaled_targets(N)["broad_support"]
-                passed_with_broad_support = 0
-                for p in passed_proposals:
-                    supporter_count = sum(1 for v in p.get("votes", {}).values() if v.get("choice") == "support")
-                    if supporter_count >= support_threshold:
-                        passed_with_broad_support += 1
-                pub_achieved = (passed_with_broad_support >= 3)
-                pub_explanation = f"{passed_with_broad_support} resolutions passed with support from ≥{support_threshold} nations (Target: ≥3)."
-
-            elif r_id == "umbra":
-                # No nation may hold more than 90 Military
-                max_mil = max((o.get("military_power", 0) for o in active_realms), default=0)
-                pub_achieved = all(o.get("military_power", 0) <= 90 for o in active_realms)
-                pub_explanation = f"Highest military power on continent: {max_mil} (Target: ≤90)."
-
-            elif r_id == "aquila":
-                # Every active nation must trade with at least target_partners different nations
-                target_partners = scaled_targets(N)["partners"]
-                all_traded = all(len(trade_partners.get(o["id"], [])) >= target_partners for o in active_realms)
-                pub_achieved = all_traded
-                min_partners = min((len(trade_partners.get(o["id"], [])) for o in active_realms), default=0)
-                pub_explanation = f"All nations have ≥{target_partners} trade partners." if pub_achieved else f"Least connected nation has only {min_partners} trade partners (Target: ≥{target_partners})."
-
-            elif r_id == "aethelgard":
-                # No nation may finish with Stability < 50 and none hit 0
-                pub_achieved = all(o.get("civil_stability", 0) >= 50 for o in active_realms) and not zero_stability_count
-                pub_explanation = "All nations maintained stability ≥50 and none collapsed to 0." if pub_achieved else f"Nations with stability <50: {low_stability_count}; collapsed to 0: {'Yes' if zero_stability_count else 'No'}."
-
-            else:
-                pub_achieved = r.get("public_vitality", 0) >= 50
-                pub_explanation = f"Vitality: {r.get('public_vitality')}/100."
-
-            # -------------------------------------------------------------
-            # Secret Missions Evaluation (scaled to active player count)
-            # -------------------------------------------------------------
-            active_secrets = r.get("active_secret_missions", [])
-            secret_evals = []
-
-            for sm in active_secrets:
-                sm_id = sm.get("id")
-                achieved = False
-                explanation = ""
-
-                # Sylvan
-                if sm_id == "sylvan_winter":
-                    achieved = r.get("alchemical_grain", 0) >= 70
-                    explanation = f"Grain reserves: {r.get('alchemical_grain')} (Target: ≥70)."
-                elif sm_id == "sylvan_defense":
-                    mil = r.get("military_power", 0)
-                    bought_from_aethelgard = any(
-                        mt.get("buyer") == "sylvan" and mt.get("seller") == "aethelgard" for mt in military_trades
-                    )
-                    achieved = (mil >= 40 and not bought_from_aethelgard)
-                    explanation = f"Military: {mil} (Target: ≥40). Purchased from Aethelgard: {'Yes (Violated)' if bought_from_aethelgard else 'No (Honored)'}."
-
-                # Val-Khor
-                elif sm_id == "valkhor_tech":
-                    other_max_cores = max((o.get("aether_cores", 0) for o in active_realms if o["id"] != "val_khor"), default=0)
-                    achieved = r.get("aether_cores", 0) >= other_max_cores + 20
-                    explanation = f"Val-Khor Cores: {r.get('aether_cores')}, second highest: {other_max_cores} (Lead: {r.get('aether_cores') - other_max_cores}, Target: ≥20)."
-                elif sm_id == "valkhor_grain":
-                    achieved = r.get("alchemical_grain", 0) >= 30
-                    explanation = f"Grain reserves: {r.get('alchemical_grain')} (Target: ≥30)."
-                elif sm_id == "valkhor_contain_military":
-                    aethel = next((o for o in active_realms if o["id"] == "aethelgard"), None)
-                    aethel_mil = aethel.get("military_power", 0) if aethel else 0
-                    diff = aethel_mil - r.get("military_power", 0)
-                    achieved = (diff <= 10)
-                    explanation = f"Aethelgard Military: {aethel_mil}, Val-Khor: {r.get('military_power', 0)} (Difference: {diff}, Target: ≤10 ahead)."
-
-                # Solaris
-                elif sm_id == "solaris_veto":
-                    solaris_opposed_passed = [p["title"] for p in passed_proposals if p.get("votes", {}).get("solaria", {}).get("choice") == "oppose"]
-                    achieved = (len(solaris_opposed_passed) == 0)
-                    explanation = "No resolution opposed by Solaris passed." if achieved else f"Resolutions passed over Solaris veto: {', '.join(solaris_opposed_passed)}."
-                elif sm_id == "solaris_standing":
-                    other_max_standing = max((o.get("diplomatic_standing", 0) for o in active_realms if o["id"] != "solaria"), default=0)
-                    achieved = (r.get("diplomatic_standing", 0) > other_max_standing)
-                    explanation = f"Solaris Standing: {r.get('diplomatic_standing')}, second highest: {other_max_standing} (Target: strictly highest on continent)."
-                elif sm_id == "solaris_contain_valkhor":
-                    vk = next((o for o in active_realms if o["id"] == "val_khor"), None)
-                    if vk:
-                        max_c = max(o.get("aether_cores", 0) for o in active_realms)
-                        max_m = max(o.get("military_power", 0) for o in active_realms)
-                        both_top = (vk.get("aether_cores", 0) >= max_c and vk.get("military_power", 0) >= max_m)
-                        achieved = not both_top
-                        explanation = "Val-Khor did not dominate both sectors simultaneously." if achieved else "Val-Khor achieved supremacy in both Cores and Military!"
-                    else:
-                        achieved = True
-                        explanation = "Val-Khor is not active."
-                elif sm_id == "solaris_silk":
-                    achieved = r.get("echo_silk", 0) >= 50
-                    explanation = f"Silk reserves: {r.get('echo_silk')} (Target: ≥50)."
-
-                # Umbra
-                elif sm_id == "umbra_challenge":
-                    solaris_supported_failed = [p["title"] for p in failed_proposals if p.get("votes", {}).get("solaria", {}).get("choice") == "support"]
-                    has_failed = (len(solaris_supported_failed) >= 1)
-                    standing_ok = r.get("diplomatic_standing", 0) >= 50
-                    achieved = (has_failed and standing_ok)
-                    explanation = f"Solaris initiative defeated: {'Yes' if has_failed else 'No'}, Umbra Standing: {r.get('diplomatic_standing')}/100 (Target: ≥50)."
-                elif sm_id == "umbra_autonomy":
-                    achieved = (r.get("aether_cores", 0) >= 60 and r.get("civil_stability", 0) >= 60)
-                    explanation = f"Cores: {r.get('aether_cores')} (≥60), Stability: {r.get('civil_stability')} (≥60)."
-
-                # Aquila
-                elif sm_id == "aquila_wealth":
-                    other_max_wealth = max((o.get("total_wealth", 0) for o in active_realms if o["id"] != "aquila"), default=0)
-                    lead = r.get("total_wealth", 0) - other_max_wealth
-                    achieved = (lead >= 25)
-                    explanation = f"Aquila Total Wealth: {r.get('total_wealth')}, second wealthiest: {other_max_wealth} (Lead: {lead}, Target: ≥25)."
-                elif sm_id == "aquila_trade_network":
-                    req_target = scaled_targets(N)["network"]
-                    partners_count = len(trade_partners.get("aquila", []))
-                    achieved = (partners_count >= req_target)
-                    explanation = f"Aquila traded with {partners_count} nations (Target: ≥{req_target} of {N - 1})."
-
-                # Aethelgard
-                elif sm_id == "aethelgard_superiority":
-                    other_max_mil = max((o.get("military_power", 0) for o in active_realms if o["id"] != "aethelgard"), default=0)
-                    lead = r.get("military_power", 0) - other_max_mil
-                    achieved = (lead >= 20)
-                    explanation = f"Aethelgard Military: {r.get('military_power')}, second strongest: {other_max_mil} (Lead: {lead}, Target: ≥20)."
-                elif sm_id == "aethelgard_contain_valkhor":
-                    vk = next((o for o in active_realms if o["id"] == "val_khor"), None)
-                    vk_mil = vk.get("military_power", 0) if vk else 0
-                    achieved = (vk_mil <= 75)
-                    explanation = f"Val-Khor Military: {vk_mil} (Target: ≤75)."
-                # Stand-ins used when the nation a mission is about is not playing
-                elif sm_id == "sylvan_defense_home":
-                    mil = r.get("military_power", 0)
-                    bought = [mt.get("seller") for mt in military_trades if mt.get("buyer") == r_id]
-                    achieved = (mil >= 40 and not bought)
-                    explanation = f"Military: {mil} (Target: ≥40). Bought Military from another nation: {'Yes (Violated)' if bought else 'No (Honored)'}."
-                elif sm_id == "valkhor_parity":
-                    other_max = max((o.get("military_power", 0) for o in active_realms if o["id"] != r_id), default=0)
-                    diff = other_max - r.get("military_power", 0)
-                    achieved = (diff <= 10)
-                    explanation = f"Strongest other Military: {other_max}, Val-Khor: {r.get('military_power', 0)} (Difference: {diff}, Target: ≤10 ahead)."
-                elif sm_id == "solaris_contain_rivals":
-                    max_c = max(o.get("aether_cores", 0) for o in active_realms)
-                    max_m = max(o.get("military_power", 0) for o in active_realms)
-                    dominant = [o["name"] for o in active_realms if o["id"] != r_id
-                                and o.get("aether_cores", 0) >= max_c and o.get("military_power", 0) >= max_m]
-                    achieved = not dominant
-                    explanation = "No rival leads in both Cores and Military." if achieved else f"{', '.join(dominant)} leads in both Cores and Military!"
-                elif sm_id == "aethelgard_contain_rivals":
-                    other_max = max((o.get("military_power", 0) for o in active_realms if o["id"] != r_id), default=0)
-                    achieved = (other_max <= 60)
-                    explanation = f"Strongest other Military: {other_max} (Target: ≤60)."
-
-                elif sm_id == "aethelgard_reserves":
-                    g = r.get("alchemical_grain", 0)
-                    c = r.get("aether_cores", 0)
-                    achieved = (g >= 35 and c >= 35)
-                    explanation = f"Grain: {g} (≥35), Cores: {c} (≥35)."
-
-                else:
-                    achieved = (r.get("public_vitality", 0) >= 50)
-                    explanation = "Standard sovereign survival."
-
-                secret_evals.append({
-                    "id": sm_id,
-                    "title": sm.get("title", "Secret Objective"),
-                    "objective": sm.get("objective", ""),
-                    "achieved": achieved,
-                    "explanation": explanation
-                })
+            pub_achieved, pub_explanation, _hint, secret_evals = self._evaluate_missions(r, ctx)
 
             total_missions = 1 + len(secret_evals)
             achieved_missions = (1 if pub_achieved else 0) + sum(1 for sm in secret_evals if sm["achieved"])
@@ -3280,6 +3560,7 @@ class SummitEngine:
             f"{verdict_desc} Full diplomatic assessments and scorecards are now active on the Grand Projector."
         )
         self.trigger_audio_cue("gong", f"Summit Concluded: {verdict}")
+        self.autosave(label="Summit concluded", force=True)                # the results stay safe, whatever happens next
         return True, f"Summit officially concluded: {verdict}", summit_outcome
 
     def build_report(self) -> Dict[str, Any]:
@@ -3289,7 +3570,7 @@ class SummitEngine:
         names = {r["id"]: r["name"] for r in state["realms"]}
         trades = self.db.get_state("trades", [])
         proposals = self.db.get_state("proposals", [])
-        types = {t["id"]: t for t in load_scenario_config().get("resolution_types", [])}
+        types = {t["id"]: t for t in self.motion_templates()}
         archive = self.db.get_state("news_archive", []) or list(reversed(state.get("news_feed", [])))
         nations = [{
             "id": r["id"], "name": r["name"], "delegates": r.get("player_count"), "votes": r.get("assembly_votes"),
@@ -3324,6 +3605,8 @@ class SummitEngine:
             "defender_power": (b.get("private") or {}).get("defender", {}).get("power"),
         } for b in reversed(self.db.get_state("battles", []))]
         return {
+            "complexity": state["game_settings"]["rules"]["name"], "scenario": state["game_settings"]["scenario_name"],
+            "quiz_played": state["game_settings"]["rules"]["quiz"], "hide_vitality": state["game_settings"]["rules"]["hide_vitality"],
             "generated": self._format_now(), "meta": state["meta"], "outcome": state.get("summit_outcome"),
             "nations": nations, "trades": trade_log, "motions": motions, "battles": battles,
             "timeline": [{"turn": n.get("turn"), "time": n.get("time_str"), "type": n.get("type"),
@@ -3347,6 +3630,7 @@ class SummitEngine:
     # -------------------------------------------------------------------------
     QUIZ_GRACE_SECONDS = 1.5        # slack for a slow phone connection
     QUIZ_DIGEST_SECONDS = 300       # the news carries a summary every 5 minutes, never one line per answer
+    NO_QUIZ_MESSAGE = "There is no quiz in this summit."
 
     def _quiz_bank(self) -> Dict[str, Dict[str, Any]]:
         return {q["id"]: q for q in load_quiz()["questions"]}
@@ -3400,6 +3684,8 @@ class SummitEngine:
         realm = next((r for r in realms if r["id"] == realm_id), None)
         if not realm:
             return None
+        if not self.rules()["quiz"]:
+            return {"success": False, "enabled": False, "message": self.NO_QUIZ_MESSAGE}
         self._expire_quiz_questions()
         realm = next(r for r in self.db.get_state("realms", []) if r["id"] == realm_id)
         meta = self.db.get_state("meta", {}) or {}
@@ -3418,7 +3704,7 @@ class SummitEngine:
                                 "explanation": q["explanation"], "article": q["article"],
                                 "stake_resource": q.get("reward_resource", "grain"), "stake_amount": entry.get("stake", 5)})
         return {
-            "success": True, "current_turn": turn, "seconds": int(self.settings().get("quiz_seconds", 15)),
+            "success": True, "enabled": True, "current_turn": turn, "seconds": int(self.settings().get("quiz_seconds", 15)),
             "stats": {"correct": len(claimed), "wrong": len(failed), "left": sum(1 for q in bank.values() if q["turn"] <= turn and q["id"] not in claimed | failed),
                       "later": len(sealed)},
             "active": self._quiz_active_payload(realm),
@@ -3432,6 +3718,8 @@ class SummitEngine:
         """The nation takes its next question. The clock starts now and cannot be paused or restarted."""
         if self._summit_over():
             return False, "The summit has ended: the quiz is closed.", None
+        if not self.rules()["quiz"]:
+            return False, self.NO_QUIZ_MESSAGE, None
         self._expire_quiz_questions()
         realms = self.db.get_state("realms", [])
         realm = next((r for r in realms if r["id"] == realm_id), None)
@@ -3536,6 +3824,8 @@ class SummitEngine:
         (the phone shows the options in a shuffled order and sends back the original index)."""
         if self._summit_over():
             return False, "The summit has ended: the quiz is closed.", {}
+        if not self.rules()["quiz"]:
+            return False, self.NO_QUIZ_MESSAGE, {}
         realms = self.db.get_state("realms", [])
         realm = next((r for r in realms if r["id"] == realm_id), None)
         if not realm:

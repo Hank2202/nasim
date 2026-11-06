@@ -7,8 +7,11 @@
 // Participant Mobile Cockpit App (RealmApp)
 // -----------------------------------------------------------------------------
 class RealmApp {
-  constructor(realmId) {
+  // The settings come with the page, so help texts are right even before the first poll has answered.
+  constructor(realmId, settings) {
     this.realmId = realmId;
+    this._settings = settings || {};
+    this.rules = this._settings.rules || {};
     this.lastAudioSeq = null;
     this.isPolling = false;
     window.realmApp = this;
@@ -19,6 +22,9 @@ class RealmApp {
     setInterval(() => this.pollState(), 1000);
     this.bindEvents();
     this.bindBottomNav();
+    this.showWelcome();
+    // A phone that wakes up should not show old numbers for even a second.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.pollState(); });
   }
 
   switchView(viewId) {
@@ -34,12 +40,12 @@ class RealmApp {
     });
     if (viewId === 'view-wiki' && !this.wikiLoaded) this.wikiHome();
     if (viewId === 'view-quiz') this.loadQuiz();
+    if (viewId === 'view-news') this.renderNewsBadge(this.rawNewsFeed || []);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  async leaveDelegation(e) {
-    if (e) e.preventDefault();
-    if (!(await confirmAction({ title: 'Leave your delegation?', message: 'You return to the lobby. You can join again with the passcode.', confirmLabel: 'Leave' }))) return;
+  async leaveDelegation() {
+    if (!(await confirmAction({ title: 'Leave your delegation?', message: 'You go back to the first page. You can join again with the passcode.', confirmLabel: 'Leave' }))) return;
     try {
       await fetch('/api/auth/realm/logout', {
         method: 'POST',
@@ -61,6 +67,73 @@ class RealmApp {
   }
 
   // ---------------------------------------------------------------------------
+  // Help: the first-time card, the ? button, and what each number means when tapped
+  // ---------------------------------------------------------------------------
+  showWelcome() {
+    let seen = false;
+    try { seen = localStorage.getItem('summit_welcome_seen') === '1'; } catch (e) { /* private window: shown again next time */ }
+    const card = document.getElementById('welcome-card');
+    if (card && !seen) card.style.display = '';
+  }
+
+  dismissWelcome() {
+    try { localStorage.setItem('summit_welcome_seen', '1'); } catch (e) { /* not remembered, that is all */ }
+    const card = document.getElementById('welcome-card');
+    if (card) card.style.display = 'none';
+  }
+
+  openHelp() {
+    const r = this.rules || {}, s = this._settings || {};
+    const minutes = s.working_session_seconds ? ` (${Math.round(s.working_session_seconds / 60)} minutes)` : '';
+    const votes = this._me ? this._me.assembly_votes : 1;
+    const close = showSheet({ title: 'How this works', html: `
+      <h3>How a turn goes</h3>
+      <ol>
+        <li><b>Working session${minutes}.</b> Walk around and talk. Trade, enact decrees and table motions before the bell.</li>
+        <li><b>The Assembly votes</b> on every motion that found a co-sponsor. Your nation has ${votes} vote${votes === 1 ? '' : 's'}.${r.grand_plenary ? ' In the last turn each motion is debated out loud first.' : ''}</li>
+        <li><b>Your people eat${s.grain_consumption ? ` ${s.grain_consumption} Grain` : ''}.</b> Then the next turn begins.</li>
+      </ol>
+      <p>After Turn ${s.max_turns || 3} the results are counted: how many of your goals you met, and how the whole continent fares.</p>
+      <h3>Where to find things</h3>
+      <dl>
+        <dt>Realm</dt><dd>Your numbers, your goals, your decrees${r.war ? ' and the war room' : ''}.</dd>
+        <dt>World</dt><dd>The news, and estimates of how the other nations stand.</dd>
+        <dt>Trade</dt><dd>Offers to and from other nations.</dd>
+        <dt>Motions</dt><dd>Co-sponsor other nations' motions, or propose your own.</dd>
+        <dt>Wiki</dt><dd>The history of every nation${r.quiz ? '. The quiz answers are all in there' : ''}.</dd>
+        ${r.quiz ? '<dt>Quiz</dt><dd>Win or lose resources, one question at a time.</dd>' : ''}
+      </dl>
+      <div class="sheet-actions">
+        <a class="btn btn-secondary btn-block" href="/overview" target="_blank" rel="noopener">Read the full game guide</a>
+        <button type="button" class="btn btn-secondary btn-block" id="help-sound">${synth.muted ? 'Turn sounds on' : 'Turn sounds off'}</button>
+        <button type="button" class="btn btn-danger btn-block" id="help-leave">Leave this delegation</button>
+      </div>` });
+    document.getElementById('help-sound').addEventListener('click', e => {
+      synth.setMuted(!synth.muted);
+      e.target.innerText = synth.muted ? 'Turn sounds on' : 'Turn sounds off';
+      if (!synth.muted) synth.playChime();
+    });
+    document.getElementById('help-leave').addEventListener('click', () => { close(); this.leaveDelegation(); });
+  }
+
+  // Tapping one of the player's own numbers says what it is for.
+  explain(key) {
+    const r = this.rules || {}, s = this._settings || {};
+    const eat = this._me && this._me.tech_efficiency_unlocked ? Math.round(s.grain_consumption * 0.75) : s.grain_consumption;
+    const texts = {
+      grain: ['🌾 Grain', `Food. Your people eat ${eat} Grain at the end of every turn. If your silos run empty you are starving: ${r.hide_vitality ? '−20 Stability' : '−25 Vitality and −20 Stability'}, and a nation still starving at the end hurts the whole continent's result.`],
+      cores: ['⚙️ Cores', 'Aether Cores run your industry. They pay for the Civil Guard and for mustering regiments. With 75 Cores your nation becomes Efficient: it eats a quarter less Grain for the rest of the summit.'],
+      silk: ['🧵 Silk', 'Luxury and influence. It pays for the Grand Gala and the Forges. Your wealth is Grain + Cores + Silk, and the single richest nation has one extra vote in the Assembly.'],
+      military: ['⚔️ Military', `Your army. Some missions measure it, and the news may make it matter.${r.war ? ' It decides most of a battle.' : ''}`],
+      vitality: ['❤️ Vitality', 'How healthy your people are. Starving costs 25. In a battle a healthy nation fights a little better.'],
+      standing: ['🤝 Standing', `How the other nations see you. It counts towards how the whole continent fares at the end.${r.war ? ' Starting a war costs Standing.' : ''}`],
+      stability: ['🏛️ Stability', 'How calm your people are. Starving costs 20. It counts towards how the whole continent fares at the end, and a people at 0 is a disaster for everyone.'],
+    };
+    const t = texts[key];
+    if (t) showSheet({ title: t[0], html: `<p>${escapeHtml(t[1])}</p>` });
+  }
+
+  // ---------------------------------------------------------------------------
   // Motions: pick a template, set its numbers, read what will happen, table it
   // ---------------------------------------------------------------------------
   renderMotionTemplates(types) {
@@ -68,17 +141,114 @@ class RealmApp {
     if (!box || this.motionTemplatesRendered || !types || !types.length) return;
     this.motionTypes = Object.fromEntries(types.map(t => [t.id, t]));
     const esc = escapeHtml;
+    if (this.rules && this.rules.free_motions === false) {
+      this.renderSimpleMotions(box, types);
+      this.motionTemplatesRendered = true;
+      return;
+    }
     box.innerHTML = types.filter(t => t.player_selectable).map(t => `
       <button type="button" class="motion-template" onclick="realmApp.chooseMotionTemplate('${esc(t.id)}')">
         <span class="motion-template-icon">${esc(t.icon || '📜')}</span>
         <span class="grow">
           <span class="motion-template-name">${esc(t.name)}</span>
           <span class="motion-template-summary">${esc(t.summary)}</span>
-          <span class="motion-effect"><span>If passed:</span> ${esc(t.effect_plain || t.statutory_effect)}</span>
         </span>
-        <span class="motion-template-go">Start from this &rsaquo;</span>
+        <span class="motion-template-go" aria-hidden="true">&rsaquo;</span>
       </button>`).join('');
     this.motionTemplatesRendered = true;
+  }
+
+  // Proposing a motion has its own screen; the floor is what most visits to this tab are for.
+  openMotionBuilder() {
+    document.getElementById('motion-floor').style.display = 'none';
+    document.getElementById('motion-builder').style.display = '';
+    window.scrollTo({ top: 0 });
+  }
+
+  closeMotionBuilder() {
+    if (document.getElementById('proposal-form')) this.chooseMotionTemplate(null);
+    document.getElementById('motion-builder').style.display = 'none';
+    document.getElementById('motion-floor').style.display = '';
+    window.scrollTo({ top: 0 });
+  }
+
+  // Simplified game: ready-made motions. A player can only change the amount; the wording and the effect are fixed.
+  renderSimpleMotions(box, types) {
+    const esc = escapeHtml;
+    this.simpleAmounts = {};
+    box.innerHTML = types.filter(t => t.player_selectable).map(t => {
+      const a = t.amount;
+      if (a) this.simpleAmounts[t.id] = a.default;
+      return `<div class="simple-motion" data-motion="${esc(t.id)}">
+        <div class="row simple-motion-head">
+          <span class="motion-template-icon">${esc(t.icon || '📜')}</span>
+          <span class="grow"><span class="motion-template-name">${esc(t.name)}</span>
+            <span class="motion-template-summary">${esc(t.summary)}</span></span>
+        </div>
+        <div class="motion-effect"><span>If passed:</span> <span class="simple-effect">${esc(this._simpleText(t))}</span></div>
+        ${a ? `<div class="form-label mt-1">${esc(a.label)}</div>
+        <div class="stepper">
+          <button type="button" aria-label="Less" onclick="realmApp.stepSimpleAmount('${esc(t.id)}', -1)">−${esc(a.step)}</button>
+          <input type="number" inputmode="numeric" min="${esc(a.min)}" max="${esc(a.max)}" step="${esc(a.step)}" value="${esc(a.default)}" aria-label="${esc(a.label)}"
+                 onchange="realmApp.setSimpleAmount('${esc(t.id)}', this.value)">
+          <button type="button" aria-label="More" onclick="realmApp.stepSimpleAmount('${esc(t.id)}', 1)">+${esc(a.step)}</button>
+        </div>` : ''}
+        <button type="button" class="btn btn-primary btn-block btn-sm mt-1" onclick="realmApp.tableSimpleMotion('${esc(t.id)}')">Table this motion</button>
+      </div>`;
+    }).join('');
+  }
+
+  // The same words the server writes under "If passed" when the motion is tabled.
+  _simpleText(t) {
+    const amount = (this.simpleAmounts || {})[t.id];
+    const me = this._me ? this._me.name : 'Your nation';
+    return String(t.effect_plain || '').split('{amount}').join(amount).split('{me}').join(me);
+  }
+
+  setSimpleAmount(id, value) {
+    const t = (this.motionTypes || {})[id];
+    if (!t || !t.amount) return;
+    const n = parseInt(value, 10);
+    const amount = Math.max(t.amount.min, Math.min(t.amount.max, Number.isNaN(n) ? t.amount.default : n));
+    this.simpleAmounts[id] = amount;
+    const card = document.querySelector(`.simple-motion[data-motion="${id}"]`);
+    if (card) {
+      card.querySelector('input').value = amount;
+      card.querySelector('.simple-effect').innerText = this._simpleText(t);
+    }
+  }
+
+  stepSimpleAmount(id, direction) {
+    const t = (this.motionTypes || {})[id];
+    if (t && t.amount) this.setSimpleAmount(id, this.simpleAmounts[id] + direction * t.amount.step);
+  }
+
+  async tableSimpleMotion(id) {
+    const t = (this.motionTypes || {})[id];
+    if (!t) return;
+    const ok = await confirmAction({
+      title: `Table “${t.name}”?`,
+      message: 'Another nation must co-sponsor it before the Assembly votes on it.',
+      details: [`If passed: ${this._simpleText(t)}`],
+      confirmLabel: 'Table the motion',
+    });
+    if (!ok) return;
+    try {
+      const res = await (await fetch('/api/proposal/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposer_id: this.realmId, effect_type: id, params: { amount: this.simpleAmounts[id] } }),
+      })).json();
+      if (res.success) {
+        showToast('Motion tabled. Now find a nation to co-sponsor it!', 'success');
+        synth.playChime();
+        this.closeMotionBuilder();
+        this.pollState();
+      } else {
+        showToast(res.message, 'danger');
+      }
+    } catch (err) {
+      showToast('Failed to table the motion', 'danger');
+    }
   }
 
   _activeRealms() {
@@ -93,9 +263,11 @@ class RealmApp {
   chooseMotionTemplate(typeId) {
     const form = document.getElementById('proposal-form');
     const gallery = document.getElementById('motion-templates');
+    const head = document.getElementById('motion-gallery-head');
     if (!typeId) {
       form.style.display = 'none';
       gallery.style.display = '';
+      head.style.display = '';
       this.motionDraft = null;
       return;
     }
@@ -112,10 +284,11 @@ class RealmApp {
     document.getElementById('proposal-target-nation').value = '';
     document.getElementById('proposal-target-nation-label').innerText = t.target_label || 'Nation';
     gallery.style.display = 'none';
+    head.style.display = 'none';
     form.style.display = 'block';
     this.renderMotionParams();
     this.refreshMotionPreview();
-    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.scrollTo({ top: 0 });
   }
 
   _nationOptions(selected, extra = []) {
@@ -131,14 +304,14 @@ class RealmApp {
     if (!box || !d) return;
     const t = d.type, p = d.params, esc = escapeHtml;
     const resOptions = (list, sel) => list.map(r => `<option value="${r}" ${r === sel ? 'selected' : ''}>${esc(RESOURCE_SHORT[r] || r)}</option>`).join('');
-    const num = (key, label, min, max) => `<label>${label}<input type="number" inputmode="numeric" min="${min}" max="${max}" value="${esc(p[key])}"
+    const num = (key, label, min, max) => `<label>${label}<input type="number" class="form-input" inputmode="numeric" min="${min}" max="${max}" value="${esc(p[key])}"
         oninput="realmApp.setMotionParam('${key}', this.value)"></label>`;
     if (t.builder === 'redistribute') {
       box.innerHTML = `<div class="param-box"><div class="section-sub" style="margin:0 0 6px;">Set the numbers (they are applied exactly as written)</div>
         <div class="param-grid">
           <label>Resource<select class="form-select" onchange="realmApp.setMotionParam('resource', this.value)">${resOptions(['grain', 'cores', 'silk'], p.resource)}</select></label>
-          ${num('above', 'Nations above this give', 10, 150)}${num('give', 'They give up to', 1, 30)}
-          ${num('below', 'Nations below this receive', 1, 100)}${num('receive', 'They receive up to', 1, 30)}
+          ${num('above', 'Nations above this give', 10, 150)}${num('give', 'They give up to', 1, 999)}
+          ${num('below', 'Nations below this receive', 1, 100)}${num('receive', 'They receive up to', 1, 999)}
         </div></div>`;
     } else if (t.builder === 'levy') {
       const dyn = [['@richest', 'The richest nation'], ['@poorest', 'The poorest nation'], ['@strongest', 'The strongest army'], ['@weakest', 'The weakest army']];
@@ -146,7 +319,7 @@ class RealmApp {
         <div class="param-grid">
           <label>Nation<select class="form-select" onchange="realmApp.setMotionParam('target', this.value)">${this._nationOptions(p.target, dyn)}</select></label>
           <label>Loses<select class="form-select" onchange="realmApp.setMotionParam('resource', this.value)">${resOptions(['grain', 'cores', 'silk', 'military', 'vitality', 'standing', 'stability'], p.resource)}</select></label>
-          ${num('amount', 'Amount', 1, 30)}
+          ${num('amount', 'Amount', 1, 999)}
         </div></div>`;
     } else if (t.builder === 'pact') {
       this._renderPactLines(box);
@@ -175,7 +348,7 @@ class RealmApp {
             <option value="transfer" ${l.kind === 'transfer' ? 'selected' : ''}>Transfer</option><option value="levy" ${l.kind === 'levy' ? 'selected' : ''}>Penalty</option></select>
           <select class="form-select" onchange="realmApp.pactSet(${i}, 'resource', this.value)">
             ${resList(l.kind).map(r => `<option value="${r}" ${r === l.resource ? 'selected' : ''}>${esc(RESOURCE_SHORT[r])}</option>`).join('')}</select>
-          <input type="number" class="form-input" inputmode="numeric" min="1" max="30" value="${esc(l.amount)}" oninput="realmApp.pactSet(${i}, 'amount', this.value, true)" aria-label="Amount">
+          <input type="number" class="form-input" inputmode="numeric" min="1" max="999" value="${esc(l.amount)}" oninput="realmApp.pactSet(${i}, 'amount', this.value, true)" aria-label="Amount">
         </div>
         ${l.kind === 'transfer' ? `<div class="form-label mt-1">Each of these gives up to that amount</div>${chips(i, 'payers', l.payers || [])}
           <div class="form-label mt-1">These share what is collected</div>${chips(i, 'receivers', l.receivers || [])}`
@@ -277,7 +450,7 @@ class RealmApp {
         showToast('Motion tabled. Now find a nation to co-sponsor it!', 'success');
         synth.playChime();
         document.getElementById('proposal-form').reset();
-        this.chooseMotionTemplate(null);
+        this.closeMotionBuilder();
         this.pollState();
       } else {
         showToast(res.message, 'danger');
@@ -295,8 +468,10 @@ class RealmApp {
       const resp = await fetch('/api/state');
       if (!resp.ok) throw new Error('State fetch failed');
       const state = await resp.json();
+      connectionWatch.ok();
       this.renderState(state);
     } catch (err) {
+      connectionWatch.failed();
       console.warn('Polling error:', err);
     } finally {
       this.isPolling = false;
@@ -312,32 +487,53 @@ class RealmApp {
     }
     const { meta, realms, trades, proposals, news_feed } = state;
     const realm = realms.find(r => r.id === this.realmId);
+    // The facilitator took this nation out of the summit: back to the first page, where the others still are.
+    if (realm && realm.active === false) { window.location.href = '/'; return; }
+    // The facilitator changed the complexity before play began: this page was built for the other kind of game.
+    this.rules = (state.game_settings || {}).rules || {};
+    if (this._complexity && this._complexity !== this.rules.id) { window.location.reload(); return; }
+    this._complexity = this.rules.id;
     this._lastRealms = realms;
     this._proposals = proposals || [];
     this._trades = trades || [];
     this._me = realm;
     this._turn = meta.current_turn;
+    this._meta = meta;
+    this._settings = state.game_settings || {};
+    document.body.classList.toggle('summit-over', meta.phase === 'summit_concluded');
 
-    // Audio cues
+    // Audio cues. Another nation's decree or trade is only news on a phone: the projector chimes, and a room
+    // of phones chiming at once helps nobody. (A trade this nation took part in has its own message below.)
     if (meta.audio_cue && meta.audio_cue.seq !== undefined) {
-      if (this.lastAudioSeq !== null && meta.audio_cue.seq > this.lastAudioSeq) {
-        if (meta.audio_cue.type === 'gong' || meta.audio_cue.type === 'turn') synth.playGong();
-        else if (meta.audio_cue.type === 'chime' || meta.audio_cue.type === 'trade') synth.playChime();
-        else if (meta.audio_cue.type === 'alert') synth.playAlert();
-        else if (meta.audio_cue.type === 'battle') synth.playBattle();
+      if (this.lastAudioSeq !== null && meta.audio_cue.seq > this.lastAudioSeq && !['decree', 'trade'].includes(meta.audio_cue.type)) {
+        synth.playCue(meta.audio_cue.type);
         if (meta.audio_cue.message) showToast(meta.audio_cue.message, 'info');
       }
       this.lastAudioSeq = meta.audio_cue.seq;
     }
 
+    // A vote or debate has opened: this must not be missed, whatever the player is doing.
+    const assembly = !['working', 'summit_concluded', 'turn_summary'].includes(meta.phase);
+    if (assembly && this._phaseSeen !== undefined && this._phaseSeen !== meta.phase) {
+      if (document.body.classList.contains('wiki-mode')) this.wikiClose();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (navigator.vibrate) navigator.vibrate(200);
+    }
+    this._phaseSeen = meta.phase;
+
     // Header updates
     const turnElem = document.getElementById('turn-display');
     if (turnElem) turnElem.innerText = `TURN ${meta.current_turn}`;
+    const clock = meta.display_timer || { seconds: meta.turn_timer_remaining, running: meta.is_timer_running, label: '' };
+    const shown = clock.kind === 'free' && !clock.seconds && !clock.running ? '--:--' : formatSeconds(clock.seconds);
     const timerElem = document.getElementById('timer-display');
     if (timerElem) {
-      timerElem.innerText = formatSeconds(meta.display_timer ? meta.display_timer.seconds : meta.turn_timer_remaining);
-      timerElem.title = meta.display_timer ? meta.display_timer.label : '';
+      timerElem.innerText = shown;
+      timerElem.title = clock.label || '';
+      timerElem.classList.toggle('stopped', !clock.running);
+      timerElem.classList.toggle('low', !!clock.running && clock.seconds <= 60);
     }
+    this._setVal('wk-timer', shown);       // the wiki hides the header, and nobody should read past the bell
     this.renderPhaseCard(meta);
 
     // Mini Breaking News Banner
@@ -353,6 +549,7 @@ class RealmApp {
 
     // Full News Stream (Tab 2)
     this.renderNewsFeed(news_feed);
+    this.renderNewsBadge(news_feed || []);
 
     if (!realm) return;
 
@@ -360,20 +557,21 @@ class RealmApp {
     this.renderTradePartners(realms);
     this.renderMotionNationOptions(realms);
 
-    // What the people eat at the end of the turn (difficulty setting; a quarter less with technological efficiency)
+    // What the people eat at the end of the turn (set by the scenario; a quarter less with technological efficiency)
     const eat = (state.game_settings || {}).grain_consumption;
     if (eat) this._setVal('eat-amount', `${realm.tech_efficiency_unlocked ? Math.round(eat * 0.75) : eat} Grain`);
+    this.renderFoodForecast(state, realm);
 
-    // Telemetry - Exact values for own country
-    this._setVal('grain-val', realm.alchemical_grain);
-    this._setVal('cores-val', realm.aether_cores);
-    this._setVal('silk-val', realm.echo_silk);
-    this._setVal('military-val', realm.military_power ?? 0);
-
-    // Metrics
-    this._setMetric('vitality', realm.public_vitality);
-    this._setMetric('standing', realm.diplomatic_standing);
-    this._setMetric('stability', realm.civil_stability);
+    // The nation's own numbers, each with a mark when it changes (and a message if the Realm tab is not showing)
+    this._setStock('grain', 'Grain', realm.alchemical_grain);
+    this._setStock('cores', 'Cores', realm.aether_cores);
+    this._setStock('silk', 'Silk', realm.echo_silk);
+    this._setStock('military', 'Military', realm.military_power ?? 0);
+    this._setMetric('vitality', 'Vitality', realm.public_vitality);
+    this._setMetric('standing', 'Standing', realm.diplomatic_standing);
+    this._setMetric('stability', 'Stability', realm.civil_stability);
+    this.renderDecrees(realm, meta);
+    this.updateTradePreview();
 
     // Assembly votes
     const votesBadge = document.getElementById('votes-badge');
@@ -385,6 +583,7 @@ class RealmApp {
 
     // Missions follow the roster: targets and stand-in missions change when nations join or leave
     this.renderMissions(realm);
+    this.renderMissionHints(realm);
 
     // Flags
     this.renderFlags(realm);
@@ -394,6 +593,7 @@ class RealmApp {
 
     // Trades
     this.renderTrades(trades, realm);
+    this._round2 = (!!this._settings.famine_storyline && meta.current_turn === 2) || meta.round2_rules_turn === meta.current_turn;
 
     // Motions Tab
     this.renderMotionTemplates(state.resolution_types);
@@ -405,7 +605,16 @@ class RealmApp {
     // Summit Concluded Personal Evaluation Callout
     this.renderConcludedDebrief(state, realm);
 
-    // Quiz: follow a question opened (or answered) on a teammate's phone
+    if (this.rules.quiz !== false) this.followQuiz(realm, meta);
+
+    // War: weather, rules, targets and the battles that have been fought
+    this.renderWar(state, realm);
+    this.renderSiegeAlert(state.sieges || []);
+    this.watchBattles(state.battles || []);
+  }
+
+  // Quiz: follow a question opened (or answered) on a teammate's phone
+  followQuiz(realm, meta) {
     const openId = realm.quiz_active ? realm.quiz_active.question_id : null;
     const answeredCount = (realm.claimed_lore || []).length + (realm.failed_lore || []).length;
     const quizChanged = this._seenQuizOpen !== undefined && (openId !== this._seenQuizOpen || answeredCount !== this._seenQuizAnswered);
@@ -418,34 +627,86 @@ class RealmApp {
       this.quizTurn = meta.current_turn;
       if (quizVisible || this.quiz) this.loadQuiz();
     }
-
-    // War: weather, rules, targets and the battles that have been fought
-    this.renderWar(state, realm);
-    this.watchBattles(state.battles || []);
   }
 
+  // What is going on right now, and what happens next, in words. The clock alone does not say whether it is running.
   renderPhaseCard(meta) {
-    const phases = {
-      working: ['Working session', 'Trade, negotiate, enact decrees and table motions before the bell.'],
-      plenary_quick: ['The Assembly votes', 'Vote on every motion at the top of your screen.'],
-      grand_plenary_discussion: ['Grand Plenary: debate', 'Argue for or against the motion on the floor. Voting opens soon.'],
-      grand_plenary_voting: ['Grand Plenary: vote', 'Cast your vote on the motion at the top of your screen.'],
-      turn_summary: ['Between turns', 'The Assembly has spoken. The facilitator will start the next turn.'],
-      summit_concluded: ['The summit has ended', 'See how your nation fared below.'],
-    };
-    let [title, hint] = phases[meta.phase] || phases.working;
-    if (meta.phase === 'working' && meta.intermission_end) {
-      [title, hint] = [`Turn ${meta.current_turn} starts soon`, 'Listen to the facilitator: the news of the new turn is being read out.'];
+    const turn = meta.current_turn, last = turn >= (meta.max_turns || 3);
+    const stage = clockStage(meta);
+    let title, hint, tone = '';
+    if (meta.phase === 'working') {
+      [title, hint, tone] = {
+        ready: turn === 1
+          ? ['The summit is about to begin', 'The clock starts when everyone is here. Read your goals below and find the rest of your delegation.', 'waiting']
+          : [`Turn ${turn} is about to begin`, 'The facilitator starts the clock in a moment. Keep talking.', 'waiting'],
+        intermission: [`Turn ${turn} starts soon`, 'Listen to the facilitator: the news of the new turn is being read out.', 'waiting'],
+        running: ['Working session', 'Talk to the other nations. Trade, enact decrees and table motions before the bell.', ''],
+        paused: ['The clock is paused', 'The facilitator has stopped the clock for a moment.', 'waiting'],
+        timeup: ['Time is up', 'The facilitator is moving on to the next step.', 'waiting'],
+      }[stage];
+    } else {
+      [title, hint, tone] = {
+        plenary_quick: ['The Assembly votes', 'Vote on every motion at the top of this screen.', 'vote'],
+        grand_plenary_discussion: ['Grand Plenary: debate', 'Argue for or against the motion on the floor, out loud. Voting opens when the clock runs out.', 'vote'],
+        grand_plenary_voting: ['Grand Plenary: vote', 'Vote on the motion at the top of this screen.', 'vote'],
+        turn_summary: last ? ['The last vote is over', 'The results are coming.', 'waiting'] : ['Between turns', 'The vote is over. The next turn starts soon.', 'waiting'],
+        summit_concluded: ['The summit has ended', 'See how your nation fared.', 'waiting'],
+      }[meta.phase] || ['Working session', '', ''];
     }
-    this._setVal('phase-kicker', `Turn ${meta.current_turn} of ${meta.max_turns || 3}`);
+    this._setVal('phase-kicker', `Turn ${turn} of ${meta.max_turns || 3}`);
     this._setVal('phase-title', title);
     this._setVal('phase-hint', hint);
+    const card = document.getElementById('phase-card');
+    if (card) card.dataset.tone = tone;
     const bar = document.getElementById('phase-progress');
     if (bar) {
       const total = meta.turn_timer_total || 0;
       const left = meta.turn_timer_remaining || 0;
       bar.style.width = (meta.phase === 'working' && total > 0) ? `${Math.max(0, Math.min(100, 100 * left / total))}%` : '0%';
     }
+  }
+
+  // Decrees that cannot be paid for right now say so before the tap, not after it.
+  renderDecrees(realm, meta) {
+    const stock = { grain: realm.alchemical_grain, cores: realm.aether_cores, silk: realm.echo_silk };
+    const open = meta.phase === 'working';
+    document.querySelectorAll('.decree').forEach(btn => {
+      const needs = JSON.parse(btn.dataset.needs || '{}');
+      const missing = Object.keys(needs).filter(r => (stock[r] ?? 0) < needs[r]).map(r => RESOURCE_SHORT[r]);
+      btn.classList.toggle('cannot', !open || missing.length > 0);
+      const why = btn.querySelector('.decree-why');
+      if (why) why.innerText = open && missing.length ? `Not enough ${missing.join(' and ')}` : '';
+    });
+    this._setVal('decrees-intro', open
+      ? 'Spend your own resources to gain others. No other nation is involved. Tap one to enact it.'
+      : 'Decrees can wait for the next working session.');
+  }
+
+  // Simplified game: how far the Grain lasts (one meal at the end of every turn left). Only the meals are
+  // counted: what the storyline has in store stays a surprise, so it says "as things stand".
+  renderFoodForecast(state, realm) {
+    const el = document.getElementById('food-forecast');
+    if (!el) return;
+    const settings = state.game_settings || {}, meta = state.meta;
+    if (meta.phase === 'summit_concluded') { el.style.display = 'none'; return; }
+    const eat = realm.tech_efficiency_unlocked ? Math.round(settings.grain_consumption * 0.75) : settings.grain_consumption;
+    const meals = Math.max(0, (settings.max_turns || 3) - meta.current_turn + 1);
+    const need = eat * meals + 1;                 // silos at 0 count as starving, so something has to be left
+    const short = need - realm.alchemical_grain;
+    const word = `${meals} meal${meals === 1 ? '' : 's'} left`;
+    el.innerText = short > 0 ? `⚠️ As things stand you are ${short} Grain short for the ${word}. Trade for more, or ask the Assembly.`
+                             : `✓ As things stand you have enough Grain for the ${word}.`;
+    el.classList.toggle('short', short > 0);
+  }
+
+  // Simplified game: where this nation's missions stand right now (same check as the final results).
+  renderMissionHints(realm) {
+    const status = realm.mission_status;
+    if (!status) return;
+    const esc = escapeHtml;
+    const hint = m => `<span class="mission-hint ${m.met ? 'ok' : 'no'}">${m.met ? '✓ On track' : '… Not yet'}</span>${m.note ? `<span class="mission-note">${esc(m.note)}</span>` : ''}`;
+    setHtml(document.getElementById('public-hint'), hint(status.public));
+    for (const s of status.secrets || []) setHtml(document.getElementById(`secret-hint-${s.id}`), hint(s));
   }
 
   _activeOthers(realms) {
@@ -485,13 +746,15 @@ class RealmApp {
     const esc = escapeHtml;
     this._setVal('realm-public-title', realm.public_mission.title || '');
     this._setVal('realm-public-desc', realm.public_mission.description || '');
-    this._setVal('secret-count-label', `🔒 Secret directives (${secrets.length})`);
+    this._setVal('secret-count-label', secrets.length === 1 ? '🔒 Your secret mission' : `🔒 Your ${secrets.length} secret missions`);
     const list = document.getElementById('secret-missions-list');
+    const hints = (this.rules || {}).live_hints;
     if (list) list.innerHTML = secrets.map((sm, i) => `
       <div class="secret-item">
         <strong>${i + 1}. ${esc(sm.title)}</strong>
         ${sm.narrative ? `<p>${esc(sm.narrative)}</p>` : ''}
         <div class="secret-goal">${esc(sm.objective)}</div>
+        ${hints ? `<div id="secret-hint-${esc(sm.id)}" class="mission-hint-row"></div>` : ''}
       </div>`).join('');
   }
 
@@ -518,11 +781,62 @@ class RealmApp {
     if (el) el.innerText = val;
   }
 
-  _setMetric(name, val) {
+  // A number of the nation's own changed: mark it where it is, and say so if another tab is showing.
+  _noteChange(key, label, value, host) {
+    this._numbers = this._numbers || {};
+    const before = this._numbers[key];
+    this._numbers[key] = value;
+    if (before === undefined || before === value) return;
+    const change = value - before;
+    const text = `${change > 0 ? '+' : '−'}${Math.abs(change)}`;
+    if (host) {
+      const mark = document.createElement('span');
+      mark.className = `delta ${change > 0 ? 'up' : 'down'}`;
+      mark.textContent = text;
+      host.appendChild(mark);
+      setTimeout(() => mark.remove(), 5000);
+    }
+    const onRealm = document.getElementById('view-overview').classList.contains('active');
+    if (!onRealm) showToast(`${label} ${text} (now ${value})`, change > 0 ? 'success' : 'warning');
+  }
+
+  _setStock(key, label, val) {
+    const el = document.getElementById(`${key}-val`);
+    if (!el) return;
+    el.innerText = val;
+    this._noteChange(key, label, val, el.closest('.coin'));
+    el.closest('.coin').classList.toggle('empty', key === 'grain' && val <= 0);
+  }
+
+  _setMetric(name, label, val) {
     const valEl = document.getElementById(`${name}-val`);
     const barEl = document.getElementById(`${name}-bar`);
-    if (valEl) valEl.innerText = `${val}/100`;
-    if (barEl) barEl.style.width = `${val}%`;
+    if (!valEl) return;
+    valEl.innerText = `${val}/100`;
+    if (barEl) {
+      barEl.style.width = `${val}%`;
+      barEl.classList.toggle('low', val < 50);
+      barEl.classList.toggle('critical', val < 25);
+    }
+    this._noteChange(name, label, val, valEl.closest('.vital'));
+  }
+
+  worldShow(which) {
+    document.getElementById('world-news').style.display = which === 'news' ? '' : 'none';
+    document.getElementById('world-nations').style.display = which === 'nations' ? '' : 'none';
+    document.querySelectorAll('.segment[data-world]').forEach(b => b.classList.toggle('active', b.dataset.world === which));
+  }
+
+  // How many news items have come in since the player last looked at the World tab.
+  renderNewsBadge(news) {
+    const badge = document.getElementById('nav-news-badge');
+    if (!badge) return;
+    const newest = news.length ? news[0].id : null;
+    if (this._newsSeenId === undefined || document.getElementById('view-news').classList.contains('active')) this._newsSeenId = newest;
+    const at = news.findIndex(n => n.id === this._newsSeenId);
+    const unread = at < 0 ? news.length : at;
+    badge.innerText = unread > 9 ? '9+' : unread;
+    badge.style.display = unread ? 'inline-block' : 'none';
   }
 
   filterNews(category, btn) {
@@ -542,12 +856,12 @@ class RealmApp {
       news_feed;
 
     if (filtered.length === 0) {
-      newsContainer.innerHTML = '<p class="empty-state">No news of this kind yet.</p>';
+      setHtml(newsContainer, '<p class="empty-state">No news of this kind yet.</p>');
       return;
     }
 
     const icons = { crisis: '⚡', trade: '🤝', assembly: '📜', lore: '📖', turn: '🔔', diplomacy: '🕊️', war: '⚔️', boon: '🌟' };
-    newsContainer.innerHTML = filtered.map(n => `
+    setHtml(newsContainer, filtered.map(n => `
       <article class="news-item">
         <span class="news-item-icon">${icons[n.type] || '✦'}</span>
         <div class="grow">
@@ -555,7 +869,7 @@ class RealmApp {
           <p>${escapeHtml(n.detail)}</p>
         </div>
       </article>
-    `).join('');
+    `).join(''));
   }
 
   renderConcludedDebrief(state, realm) {
@@ -571,91 +885,28 @@ class RealmApp {
     const myEval = (outcome.realm_evaluations || []).find(e => e.realm_id === this.realmId);
     if (!myEval) return;
 
-    let verdictColor = '#ef4444';
-    let verdictIcon = '🔴';
-    if (outcome.continental_verdict === 'STABLE CONTINENT') {
-      verdictColor = '#10b981';
-      verdictIcon = '🟢';
-    } else if (outcome.continental_verdict === 'FRAGILE PEACE') {
-      verdictColor = '#f59e0b';
-      verdictIcon = '🟡';
-    }
-
-    // Public mission HTML
-    let pubHtml = '';
-    if (myEval.public_mission_eval) {
-      const pm = myEval.public_mission_eval;
-      pubHtml = `
-        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px; border-radius:var(--radius-xs); margin-bottom:8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="font-size:0.82rem; color: var(--text-primary);">PUBLIC: ${pm.title}</strong>
-            ${pm.achieved ? 
-              '<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ACHIEVED</span>' : 
-              '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">✗ FAILED</span>'}
-          </div>
-          <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:2px;">${pm.description}</div>
-          <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); margin-top:4px;">${pm.explanation}</div>
-        </div>
-      `;
-    }
-
-    // Secret missions HTML
-    let secretsHtml = '';
-    if (myEval.secret_missions_eval && myEval.secret_missions_eval.length > 0) {
-      secretsHtml = myEval.secret_missions_eval.map((sm, i) => `
-        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px; border-radius:var(--radius-xs); margin-bottom:6px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="font-size:0.82rem; color: var(--text-primary);">SECRET #${i+1}: ${sm.title}</strong>
-            ${sm.achieved ? 
-              '<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ACHIEVED</span>' : 
-              '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">✗ FAILED</span>'}
-          </div>
-          <div style="font-size:0.75rem; color:#10b981; margin-top:2px; font-weight:600;">${sm.objective}</div>
-          <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); margin-top:4px;">${sm.explanation}</div>
-        </div>
-      `).join('');
-    } else {
-      secretsHtml = `
-        <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); padding:10px; border-radius:var(--radius-xs); margin-bottom:8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="font-size:0.82rem;">${myEval.directive_title}</strong>
-            ${myEval.directive_achieved ? 
-              '<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ACHIEVED</span>' : 
-              '<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">✗ FAILED</span>'}
-          </div>
-          <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); margin-top:4px;">${myEval.directive_explanation}</div>
-        </div>
-      `;
-    }
+    const esc = escapeHtml;
+    const look = { 'STABLE CONTINENT': ['🟢', 'stable'], 'FRAGILE PEACE': ['🟡', 'fragile'] }[outcome.continental_verdict] || ['🔴', 'crisis'];
+    const result = (title, goal, achieved, explanation) => `<div class="mission-result ${achieved ? 'met' : 'missed'}">
+        <div class="row-between"><strong>${esc(title)}</strong><span class="status-pill ${achieved ? 'ok' : 'bad'}">${achieved ? 'Met' : 'Not met'}</span></div>
+        ${goal ? `<p class="mission-result-goal">${esc(goal)}</p>` : ''}
+        <p class="mission-result-why">${esc(explanation)}</p>
+      </div>`;
+    const pub = myEval.public_mission_eval;
+    const secrets = myEval.secret_missions_eval || [];
 
     container.style.display = 'block';
-    container.innerHTML = `
-      <div class="card" style="border: 2px solid ${verdictColor}; padding: 16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <span class="badge" style="background:var(--text-primary); color:var(--bg-surface); font-weight:800;">SUMMIT CONCLUDED</span>
-          <span class="badge" style="font-size:0.75rem; background:${verdictColor}; color:#fff; font-weight:800;">
-            ${myEval.success_ratio || ''} MANDATES (${myEval.score}%)
-          </span>
-        </div>
-
-        <h2 style="font-size:1.2rem; font-weight:900; margin-bottom:4px; text-transform:uppercase; color:${verdictColor};">
-          ${verdictIcon} ${outcome.continental_verdict}
-        </h2>
-        <p style="font-size:0.82rem; color:var(--text-secondary); line-height:1.4; margin-bottom:12px;">
-          ${outcome.continental_desc}
-        </p>
-
-        <div style="font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; font-weight:700;">
-          SOVEREIGN MANDATE EVALUATION:
-        </div>
-        ${pubHtml}
-        ${secretsHtml}
-
-        <p style="font-size:0.82rem; color:var(--text-primary); line-height:1.4; font-style:italic; margin-top:8px;">
-          "${myEval.epilogue}"
-        </p>
+    setHtml(container, `
+      <div class="verdict-card ${look[1]}">
+        <div class="phase-kicker">The summit has ended</div>
+        <h2 class="verdict-title">${look[0]} ${esc(outcome.continental_verdict)}</h2>
+        <p class="verdict-desc">${esc(outcome.continental_desc)}</p>
+        <div class="verdict-score">${esc(myEval.name)}: ${myEval.achieved_missions} of ${myEval.total_missions} goals met</div>
+        ${pub ? result(`Public mandate: ${pub.title}`, pub.description, pub.achieved, pub.explanation) : ''}
+        ${secrets.map((sm, i) => result(`Secret mission ${i + 1}: ${sm.title}`, sm.objective, sm.achieved, sm.explanation)).join('')}
+        <p class="verdict-epilogue">${esc(myEval.epilogue)}</p>
       </div>
-    `;
+    `);
   }
 
   // ---------------------------------------------------------------------------
@@ -897,7 +1148,7 @@ class RealmApp {
       this._wikiShow(`<div class="wk-title">Welcome to the Spireopedia</div>
         <div class="wk-sub">${data.articles.length} articles · current year ${esc(data.meta.current_year)}</div>
         <p>${esc(data.meta.tagline)}. ${esc(data.meta.calendar_note)}</p>
-        <p class="wk-muted">The answers to every quiz question are somewhere in these articles.</p>${cats}`, { nav: false });
+        ${(this.rules || {}).quiz === false ? '' : '<p class="wk-muted">The answers to every quiz question are somewhere in these articles.</p>'}${cats}`, { nav: false });
     } catch (err) {
       this._wikiShow(`<p class="wk-muted">${escapeHtml(err.message)}</p>`, { nav: false });
     }
@@ -969,6 +1220,7 @@ class RealmApp {
     const meta = state.meta;
     section.style.display = settings.attacks_enabled === false ? 'none' : '';
     if (settings.attacks_enabled === false) return;
+    const summitOver = meta.phase === 'summit_concluded';
     const w = meta.weather;
     const box = document.getElementById('war-weather');
     if (box && w && this._weatherKey !== w.id + meta.current_turn) {
@@ -983,6 +1235,8 @@ class RealmApp {
       this._warAt = now;
       this.loadWar();
     }
+    const open = document.getElementById('war-open');
+    if (open) open.style.display = this.war && this.war.from_turn <= meta.current_turn && !summitOver ? '' : 'none';
     this.renderWarLog(state.battles || []);
     this.renderSieges(state.sieges || []);
   }
@@ -1014,15 +1268,14 @@ class RealmApp {
     const chips = document.getElementById('war-targets');
     if (chips) {
       const names = Object.fromEntries((this._lastRealms || []).map(r => [r.id, r]));
-      chips.innerHTML = (war.targets || []).map(t => {
+      const blocked = (war.targets || []).filter(t => !t.can_attack);
+      // setHtml: a tap on a target must not land between two rebuilds of the list.
+      setHtml(chips, ((war.targets || []).map(t => {
         const r = names[t.id] || {};
         return `<button type="button" class="war-chip ${t.id === this.warTarget ? 'active' : ''}" style="--chip-color:${esc(r.theme_color || '#8c7a5e')}"
           ${t.can_attack ? '' : 'disabled'} title="${esc(t.reason || '')}" onclick="realmApp.selectWarTarget('${esc(t.id)}')"><span>${esc(r.emoji || '🏛️')}</span>${esc(t.name)}</button>`;
-      }).join('') || '<p class="empty-state">No other nations are playing.</p>';
-      const blocked = (war.targets || []).filter(t => !t.can_attack);
-      if (blocked.length && blocked.length === (war.targets || []).length) {
-        chips.insertAdjacentHTML('beforeend', `<p class="section-sub" style="width:100%;">${esc(blocked[0].reason)}</p>`);
-      }
+      }).join('') || '<p class="empty-state">No other nations are playing.</p>')
+        + (blocked.length && blocked.length === (war.targets || []).length ? `<p class="section-sub" style="width:100%;">${esc(blocked[0].reason)}</p>` : ''));
     }
     this.renderWarScout();
   }
@@ -1047,6 +1300,8 @@ class RealmApp {
     const box = document.getElementById('war-scout');
     if (!box) return;
     const p = this.warPreview, esc = escapeHtml;
+    const buttons = document.getElementById('war-buttons');
+    if (buttons) buttons.style.display = this.warTarget ? '' : 'none';
     if (!this.warTarget || !p) {
       box.innerHTML = '';
       this._setWarButtons(null);
@@ -1132,6 +1387,17 @@ class RealmApp {
     }
   }
 
+  // The alarm for a nation under siege is on every tab, with what can be done about it.
+  renderSiegeAlert(sieges) {
+    const box = document.getElementById('siege-alert');
+    if (!box) return;
+    const coming = sieges.filter(s => s.defender_id === this.realmId);
+    box.style.display = coming.length ? '' : 'none';
+    setHtml(box, coming.map(s => `<div class="row-between"><b>⚠️ ${escapeHtml(s.attacker_name)} is marching on you!</b>
+      <b class="siege-eta">${Math.floor(s.eta / 60)}:${String(s.eta % 60).padStart(2, '0')}</b></div>`).join('')
+      + (coming.length ? '<p>The battle is fought when the army arrives, with the numbers of that moment. Trade for Grain, steady your people, raise your army.</p>' : ''));
+  }
+
   // Armies on the road are announced to everyone; the nation under siege gets an alarm.
   renderSieges(sieges) {
     const box = document.getElementById('war-sieges');
@@ -1150,8 +1416,7 @@ class RealmApp {
     for (const s of sieges || []) {
       if (this._seenSieges.has(s.id)) continue;
       this._seenSieges.add(s.id);
-      if (s.defender_id === this.realmId) { showToast(`⚠️ ${s.attacker_name} is marching on you! They arrive in ${clock(s.eta)}.`, 'danger'); synth.playAlert(); }
-      else if (s.attacker_id !== this.realmId) showToast(`🏰 ${s.attacker_name} marches on ${s.defender_name} (${clock(s.eta)})`, 'info');
+      if (s.defender_id === this.realmId) synth.playAlert();
     }
   }
 
@@ -1229,22 +1494,35 @@ class RealmApp {
     const level = t => ({ LOW: 1, MEDIUM: 2, HIGH: 3 }[t] || 0);
     const pips = (icon, label, tier) => `<span class="pips" title="${label}: ${esc(tier || '?')}">
         <i>${icon}</i>${[1, 2, 3].map(n => `<em class="${n <= level(tier) ? 'on' : ''}"></em>`).join('')}</span>`;
-    list.innerHTML = realms.filter(r => r.active !== false).map(r => {
+    this._openNations = this._openNations || new Set();
+    if (!list._toggleWatched) {               // what is open stays open when a number changes and the list is rebuilt
+      list._toggleWatched = true;
+      list.addEventListener('toggle', e => {
+        const id = e.target.dataset && e.target.dataset.nation;
+        if (!id) return;
+        if (e.target.open) this._openNations.add(id); else this._openNations.delete(id);
+      }, true);
+    }
+    setHtml(list, realms.filter(r => r.active !== false).map(r => {
       const mine = r.id === this.realmId;
-      return `<div class="nation-card" style="--nc:${esc(r.theme_color || '#8c7a5e')}">
-        <div class="nation-card-head">
-          <span class="crest small">${esc(r.emoji || '🏛️')}</span>
-          <div class="grow"><strong>${esc(r.name)}</strong>${mine ? ' <span class="status-pill open">You</span>' : ''}
-            <div class="nation-card-sub">${esc(r.public_mission ? r.public_mission.title : r.ethos || '')}</div></div>
-          <span class="vote-seal" title="Assembly votes">${r.assembly_votes}</span>
-        </div>
-        <div class="nation-card-pips">
-          ${pips('🌾', 'Grain', r.grain_tier)}${pips('⚙️', 'Cores', r.cores_tier)}${pips('🧵', 'Silk', r.silk_tier)}${pips('⚔️', 'Military', r.military_tier)}
-          ${pips('🤝', 'Standing', r.standing_tier)}${pips('🏛️', 'Stability', r.stability_tier)}
-        </div>
-        ${r.is_starving ? '<div class="flag bad mt-1">🥀 Starving</div>' : ''}
-      </div>`;
-    }).join('');
+      const mandate = r.public_mission || {};
+      return `<details class="nation-card" data-nation="${esc(r.id)}" style="--nc:${esc(r.theme_color || '#8c7a5e')}" ${this._openNations.has(r.id) ? 'open' : ''}>
+        <summary>
+          <div class="nation-card-head">
+            <span class="crest small">${esc(r.emoji || '🏛️')}</span>
+            <div class="grow"><strong>${esc(r.name)}</strong>${mine ? ' <span class="status-pill open">You</span>' : ''}
+              <div class="nation-card-sub">${esc(mandate.title || r.ethos || '')}</div></div>
+            <span class="vote-seal" title="Assembly votes">${r.assembly_votes}</span>
+          </div>
+          <div class="nation-card-pips">
+            ${pips('🌾', 'Grain', r.grain_tier)}${pips('⚙️', 'Cores', r.cores_tier)}${pips('🧵', 'Silk', r.silk_tier)}${pips('⚔️', 'Military', r.military_tier)}
+            ${pips('🤝', 'Standing', r.standing_tier)}${pips('🏛️', 'Stability', r.stability_tier)}
+          </div>
+          ${r.is_starving ? '<div class="flag bad mt-1">🥀 Starving</div>' : ''}
+        </summary>
+        <p class="nation-card-more"><b>Public mandate:</b> ${esc(mandate.description || '—')}</p>
+      </details>`;
+    }).join(''));
   }
 
   renderFlags(realm) {
@@ -1258,7 +1536,7 @@ class RealmApp {
     if (realm.is_quarantined) html += `<span class="flag good">🛡️ Cordon: shielded from plague & surges</span>`;
     if (realm.is_striking) html += `<span class="flag bad">✊ Workers on strike</span>`;
 
-    container.innerHTML = html;
+    setHtml(container, html);
   }
 
   renderTrades(trades, realm) {
@@ -1273,39 +1551,76 @@ class RealmApp {
       badgeEl.style.display = incoming.length ? 'inline-block' : 'none';
     }
     const note = t => t.note ? `<p class="trade-note">“${esc(t.note)}”</p>` : '';
+    const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+    const amount = (n, r) => `${n} ${RESOURCE_SHORT[r] || r}`;
 
-    const incomingContainer = document.getElementById('incoming-trades-list');
-    if (incomingContainer) {
-      incomingContainer.innerHTML = incoming.length ? incoming.map(t => `
-        <div class="offer-card">
-          <div class="offer-head"><strong>${esc(t.sender_name)}</strong><span>${esc(t.time_str || '')}</span></div>
-          <div class="offer-swap">
-            <div><span>You get</span><b>${t.offer_amount} ${esc(res(t.offer_resource))}</b></div>
-            <div class="offer-arrow">⇄</div>
-            <div><span>You give</span><b>${t.request_amount} ${esc(res(t.request_resource))}</b></div>
-          </div>
-          ${note(t)}
-          <div class="row mt-1">
-            <button class="btn btn-primary btn-sm grow" onclick="realmApp.respondTrade('${esc(t.id)}', 'accept')">Accept</button>
-            <button class="btn btn-secondary btn-sm grow" onclick="realmApp.respondTrade('${esc(t.id)}', 'decline')">Decline</button>
-          </div>
-        </div>`).join('') : '<p class="empty-state">No offers waiting for you.</p>';
-    }
+    show('incoming-card', incoming.length > 0);
+    setHtml(document.getElementById('incoming-trades-list'), incoming.map(t => `
+      <div class="offer-card">
+        <div class="offer-head"><strong>${esc(t.sender_name)}</strong><span>${esc(t.time_str || '')}</span></div>
+        <div class="offer-swap">
+          <div><span>You get</span><b>${t.offer_amount} ${esc(res(t.offer_resource))}</b></div>
+          <div class="offer-arrow">⇄</div>
+          <div><span>You give</span><b>${t.request_amount} ${esc(res(t.request_resource))}</b></div>
+        </div>
+        ${note(t)}
+        <div class="row mt-1">
+          <button class="btn btn-primary btn-sm grow" onclick="realmApp.respondTrade('${esc(t.id)}', 'accept')">Accept</button>
+          <button class="btn btn-secondary btn-sm grow" onclick="realmApp.respondTrade('${esc(t.id)}', 'decline')">Decline</button>
+        </div>
+      </div>`).join(''));
 
-    const outgoingContainer = document.getElementById('outgoing-trades-list');
-    if (outgoingContainer) {
-      outgoingContainer.innerHTML = outgoing.length ? outgoing.map(t => `
-        <div class="offer-card">
-          <div class="offer-head"><strong>To ${esc(t.receiver_name)}</strong><span>Waiting…</span></div>
-          <div class="offer-swap">
-            <div><span>You give</span><b>${t.offer_amount} ${esc(res(t.offer_resource))}</b></div>
-            <div class="offer-arrow">⇄</div>
-            <div><span>You get</span><b>${t.request_amount} ${esc(res(t.request_resource))}</b></div>
-          </div>
-          ${note(t)}
-          <button class="btn btn-secondary btn-sm mt-1" onclick="realmApp.respondTrade('${esc(t.id)}', 'cancel')">Withdraw offer</button>
-        </div>`).join('') : '<p class="empty-state">You have no open offers.</p>';
+    show('outgoing-card', outgoing.length > 0);
+    setHtml(document.getElementById('outgoing-trades-list'), outgoing.map(t => `
+      <div class="offer-card">
+        <div class="offer-head"><strong>To ${esc(t.receiver_name)}</strong><span>Waiting for an answer…</span></div>
+        <div class="offer-swap">
+          <div><span>You give</span><b>${t.offer_amount} ${esc(res(t.offer_resource))}</b></div>
+          <div class="offer-arrow">⇄</div>
+          <div><span>You get</span><b>${t.request_amount} ${esc(res(t.request_resource))}</b></div>
+        </div>
+        ${note(t)}
+        <button class="btn btn-secondary btn-sm mt-1" onclick="realmApp.respondTrade('${esc(t.id)}', 'cancel')">Withdraw offer</button>
+      </div>`).join(''));
+
+    // What became of this nation's offers: an offer must not simply vanish from the list.
+    const mine = trades.filter(t => t.status !== 'pending' && (t.sender_id === this.realmId || t.receiver_id === this.realmId));
+    show('trade-history-card', mine.length > 0);
+    setHtml(document.getElementById('trade-history'), mine.slice(0, 6).map(t => {
+      const sent = t.sender_id === this.realmId;
+      const other = sent ? t.receiver_name : t.sender_name;
+      const deal = sent ? `you give ${amount(t.offer_amount, t.offer_resource)}, you get ${amount(t.request_amount, t.request_resource)}`
+                        : `you give ${amount(t.request_amount, t.request_resource)}, you get ${amount(t.offer_amount, t.offer_resource)}`;
+      const [icon, cls, text] = {
+        accepted: ['✓', 'ok', sent ? `${other} accepted` : `You accepted ${other}'s offer`],
+        declined: ['✗', 'bad', sent ? `${other} declined` : `You declined ${other}'s offer`],
+      }[t.status] || ['–', '', sent ? `Offer to ${other} withdrawn` : `${other}'s offer was withdrawn`];
+      return `<div class="trade-past ${cls}"><span class="trade-past-icon">${icon}</span><span><b>${esc(text)}</b><br>${esc(deal)}</span></div>`;
+    }).join(''));
+
+    this._announceTradeNews(trades);
+  }
+
+  // Offers that arrive and answers to this nation's offers matter at once, whichever tab is showing.
+  _announceTradeNews(trades) {
+    const known = this._tradeStatus;
+    const now = {};
+    for (const t of trades) {
+      if (t.sender_id !== this.realmId && t.receiver_id !== this.realmId) continue;
+      now[t.id] = t.status;
+      if (!known) continue;
+      if (!known[t.id] && t.status === 'pending' && t.receiver_id === this.realmId) {
+        const onTrade = document.getElementById('view-trades').classList.contains('active');
+        showToast(onTrade ? `New offer from ${t.sender_name}` : `${t.sender_name} sent you an offer. See the Trade tab.`, 'info');
+        synth.playChime();
+      } else if (known[t.id] === 'pending' && t.sender_id === this.realmId && t.status === 'accepted') {
+        showToast(`${t.receiver_name} accepted your offer!`, 'success');
+        synth.playChime();
+      } else if (known[t.id] === 'pending' && t.sender_id === this.realmId && t.status === 'declined') {
+        showToast(`${t.receiver_name} declined your offer.`, 'warning');
+      }
     }
+    this._tradeStatus = now;
   }
 
   renderProposals(proposals, realm) {
@@ -1313,17 +1628,27 @@ class RealmApp {
     const types = this.motionTypes || {};
     const open = proposals.filter(p => p.status === 'draft' || p.status === 'qualified');
     const decided = proposals.filter(p => p.status === 'passed' || p.status === 'rejected');
-    const canEndorse = p => !(p.support_list || []).includes(this.realmId)
+    const working = !this._meta || this._meta.phase === 'working';
+    const fromSpire = p => p.proposer_id === 'spire_council';
+    const canEndorse = p => working && !fromSpire(p) && !(p.support_list || []).includes(this.realmId)
       && (!p.target_seconder_id || p.target_seconder_id === this.realmId);
+    const hasBallotPlace = p => (p.support_count ?? (p.support_list || []).length) >= 2 || p.is_qualified;
 
+    // The badge counts what is waiting for a nation like this one: motions that still need a co-sponsor.
     const motionsBadge = document.getElementById('nav-motions-badge');
     if (motionsBadge) {
-      const n = open.filter(canEndorse).length;
+      const n = open.filter(p => canEndorse(p) && !hasBallotPlace(p)).length;
       motionsBadge.innerText = n;
       motionsBadge.style.display = n > 0 ? 'inline-block' : 'none';
     }
+    const newBtn = document.getElementById('motion-new-btn');
+    if (newBtn) newBtn.style.display = working ? '' : 'none';
+    const closed = document.getElementById('motion-closed-note');
+    if (closed) closed.style.display = working || (this._meta && this._meta.phase === 'summit_concluded') ? 'none' : '';
 
     const effectLine = p => this._motionEffectHtml(p);
+    // The wording of a ready-made motion adds nothing to what "If passed" already says.
+    const terms = p => (this.rules || {}).free_motions === false ? '' : `<details class="motion-terms"><summary>Read the terms</summary><p>${esc(p.description)}</p></details>`;
     const head = (p, pill) => {
       const t = types[p.effect_type] || {};
       return `<div class="row-between" style="align-items:flex-start;">
@@ -1333,26 +1658,32 @@ class RealmApp {
 
     const container = document.getElementById('pending-motions-list');
     if (container) {
-      container.innerHTML = open.length ? open.map(p => {
+      setHtml(container, open.length ? open.map(p => {
         const support = p.support_list || [];
         const count = p.support_count ?? support.length;
         const qualified = count >= 2 || p.is_qualified;
         const pill = qualified ? '<span class="status-pill ok">On the ballot</span>'
                                : '<span class="status-pill">Needs a co-sponsor</span>';
         let action;
-        if (support.includes(this.realmId)) {
-          action = `<span class="section-sub">${p.proposer_id === this.realmId ? 'Your motion' : 'You co-sponsored this'}</span>`;
+        if (fromSpire(p)) {
+          action = '<span class="section-sub">Put on the ballot by the Spire Council</span>';
+        } else if (p.proposer_id === this.realmId) {
+          action = `<span class="section-sub">Your motion.${qualified ? ' It goes to the next vote.' : ' Ask another nation to co-sponsor it.'}</span>`;
+        } else if (support.includes(this.realmId)) {
+          action = '<span class="section-sub">You co-sponsored this</span>';
         } else if (canEndorse(p)) {
           action = `<button class="btn btn-primary btn-block btn-sm" onclick="realmApp.supportProposal('${esc(p.id)}')">Co-sponsor this motion</button>`;
+        } else if (p.target_seconder_id && p.target_seconder_id !== this.realmId) {
+          action = '<span class="section-sub">Addressed to another nation</span>';
         } else {
-          action = `<span class="section-sub">Addressed to another nation</span>`;
+          action = '';
         }
         const ask = p.target_seconder_id && !qualified
           ? `<div class="callout ${p.target_seconder_id === this.realmId ? 'warn' : 'neutral'} mt-1">${p.target_seconder_id === this.realmId ? 'Your nation has been asked to co-sponsor this.' : `Waiting for ${esc(p.target_seconder_name)} to co-sponsor.`}</div>` : '';
         return `<div class="motion-card">${head(p, pill)}${effectLine(p)}
-          <details class="motion-terms"><summary>Read the terms</summary><p>${esc(p.description)}</p></details>
+          ${terms(p)}
           ${ask}<div class="mt-1">${action}</div></div>`;
-      }).join('') : '<p class="empty-state">No motions on the floor yet. Pick a template above to propose one.</p>';
+      }).join('') : '<p class="empty-state">No motions on the floor yet.</p>');
     }
 
 
@@ -1360,7 +1691,7 @@ class RealmApp {
     const decidedList = document.getElementById('decided-motions-list');
     if (decidedCard && decidedList) {
       decidedCard.style.display = decided.length ? '' : 'none';
-      decidedList.innerHTML = decided.map(p => {
+      setHtml(decidedList, decided.map(p => {
         const votes = Object.values(p.votes || {});
         const side = c => votes.filter(v => v.choice === c);
         const sum = c => side(c).reduce((a, v) => a + (v.weight || 1), 0);
@@ -1376,7 +1707,7 @@ class RealmApp {
             <div><b>Against</b> ${sum('oppose')} votes &middot; ${side('oppose').length} nations<br><span>${line('oppose')}</span></div>
             ${side('abstain').length ? `<div><b>Abstained</b><br><span>${line('abstain')}</span></div>` : ''}
           </div></div>`;
-      }).join('');
+      }).join(''));
     }
   }
 
@@ -1409,96 +1740,62 @@ class RealmApp {
     const timerEl = document.getElementById('plenary-timer-display');
     const actionsContainer = document.getElementById('plenary-voting-actions-container');
 
+    const simple = (this.rules || {}).free_motions === false;
+    const esc = escapeHtml;
+    const docket = meta.plenary_docket || [];
+    const idx = meta.current_motion_index || 0;
+    const clock = meta.display_timer;
+    const votes = realm.assembly_votes;
+    const voteWord = `${votes} vote${votes === 1 ? '' : 's'}`;
+    const passRule = `A motion passes when it has more votes for than against. Your nation has ${voteWord}.`;
+    timerEl.innerText = clock && (clock.kind === 'vote' || clock.kind === 'debate')
+      ? `${clock.running ? (clock.kind === 'vote' ? 'Voting closes in' : 'Debate') : 'Clock paused at'} ${formatSeconds(clock.seconds)}` : '';
+
+    const voteCard = p => {
+      const mine = (p.votes || {})[this.realmId];
+      const verb = { support: 'for', oppose: 'against' }[mine ? mine.choice : ''];
+      return `<div class="vote-card">
+        <strong class="motion-title">${esc(p.title)}</strong>
+        <div class="motion-sponsor">Tabled by ${esc(p.proposer_name)}</div>
+        ${this._motionEffectHtml(p)}
+        ${simple ? '' : `<details class="motion-terms"><summary>Read the terms</summary><p>${esc(p.description)}</p></details>`}
+        ${mine ? `<div class="vote-cast">✓ ${verb ? `You voted ${verb} with ${mine.weight} vote${mine.weight === 1 ? '' : 's'}` : 'You abstained'}</div>` : `
+        <div class="vote-buttons">
+          <button class="btn btn-primary vote-for" onclick="realmApp.castPlenaryVote('${esc(p.id)}', 'support')">For</button>
+          <button class="btn btn-danger vote-against" onclick="realmApp.castPlenaryVote('${esc(p.id)}', 'oppose')">Against</button>
+          <button class="btn btn-secondary vote-abstain" onclick="realmApp.castPlenaryVote('${esc(p.id)}', 'abstain')">Abstain</button>
+        </div>`}
+      </div>`;
+    };
+
     if (phase === 'plenary_quick') {
-      titleEl.innerText = `BETWEEN-ROUNDS PLENARY: QUICK VOTE`;
-      descEl.innerText = `Cast your sovereign weighted ballots on the qualified resolutions.`;
-      timerEl.innerText = `VOTING ACTIVE`;
-
-      const docket = meta.plenary_docket || [];
-      const docketProps = proposals.filter(p => docket.includes(p.id));
-
-      if (docketProps.length === 0) {
-        actionsContainer.innerHTML = '<p class="text-muted" style="font-size:0.8rem; font-family:var(--font-mono);">No resolutions qualified for this plenary.</p>';
-      } else {
-        actionsContainer.innerHTML = docketProps.map(p => {
-          const votes = p.votes || {};
-          const myVote = votes[this.realmId];
-          return `
-            <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); border-radius:4px; padding:10px; margin-bottom:8px;">
-              <strong class="motion-title">${escapeHtml(p.title)}</strong>
-              ${this._motionEffectHtml(p)}
-              <details class="motion-terms" style="margin-bottom:8px;"><summary>Read the terms</summary><p>${escapeHtml(p.description)}</p></details>
-              
-              ${myVote ? `
-                <div class="badge" style="border-color:var(--accent); color:var(--accent);">BALLOT CAST: ${myVote.choice.toUpperCase()} (${myVote.weight} VOTES)</div>
-              ` : `
-                <div style="display:flex; gap:6px;">
-                  <button class="btn btn-sm btn-primary" onclick="realmApp.castPlenaryVote('${p.id}', 'support')">SUPPORT (+${realm.assembly_votes})</button>
-                  <button class="btn btn-sm btn-danger" onclick="realmApp.castPlenaryVote('${p.id}', 'oppose')">OPPOSE (+${realm.assembly_votes})</button>
-                  <button class="btn btn-sm btn-secondary" onclick="realmApp.castPlenaryVote('${p.id}', 'abstain')">ABSTAIN</button>
-                </div>
-              `}
-            </div>
-          `;
-        }).join('');
-      }
+      const last = meta.current_turn >= (meta.max_turns || 3);
+      const motions = proposals.filter(p => docket.includes(p.id));
+      const left = motions.filter(p => !(p.votes || {})[this.realmId]).length;
+      titleEl.innerText = last ? 'The final vote' : 'The Assembly votes';
+      descEl.innerText = !motions.length ? '' : left ? `Vote on ${left === 1 ? 'this motion' : `all ${left} motions`}. ${passRule}` : 'All your votes are in. The result comes when voting closes.';
+      setHtml(actionsContainer, motions.length ? motions.map(voteCard).join('') : '<p class="empty-state">No motion reached the ballot this time.</p>');
     } else if (phase === 'grand_plenary_discussion') {
-      const docket = meta.plenary_docket || [];
-      const idx = meta.current_motion_index || 0;
-      const activeProp = proposals.find(p => p.id === docket[idx]);
-
-      titleEl.innerText = `GRAND PLENARY: MOTION ${idx + 1} OF ${docket.length}`;
-      descEl.innerText = `5 minutes allocated for floor discussion before voting opens.`;
-      timerEl.innerText = `DEBATE: ${formatSeconds(meta.discussion_timer_remaining)}`;
-
-      if (activeProp) {
-        actionsContainer.innerHTML = `
-          <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); border-radius:4px; padding:12px;">
-            <strong class="motion-title">${escapeHtml(activeProp.title)}</strong>
-            <div class="motion-sponsor">Tabled by ${escapeHtml(activeProp.proposer_name)}</div>
-            ${this._motionEffectHtml(activeProp)}
-            <p style="font-size:0.82rem; color:var(--text-secondary); line-height:1.45; margin-top:8px; white-space:pre-line;">${escapeHtml(activeProp.description)}</p>
-            <div style="margin-top:10px; font-size:0.78rem; font-family:var(--font-mono); color: var(--text-primary);">
-              [FLOOR OPEN FOR VERBAL DELIBERATION]
-            </div>
-          </div>
-        `;
-      }
+      const motion = proposals.find(p => p.id === docket[idx]);
+      titleEl.innerText = `Grand Plenary: motion ${idx + 1} of ${docket.length}`;
+      descEl.innerText = 'Argue for or against it, out loud. Voting opens when the debate ends.';
+      setHtml(actionsContainer, motion ? `<div class="vote-card">
+        <strong class="motion-title">${esc(motion.title)}</strong>
+        <div class="motion-sponsor">Tabled by ${esc(motion.proposer_name)}</div>
+        ${this._motionEffectHtml(motion)}
+        ${simple ? '' : `<p class="vote-terms">${esc(motion.description)}</p>`}
+      </div>` : '');
     } else if (phase === 'grand_plenary_voting') {
-      const docket = meta.plenary_docket || [];
-      const idx = meta.current_motion_index || 0;
-      const activeProp = proposals.find(p => p.id === docket[idx]);
-
-      titleEl.innerText = `GRAND PLENARY: VOTE ACTIVE ON MOTION ${idx + 1}`;
-      descEl.innerText = `Debate concluded. Cast your sovereign weighted ballots.`;
-      timerEl.innerText = `VOTE IN PROGRESS`;
-
-      if (activeProp) {
-        const votes = activeProp.votes || {};
-        const myVote = votes[this.realmId];
-        actionsContainer.innerHTML = `
-          <div style="background:var(--bg-surface-sunken); border:1px solid var(--border-subtle); border-radius:4px; padding:12px;">
-            <strong class="motion-title">${escapeHtml(activeProp.title)}</strong>
-            ${this._motionEffectHtml(activeProp)}
-            <details class="motion-terms" style="margin-bottom:10px;"><summary>Read the terms</summary><p>${escapeHtml(activeProp.description)}</p></details>
-            
-            ${myVote ? `
-              <div class="badge" style="border-color:var(--accent); color:var(--accent);">BALLOT LOCKED: ${myVote.choice.toUpperCase()} (${myVote.weight} VOTES)</div>
-            ` : `
-              <div style="display:flex; gap:8px;">
-                <button class="btn btn-primary btn-block" onclick="realmApp.castPlenaryVote('${activeProp.id}', 'support')">SUPPORT (+${realm.assembly_votes})</button>
-                <button class="btn btn-danger btn-block" onclick="realmApp.castPlenaryVote('${activeProp.id}', 'oppose')">OPPOSE (+${realm.assembly_votes})</button>
-                <button class="btn btn-secondary btn-block" onclick="realmApp.castPlenaryVote('${activeProp.id}', 'abstain')">ABSTAIN</button>
-              </div>
-            `}
-          </div>
-        `;
-      }
+      const motion = proposals.find(p => p.id === docket[idx]);
+      titleEl.innerText = `Grand Plenary: vote on motion ${idx + 1} of ${docket.length}`;
+      descEl.innerText = passRule;
+      setHtml(actionsContainer, motion ? voteCard(motion) : '');
     } else if (phase === 'turn_summary') {
-      titleEl.innerText = `PLENARY CONCLUDED`;
-      descEl.innerText = `All resolutions decided. Facilitator will process end of turn cycles.`;
-      timerEl.innerText = `ROUND END`;
-      actionsContainer.innerHTML = '';
+      const last = meta.current_turn >= (meta.max_turns || 3);
+      titleEl.innerText = 'The vote is over';
+      descEl.innerText = last ? 'The results are coming.' : 'The next turn starts soon. See the Motions tab for how it went.';
+      timerEl.innerText = '';
+      setHtml(actionsContainer, '');
     }
   }
 
@@ -1509,9 +1806,15 @@ class RealmApp {
       toggleAgendaBtn.addEventListener('click', () => {
         agendaContent.classList.toggle('open');
         const isOpen = agendaContent.classList.contains('open');
-        toggleAgendaBtn.querySelector('.toggle-indicator').innerText = isOpen ? '▲' : '▼';
+        toggleAgendaBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        toggleAgendaBtn.querySelector('.toggle-indicator').innerText = isOpen ? 'Hide' : 'Tap to read';
       });
     }
+
+    // Tapping one of the nation's own numbers says what it is for.
+    document.querySelectorAll('[data-explain]').forEach(el => {
+      el.addEventListener('click', () => this.explain(el.dataset.explain));
+    });
 
     document.querySelectorAll('.res-picker').forEach(picker => {
       picker.addEventListener('click', e => {
@@ -1583,16 +1886,28 @@ class RealmApp {
     this.updateTradePreview();
   }
 
+  // The offer in plain words, and anything that would stop it, before the player presses Send.
   updateTradePreview() {
     const el = document.getElementById('trade-preview-text');
     if (!el) return;
     const partner = document.getElementById('trade-receiver').value;
     const name = (this._realmNames || {})[partner];
-    const g = document.getElementById('trade-offer-res').value, ga = document.getElementById('trade-offer-amt').value || 0;
-    const r = document.getElementById('trade-req-res').value, ra = document.getElementById('trade-req-amt').value || 0;
-    el.innerHTML = name
-      ? `You give <b>${escapeHtml(ga)} ${RESOURCE_SHORT[g]}</b> to <b>${escapeHtml(name)}</b> and receive <b>${escapeHtml(ra)} ${RESOURCE_SHORT[r]}</b>.`
-      : 'Choose a nation to trade with.';
+    const g = document.getElementById('trade-offer-res').value, ga = parseInt(document.getElementById('trade-offer-amt').value, 10) || 0;
+    const r = document.getElementById('trade-req-res').value, ra = parseInt(document.getElementById('trade-req-amt').value, 10) || 0;
+    const me = this._me || {};
+    const stock = { grain: me.alchemical_grain, cores: me.aether_cores, silk: me.echo_silk, military: me.military_power };
+    const have = stock[g];
+    this._setVal('trade-have', have === undefined ? '' : `You have ${have} ${RESOURCE_SHORT[g]}`);
+    const givePart = `<b>${ga} ${RESOURCE_SHORT[g]}</b>`, getPart = `<b>${ra} ${RESOURCE_SHORT[r]}</b>`;
+    let text, warn = '';
+    if (!name) text = 'Choose a nation to trade with.';
+    else if (!ga && !ra) text = 'Set how much you give or ask for.';
+    else if (!ra) text = `You give ${givePart} to <b>${escapeHtml(name)}</b> as a gift.`;
+    else if (!ga) text = `You ask <b>${escapeHtml(name)}</b> for ${getPart} and give nothing in return.`;
+    else text = `You give ${givePart} to <b>${escapeHtml(name)}</b> and receive ${getPart}.`;
+    if (have !== undefined && ga > have) warn = `You only have ${have} ${RESOURCE_SHORT[g]}.`;
+    else if (name && this._round2 && ((g === 'grain' && ga) || (r === 'grain' && ra))) warn = 'The border crisis costs 5 Grain in transit on this trade.';
+    setHtml(el, text + (warn ? `<div class="trade-warn">${escapeHtml(warn)}</div>` : ''));
   }
 
   async respondTrade(tradeId, action) {
@@ -1661,12 +1976,13 @@ class RealmApp {
   async castPlenaryVote(propId, choice) {
     const prop = (this._proposals || []).find(p => p.id === propId) || {};
     const votes = this._me ? this._me.assembly_votes : 1;
+    const word = { support: 'for', oppose: 'against' }[choice];
     const ok = await confirmAction({
-      title: `Vote ${choice.toUpperCase()}?`,
+      title: word ? `Vote ${word}?` : 'Abstain?',
       message: prop.title ? `“${prop.title}”` : '',
-      details: choice === 'abstain' ? ['You do not take a side. Your votes are not counted for or against.', 'A ballot cannot be changed once cast.']
-        : [`Your nation's ${votes} vote${votes === 1 ? '' : 's'} count ${choice === 'support' ? 'for' : 'against'} the motion.`, 'A ballot cannot be changed once cast.'],
-      confirmLabel: `Cast ${choice} vote`, tone: choice === 'oppose' ? 'danger' : undefined,
+      details: !word ? ['You do not take a side. Your votes are not counted for or against.', 'A vote cannot be changed once cast.']
+        : [`Your nation's ${votes} vote${votes === 1 ? '' : 's'} count ${word} the motion.`, 'A vote cannot be changed once cast.'],
+      confirmLabel: word ? `Vote ${word}` : 'Abstain', tone: choice === 'oppose' ? 'danger' : undefined,
     });
     if (!ok) return;
     try {

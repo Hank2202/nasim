@@ -130,13 +130,16 @@ def enforce_api_auth():
         if not is_admin():
             return jsonify({"success": False, "message": "Facilitator authentication required."}), 401
     elif path.startswith("/api/") and not path.startswith("/api/auth/"):
-        data = request.get_json(silent=True) or {}
-        actor = next((data[k] for k in _ACTOR_KEYS if data.get(k)), None)
-        if not actor or not (is_realm_authed(actor) or is_admin()):
+        data = request.get_json(silent=True)
+        data = data if isinstance(data, dict) else {}
+        # Every nation named in the request must be logged in here: a request naming a second nation
+        # (realm_id = mine, sender_id = theirs) must not be able to act in that nation's name.
+        actors = {str(data[k]) for k in _ACTOR_KEYS if data.get(k)}
+        if not actors or not (is_admin() or all(is_realm_authed(a) for a in actors)):
             return jsonify({"success": False, "message": "Delegation authentication required."}), 401
         if not is_admin():
-            actor_realm = next((r for r in engine.db.get_state("realms", []) if r["id"] == actor), None)
-            if not actor_realm or not actor_realm.get("active", True):
+            realms = {r["id"]: r for r in engine.db.get_state("realms", [])}
+            if any(a not in realms or not realms[a].get("active", True) for a in actors):
                 return jsonify({"success": False, "message": "Your nation is not taking part in this summit."}), 403
     return None
 
@@ -155,7 +158,7 @@ _JOURNAL_REVERSIBLE = {"/api/admin/resources/bulk", "/api/admin/realm/override",
                        "/api/admin/plenary/conclude_quick", "/api/trade/<trade_id>/respond", "/api/lore/quiz", "/api/war/attack",
                        "/api/realm/action"}
 
-_JOURNAL_SKIP = {"/api/admin/reset", "/api/admin/setup/new", "/api/admin/save/restore", "/api/admin/realm/add",
+_JOURNAL_SKIP = {"/api/admin/reset", "/api/admin/setup/new", "/api/admin/save/restore",
                  "/api/admin/realm/remove", "/api/admin/realm/delete", "/api/admin/realms/set_count"}
 
 @app.before_request
@@ -199,8 +202,8 @@ def sanitize_state(state: Dict[str, Any]) -> Dict[str, Any]:
     if is_admin() or app.config.get("TESTING", False):
         return state
     hidden = ("pin", "secret_missions_pool", "active_secret_missions", "claimed_lore", "failed_lore", "quiz_answers",
-              "quiz_active", "quiz_log", "alchemical_grain", "aether_cores", "echo_silk", "military_power", "total_wealth",
-              "modifiers")
+              "quiz_active", "quiz_next", "quiz_log", "alchemical_grain", "aether_cores", "echo_silk", "military_power",
+              "total_wealth", "modifiers", "private_agenda", "mission_status")
     realms = []
     for r in state["realms"]:
         if is_realm_authed(r["id"]):
@@ -216,7 +219,17 @@ def sanitize_state(state: Dict[str, Any]) -> Dict[str, Any]:
     viewers = {r["id"] for r in state["realms"] if is_realm_authed(r["id"])}
     out["proposals"] = [p for p in (_private_view(p, viewers) for p in state.get("proposals", [])) if p]
     out["battles"] = [_battle_view(b, viewers) for b in state.get("battles", [])]
+    out["trades"] = [t for t in (_trade_view(t, viewers) for t in state.get("trades", [])) if t]
     return out
+
+def _trade_view(t: Dict[str, Any], viewers: set):
+    """Offers stay between the two nations. Everyone else only learns that two nations concluded a trade
+    (the news says so too, and the projector's map draws the route), never what moved or the private note."""
+    if t.get("sender_id") in viewers or t.get("receiver_id") in viewers:
+        return t
+    if t.get("status") == "accepted":
+        return {k: t.get(k) for k in ("id", "sender_id", "sender_name", "receiver_id", "receiver_name", "status", "time_str")}
+    return None
 
 def _battle_view(b: Dict[str, Any], viewers: set) -> Dict[str, Any]:
     """Everyone sees who fought, the outcome and the spoils. Only the two nations see how their own side fared."""
@@ -284,19 +297,25 @@ def get_lan_ip() -> str:
 
 @app.route("/")
 def index():
+    # Already logged in to the nation this link is for (its passcode card, say): straight to the console.
+    target = request.args.get("login", "")
+    if target and is_realm_authed(target):
+        return redirect(url_for("realm_view", realm_id=target))
     state = sanitize_state(engine.get_full_state())
     lan_ip = get_lan_ip()
     port = request.environ.get("SERVER_PORT", "5000")
     server_url = public_base_url() if IS_HOSTED else f"http://{lan_ip}:{port}"
-    login_target = request.args.get("login", "")
     return render_template(
         "lobby.html",
         realms=state["realms"],
         meta=state["meta"],
+        rules=state["game_settings"]["rules"],
+        my_realms=[r for r in state["realms"] if r.get("active", True) and is_realm_authed(r["id"])],
         server_url=server_url,
         lan_ip=lan_ip,
         port=port,
-        login_target=login_target
+        login_target=request.args.get("login", ""),
+        logged_out_by_new_game=request.args.get("again") == "1",
     )
 
 @app.route("/realm/<realm_id>")
@@ -309,10 +328,9 @@ def realm_view(realm_id: str):
     # Verify delegation auth cookie (or allow override via query param ?auth=1)
     has_auth_param = request.args.get("auth") == "1" and _auth_param_allowed()
     if not is_realm_authed(realm_id) and not has_auth_param:
-        # Forget the "already logged in" marker too, so the lobby asks for the passcode again.
-        resp = redirect(f"/?login={realm_id}")
-        resp.delete_cookie(f"has_auth_{realm_id}")
-        return resp
+        # A login from an earlier game: the lobby says why it asks for the passcode again.
+        stale = f"auth_{realm_id}" in request.cookies
+        return redirect(f"/?login={realm_id}" + ("&again=1" if stale else ""))
 
     session_id = request.cookies.get("summit_session_id")
     if not session_id:
@@ -330,6 +348,7 @@ def realm_view(realm_id: str):
         proposals=state["proposals"],
         news_feed=state["news_feed"],
         game_settings=state.get("game_settings", {}),
+        rules=state["game_settings"]["rules"],
         world_lore=state.get("world_lore", {})
     ))
     if not request.cookies.get("summit_session_id"):
@@ -356,7 +375,7 @@ def admin_view():
     has_auth_param = request.args.get("auth") == "1" and _auth_param_allowed()
     is_testing = app.config.get("TESTING", False)
     if not is_testing and not is_admin() and not has_auth_param:
-        return render_template("admin_login.html")
+        return render_template("admin_login.html", hosted=IS_HOSTED)
 
     state = engine.get_full_state()
     lan_ip = get_lan_ip()
@@ -367,12 +386,25 @@ def admin_view():
     return render_template(
         "admin.html",
         state=state,
+        rules=state["game_settings"]["rules"],
         server_url=server_url,
         qr_svg=qr_svg,
         host_ip=lan_ip,
         port=port,
         in_progress=game_in_progress(),
     )
+
+@app.route("/admin/cards")
+def admin_cards():
+    """Passcode cards to print or show, one per nation: a QR code that opens that nation's login, and its passcode."""
+    if not (is_admin() or app.config.get("TESTING", False)):
+        return redirect(url_for("admin_view"))
+    state = engine.get_full_state()
+    port = request.environ.get("SERVER_PORT", "5000")
+    server_url = public_base_url() if IS_HOSTED else f"http://{get_lan_ip()}:{port}"
+    cards = [{"realm": r, "qr": generate_qr_svg(f"{server_url}/?login={r['id']}", box_size=5)}
+             for r in state["realms"] if r.get("active", True)]
+    return render_template("cards.html", cards=cards, server_url=server_url, rules=state["game_settings"]["rules"])
 
 # -----------------------------------------------------------------------------
 # Spireopedia (in-game encyclopedia, read in the phone's Wiki tab)
@@ -424,21 +456,21 @@ def game_in_progress() -> bool:
 
 @app.route("/admin/setup")
 def admin_setup():
-    """Facilitator setup screen: scenario, difficulty, nations, timers and events."""
+    """Facilitator setup screen: the two difficulty settings (complexity and scenario), nations, timers and events."""
     if not (is_admin() or app.config.get("TESTING", False)):
         return redirect(url_for("admin_view"))
     state = engine.get_full_state()
     cfg = load_scenario_config()
     meta = state["meta"]
     in_progress = game_in_progress()
-    return render_template("setup.html", settings=engine.settings(), scenarios=cfg.get("scenarios", {}),
-                           difficulties=cfg.get("difficulties", {}), realms=state["realms"], meta=meta,
-                           in_progress=in_progress)
+    return render_template("setup.html", settings=engine.settings(as_chosen=True), scenarios=cfg.get("scenarios", {}),
+                           complexities=cfg.get("complexities", {}), rules=state["game_settings"]["rules"],
+                           realms=state["realms"], meta=meta, in_progress=in_progress, interrupted=engine.interrupted_game())
 
 @app.route("/api/admin/settings", methods=["POST"])
 def api_admin_settings():
     ok, msg = engine.update_settings(request.get_json(silent=True) or {})
-    return jsonify({"success": ok, "message": msg, "settings": engine.settings()}), (200 if ok else 400)
+    return jsonify({"success": ok, "message": msg, "settings": engine.settings(as_chosen=True)}), (200 if ok else 400)
 
 @app.route("/api/admin/setup/new", methods=["POST"])
 def api_admin_setup_new():
@@ -461,11 +493,36 @@ def overview_view():
     port = request.environ.get("SERVER_PORT", "5000")
     server_url = public_base_url() if IS_HOSTED else f"http://{lan_ip}:{port}"
     from engine import load_quiz
+    settings = state["game_settings"]
+    rules = settings["rules"]
+    # What each nation starts with in this game: the same for everyone to read, whatever has happened since.
+    fields = (("Grain", "alchemical_grain", "grain"), ("Cores", "aether_cores", "cores"), ("Silk", "echo_silk", "silk"),
+              ("Military", "military_power", "military"), ("Vitality", "public_vitality", None),
+              ("Standing", "diplomatic_standing", None), ("Stability", "civil_stability", None))
+    start = {}
+    for r in cfg.get("realms", []):
+        rows = []
+        for label, field, tier in fields:
+            if label == "Vitality" and rules["hide_vitality"]:
+                continue
+            value = r.get(field, 0) + rules["starting_bonus"].get(tier or "", 0)
+            rows.append({"label": label, "value": value, "tier": engine.get_qualitative_tier(tier, value) if tier else ""})
+        start[r["id"]] = rows
+    # Roughly how long a game takes: the working sessions, the pauses and the Assembly votes.
+    votes = 3 * settings.get("plenary_vote_seconds", 180) if not rules["grand_plenary"] else \
+        2 * settings.get("plenary_vote_seconds", 180) + 3 * (settings.get("debate_session_seconds", 300) + settings.get("grand_vote_seconds", 90))
+    minutes = round((3 * settings.get("working_session_seconds", 1200) + 2 * settings.get("intermission_seconds", 45) + votes) / 60 / 5) * 5
     return render_template(
         "overview.html",
         quiz_count=len(load_quiz()["questions"]),
         state=state,
         cfg=cfg,
+        settings=settings,
+        rules=rules,
+        start=start,
+        game_minutes=minutes,
+        working_minutes=f"{settings.get('working_session_seconds', 1200) / 60:g}",
+        simple_motions=engine.motion_templates(rules),
         realms=state["realms"],
         meta=state["meta"],
         server_url=server_url,
@@ -508,10 +565,10 @@ def api_auth_realm():
         realms = engine.db.get_state("realms", [])
         target = next((r for r in realms if r["id"] == realm_id), None)
         cap = target.get("player_count", 2) if target else 2
-        occ = engine.get_connected_player_count(realm_id)
+        name = target["name"] if target else "This nation"
         return jsonify({
             "success": False,
-            "message": f"Delegation capacity reached ({occ}/{cap} seats occupied). Please choose another realm.",
+            "message": f"All {cap} seats of {name} are taken. Ask your facilitator to add a seat or free one.",
             "is_full": True
         }), 403
 
@@ -521,13 +578,11 @@ def api_auth_realm():
         engine.register_realm_session(realm_id, session_id)
         resp = make_response(jsonify({"success": True, "message": "Authentication successful."}))
         _set_auth_cookie(resp, f"auth_{realm_id}", _realm_role(realm_id))
-        # Non-secret marker so the lobby page JS can tell this device already logged in.
-        resp.set_cookie(f"has_auth_{realm_id}", "1", max_age=86400, samesite="Lax", secure=IS_HOSTED)
         resp.set_cookie("summit_session_id", session_id, max_age=86400, httponly=False, samesite="Lax", secure=IS_HOSTED)
         return resp
     else:
         _note_failed_login()
-        return jsonify({"success": False, "message": "Invalid delegation PIN passcode."}), 401
+        return jsonify({"success": False, "message": "That passcode is not right. Check it with your facilitator."}), 401
 
 @app.route("/api/auth/realm/logout", methods=["POST"])
 def api_auth_realm_logout():
@@ -539,7 +594,6 @@ def api_auth_realm_logout():
     resp = make_response(jsonify({"success": True, "message": "Logged out from delegation."}))
     if realm_id:
         resp.delete_cookie(f"auth_{realm_id}")
-        resp.delete_cookie(f"has_auth_{realm_id}")
     return resp
 
 @app.route("/api/auth/admin", methods=["POST"])
@@ -550,13 +604,14 @@ def api_auth_admin():
         return jsonify({"success": False, "message": "Too many failed attempts. Wait a minute."}), 429
     if engine.verify_admin_passcode(passcode):
         # Before a game has started, the facilitator lands on the setup screen first.
+        # (A game a restart interrupted is offered on the command deck, so that comes first.)
         resp = make_response(jsonify({"success": True, "message": "Command Deck unlocked.",
-                                      "next": "/admin" if game_in_progress() else "/admin/setup"}))
+                                      "next": "/admin" if game_in_progress() or engine.interrupted_game() else "/admin/setup"}))
         _set_auth_cookie(resp, "auth_admin", "admin")
         return resp
     else:
         _note_failed_login()
-        return jsonify({"success": False, "message": "Invalid facilitator passcode."}), 401
+        return jsonify({"success": False, "message": "That passcode is not right."}), 401
 
 @app.route("/api/auth/admin/logout", methods=["POST"])
 def api_auth_admin_logout():
@@ -585,7 +640,14 @@ def api_state():
                 r_id = key[len("auth_"):]
                 if is_realm_authed(r_id):
                     engine.register_realm_session(r_id, session_id)
-    return jsonify(sanitize_state(engine.get_full_state()))
+    state = sanitize_state(engine.get_full_state())
+    # Which nations this device is logged in to: a lobby can take a phone back to its console (after a restored game, say).
+    state["my_realms"] = [r["id"] for r in state["realms"] if r.get("active", True) and is_realm_authed(r["id"])]
+    if is_admin() or app.config.get("TESTING", False):
+        state["save_status"] = engine.save_status()
+        state["interrupted_game"] = engine.interrupted_game()
+        state["pins_are_default"] = engine.pins_are_default()
+    return jsonify(state)
 
 @app.route("/api/realm/action", methods=["POST"])
 def api_realm_action():
@@ -634,12 +696,11 @@ def api_trade_create():
     sender_id = data.get("sender_id")
     receiver_id = data.get("receiver_id")
     offer_res = data.get("offer_resource")
-    offer_amt = int(data.get("offer_amount", 0))
     req_res = data.get("request_resource")
-    req_amt = int(data.get("request_amount", 0))
     note = data.get("note", "")
 
-    success, msg = engine.create_trade(sender_id, receiver_id, offer_res, offer_amt, req_res, req_amt, note)
+    # The engine checks the amounts, so a blank field gets a message instead of a server error.
+    success, msg = engine.create_trade(sender_id, receiver_id, offer_res, data.get("offer_amount", 0), req_res, data.get("request_amount", 0), note)
     return jsonify({"success": success, "message": msg}), (200 if success else 400)
 
 @app.route("/api/trade/<trade_id>/respond", methods=["POST"])
@@ -792,6 +853,10 @@ def api_admin_plenary_conclude_quick():
 
 @app.route("/api/admin/turn/next", methods=["POST"])
 def api_admin_turn_next():
+    # The last turn ends with the results, not with another turn (the button used to start a fourth turn,
+    # and pressing it after the summit brought the finished game back to life).
+    if engine.db.get_state("meta", {}).get("current_turn", 1) >= engine.settings()["max_turns"]:
+        return jsonify({"success": False, "message": "This is the last turn: end the summit to count the results."}), 400
     res = engine.process_end_of_turn()
     return jsonify({"success": True, "result": res})
 
@@ -898,44 +963,6 @@ def api_admin_crisis_round():
     success, msg = engine.trigger_round_crisis(round_num)
     return jsonify({"success": success, "message": msg, "round": round_num}), (200 if success else 400)
 
-@app.route("/api/admin/realm/add", methods=["POST"])
-def api_admin_realm_add():
-    data = request.get_json() or {}
-    realm_id = data.get("id", "").strip().lower().replace(" ", "_")
-    name = data.get("name", "").strip()
-    if not realm_id or not name:
-        return jsonify({"success": False, "message": "Identifier and name are required."}), 400
-
-    realms = db.get_state("realms", [])
-    if any(r["id"] == realm_id for r in realms):
-        return jsonify({"success": False, "message": "A realm with this ID already exists."}), 400
-
-    new_realm = {
-        "id": realm_id,
-        "name": name,
-        "theme_color": "#ffffff",
-        "icon": "shield",
-        "ethos": data.get("values", "Autonomy, Trade, Innovation"),
-        "values": data.get("values", "Autonomy, Trade, Innovation"),
-        "pin": data.get("pin", "1001"),
-        "private_agenda": data.get("private_agenda", "Advance the sovereign destiny of your people."),
-        "alchemical_grain": int(data.get("alchemical_grain", 50)),
-        "aether_cores": int(data.get("aether_cores", 50)),
-        "echo_silk": int(data.get("echo_silk", 50)),
-        "public_vitality": int(data.get("public_vitality", 75)),
-        "diplomatic_standing": int(data.get("diplomatic_standing", 60)),
-        "civil_stability": int(data.get("civil_stability", 70)),
-        "tech_efficiency_unlocked": False,
-        "is_quarantined": False,
-        "is_striking": False,
-        "is_starving": False,
-    }
-    realms.append(new_realm)
-    engine._recalculate_all_realms(realms)
-    db.set_state("realms", realms)
-    engine.add_news("diplomacy", f"NEW DELEGATION ACCREDITED: {name.upper()}", "A new sovereign realm has been seated at the summit table.")
-    return jsonify({"success": True, "message": f"{name} admitted."})
-
 @app.route("/api/admin/realm/remove", methods=["POST"])
 @app.route("/api/admin/realm/delete", methods=["POST"])
 def api_admin_realm_remove():
@@ -975,6 +1002,8 @@ def api_admin_realm_clear_sessions():
 
 @app.route("/api/events")
 def api_events():
+    if not (is_admin() or app.config.get("TESTING", False)):
+        return jsonify({"success": False, "message": "Facilitator authentication required."}), 401
     events = engine.get_catalog_events()
     return jsonify({"events": events})
 
@@ -1043,7 +1072,7 @@ def api_admin_reflection():
 def api_admin_saves():
     if not (is_admin() or app.config.get("TESTING", False)):
         return jsonify({"success": False, "message": "Facilitator authentication required."}), 401
-    return jsonify({"success": True, "interval": engine.AUTOSAVE_INTERVAL, "saves": engine.db.list_autosaves()})
+    return jsonify({"success": True, "saves": engine.db.list_autosaves(), **engine.save_status()})
 
 @app.route("/api/admin/save/export")
 def api_admin_save_export():
@@ -1053,22 +1082,34 @@ def api_admin_save_export():
     snapshot = engine.db.get_autosave(save_id) if save_id else engine.db.dump_all()
     if snapshot is None:
         return jsonify({"success": False, "message": "Save not found."}), 404
-    return jsonify({"success": True, "format": "summit-of-realms-save", "saved_at": time.time(), "snapshot": snapshot})
+    return jsonify({"success": True, "format": "summit-of-realms-save", "saved_at": time.time(), "snapshot": snapshot,
+                    "in_progress": engine.game_in_progress()})
 
 @app.route("/api/admin/save/now", methods=["POST"])
 def api_admin_save_now():
-    save_id = engine.autosave(label="Manual save", force=True)
+    save_id = engine.autosave(label=f"Manual save · Turn {engine.db.get_state('meta', {}).get('current_turn', 1)}", force=True)
     return jsonify({"success": True, "message": "Game saved.", "id": save_id})
 
 @app.route("/api/admin/save/restore", methods=["POST"])
 def api_admin_save_restore():
     data = request.get_json(silent=True) or {}
-    snapshot = engine.db.get_autosave(int(data["id"])) if data.get("id") else data.get("snapshot")
+    try:
+        snapshot = engine.db.get_autosave(int(data["id"])) if data.get("id") else data.get("snapshot")
+    except (TypeError, ValueError):
+        snapshot = None
     ok, msg = engine.restore_snapshot(snapshot)
     return jsonify({"success": ok, "message": msg}), (200 if ok else 400)
 
+@app.route("/api/admin/resume/dismiss", methods=["POST"])
+def api_admin_resume_dismiss():
+    """The facilitator does not want the interrupted game back. It stays on the Saves tab."""
+    engine.dismiss_interrupted_game()
+    return jsonify({"success": True})
+
 @app.route("/api/admin/reset", methods=["POST"])
 def api_admin_reset():
+    if engine.game_in_progress():
+        engine.autosave(label="Before reset", force=True)
     engine.reset_simulation()
     return jsonify({"success": True, "message": "Simulation reset."})
 
@@ -1085,6 +1126,8 @@ if __name__ == "__main__":
     print(f"  * DM Deck:        http://{lan_ip}:{port}/admin")
     print(f"  * Projector View: http://{lan_ip}:{port}/projector")
     print(f"  * Local Loopback: http://127.0.0.1:{port}")
+    passcode = os.environ.get("ADMIN_PASSCODE") or load_scenario_config().get("simulation_settings", {}).get("admin_passcode", "admin2026")
+    print(f"  * Facilitator passcode: {passcode}")
     print("=" * 65)
     if os.environ.get("FRESH_START", "1") != "0":
         engine.fresh_start()

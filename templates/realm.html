@@ -15,22 +15,23 @@
     <span id="turn-display" class="ribbon-turn">TURN {{ meta.current_turn if meta else 1 }}</span>
     <span id="timer-display" class="ribbon-timer">--:--</span>
   </div>
-  <a href="/" class="ribbon-exit" title="Leave delegation" aria-label="Leave delegation"
-     onclick="if(window.realmApp) { realmApp.leaveDelegation(event); }">&#x2715;</a>
+  <button type="button" class="ribbon-help" onclick="realmApp.openHelp()" aria-label="Help, sounds and leaving the game">?</button>
 </header>
 {% endblock %}
 
 {% block content %}
 <div class="mobile-container">
 
+  <!-- An army marching on this nation: shown on every tab, because there is little time to react -->
+  <div id="siege-alert" class="siege-alert" role="alert" style="display: none;"></div>
+
   <!-- Plenary voting: appears on every tab while the Assembly is in session -->
   <div id="plenary-session-callout" class="plenary-callout" style="display: none;">
-    <div class="row-between">
-      <span class="status-pill open">The Assembly is in session</span>
-      <span id="plenary-timer-display" class="mono small">-</span>
+    <div class="plenary-head">
+      <h3 id="plenary-callout-title" class="plenary-title">The Assembly votes</h3>
+      <span id="plenary-timer-display" class="plenary-timer"></span>
     </div>
-    <h3 id="plenary-callout-title" class="plenary-title">Voting session</h3>
-    <p id="plenary-callout-desc" class="small" style="color: var(--text-secondary);"></p>
+    <p id="plenary-callout-desc" class="plenary-desc"></p>
     <div id="plenary-voting-actions-container" class="mt-2"></div>
   </div>
 
@@ -41,52 +42,75 @@
     <div id="mobile-concluded-callout" style="display: none; margin-bottom: 14px;"></div>
 
     <!-- What is happening now -->
-    <section class="phase-card">
+    <section class="phase-card" id="phase-card">
       <div class="phase-text">
         <div class="phase-kicker" id="phase-kicker">Turn {{ meta.current_turn if meta else 1 }}</div>
         <div class="phase-title" id="phase-title">Working session</div>
-        <div class="phase-hint" id="phase-hint">Trade, negotiate and table motions before the bell.</div>
+        <div class="phase-hint" id="phase-hint">Talk to the other nations. Trade, enact decrees and table motions before the bell.</div>
       </div>
       <div class="phase-bar"><div id="phase-progress"></div></div>
     </section>
 
+    <!-- First time on this phone: the game in a few lines. Shown from realm.js until dismissed. -->
+    <section id="welcome-card" class="welcome-card" style="display: none;">
+      <h2 class="welcome-title">New here? The game in four lines</h2>
+      <ol>
+        <li><b>Read your goals</b> further down this page. Your secret missions are for your delegation only.</li>
+        <li><b>Get up and talk.</b> The game happens between people. This phone is your ledger.</li>
+        <li><b>Before each bell:</b> trade, enact decrees and table motions.</li>
+        <li><b>At the bell</b> the Assembly votes on the motions, and your people eat.</li>
+      </ol>
+      <div class="row">
+        <button type="button" class="btn btn-primary btn-sm grow" onclick="realmApp.dismissWelcome()">Got it</button>
+        <button type="button" class="btn btn-secondary btn-sm grow" onclick="realmApp.openHelp()">Tell me more</button>
+      </div>
+    </section>
+
+    <!-- Latest dispatch -->
+    <a class="dispatch" href="#" onclick="realmApp.switchView('view-news'); return false;">
+      <span class="dispatch-kicker">Latest news</span>
+      <strong id="news-headline">&hellip;</strong>
+      <span id="news-body"></span>
+    </a>
+
     <!-- Treasury -->
     <section class="treasury">
-      <div class="coin"><span class="coin-icon">🌾</span><b id="grain-val">{{ realm.alchemical_grain }}</b><span>Grain</span></div>
-      <div class="coin"><span class="coin-icon">⚙️</span><b id="cores-val">{{ realm.aether_cores }}</b><span>Cores</span></div>
-      <div class="coin"><span class="coin-icon">🧵</span><b id="silk-val">{{ realm.echo_silk }}</b><span>Silk</span></div>
-      <div class="coin"><span class="coin-icon">⚔️</span><b id="military-val">{{ realm.military_power }}</b><span>Military</span></div>
+      <button type="button" class="coin" data-explain="grain"><span class="coin-icon">🌾</span><b id="grain-val">{{ realm.alchemical_grain }}</b><span class="coin-label">Grain</span></button>
+      <button type="button" class="coin" data-explain="cores"><span class="coin-icon">⚙️</span><b id="cores-val">{{ realm.aether_cores }}</b><span class="coin-label">Cores</span></button>
+      <button type="button" class="coin" data-explain="silk"><span class="coin-icon">🧵</span><b id="silk-val">{{ realm.echo_silk }}</b><span class="coin-label">Silk</span></button>
+      <button type="button" class="coin" data-explain="military"><span class="coin-icon">⚔️</span><b id="military-val">{{ realm.military_power }}</b><span class="coin-label">Military</span></button>
     </section>
-    <p class="treasury-note">Your people eat <b id="eat-amount">{{ game_settings.grain_consumption if game_settings else 20 }} Grain</b> at the end of every turn.</p>
+    <p class="treasury-note">Your people eat <b id="eat-amount">{{ game_settings.grain_consumption if game_settings else 20 }} Grain</b> at the end of every turn. Tap a number to see what it does.</p>
+    {% if rules.live_hints %}<p id="food-forecast" class="food-forecast"></p>{% endif %}
 
     <!-- Vitals -->
-    <section class="card vitals">
+    <section class="vitals {{ 'two' if rules.hide_vitality else '' }}">
       {% for key, label, icon, val in [
         ('vitality', 'Vitality', '❤️', realm.public_vitality),
         ('standing', 'Standing', '🤝', realm.diplomatic_standing),
-        ('stability', 'Stability', '🏛️', realm.civil_stability)] %}
-      <div class="vital">
-        <span class="vital-icon">{{ icon }}</span>
-        <span class="vital-label">{{ label }}</span>
-        <div class="vital-track"><div id="{{ key }}-bar" class="vital-fill" style="width: {{ val }}%;"></div></div>
+        ('stability', 'Stability', '🏛️', realm.civil_stability)] if not (key == 'vitality' and rules.hide_vitality) %}
+      <button type="button" class="vital" data-explain="{{ key }}">
+        <span class="vital-head"><span class="vital-icon">{{ icon }}</span><span class="vital-label">{{ label }}</span></span>
         <b id="{{ key }}-val" class="vital-val">{{ val }}/100</b>
-      </div>
+        <span class="vital-track"><span id="{{ key }}-bar" class="vital-fill" style="width: {{ val }}%;"></span></span>
+      </button>
       {% endfor %}
-      <div id="status-tags-container" class="status-tags"></div>
     </section>
+    <div id="status-tags-container" class="status-tags"></div>
 
-    <!-- Mandates -->
+    <!-- Goals -->
+    <h2 class="section-heading">Your goals</h2>
     <section class="scrolls">
       <div class="scroll public">
-        <div class="scroll-kicker">Public mandate &middot; everyone knows</div>
+        <div class="scroll-kicker">Public mandate &middot; everyone knows it</div>
         <strong id="realm-public-title">{{ realm.public_mission.title if realm.public_mission else 'Continental Mandate' }}</strong>
-        <div class="mt-1">{{ diff.badge(realm) }}{{ diff.note(realm) }}</div>
         <p id="realm-public-desc">{{ realm.public_mission.description if realm.public_mission else '' }}</p>
+        {% if rules.live_hints %}<div id="public-hint" class="mission-hint-row"></div>{% endif %}
       </div>
       <div class="scroll secret agenda-card">
-        <button type="button" id="toggle-agenda-btn" class="agenda-toggle-btn">
-          <span id="secret-count-label">&#x1F512; Secret directives ({{ (realm.active_secret_missions or [])|length }})</span>
-          <span class="toggle-indicator">&#9660;</span>
+        <button type="button" id="toggle-agenda-btn" class="agenda-toggle-btn" aria-expanded="false" aria-controls="agenda-content">
+          <span id="secret-count-label">&#x1F512; {% if (realm.active_secret_missions or [])|length == 1 %}Your secret mission{% else %}Your {{ (realm.active_secret_missions or [])|length }} secret missions{% endif %}</span>
+          <span class="toggle-indicator">Tap to read</span>
         </button>
         <div id="agenda-content" class="agenda-content">
           <div class="scroll-kicker">For your delegation's eyes only</div>
@@ -96,90 +120,110 @@
               <strong>{{ loop.index }}. {{ sm.title }}</strong>
               {% if sm.narrative %}<p>{{ sm.narrative }}</p>{% endif %}
               <div class="secret-goal">{{ sm.objective }}</div>
+              {% if rules.live_hints %}<div id="secret-hint-{{ sm.id }}" class="mission-hint-row"></div>{% endif %}
             </div>
             {% endfor %}
           </div>
         </div>
       </div>
-      <a class="history-link" href="#" onclick="realmApp.openArticle('{{ realm_article(realm.id) }}'); return false;">Read the history of {{ realm.name }} &rarr;</a>
     </section>
 
     <!-- Decrees -->
-    <section>
+    <section class="decrees-section">
       <h2 class="section-heading">Royal decrees</h2>
+      <p class="section-intro" id="decrees-intro">Spend your own resources to gain others. No other nation is involved. Tap one to enact it.</p>
       <div class="decree-grid">
-        {% for key, icon, name, cost, gain in [
-          ('relief', '🍞', 'Grain Rationing', '−15 Grain', '+15 Vitality'),
-          ('forge', '🔥', 'Stoke the Forges', '−10 Grain, −10 Silk', '+15 Cores'),
-          ('gala', '🎭', 'Grand Gala', '−15 Silk', '+10 Standing, +10 Stability'),
-          ('security', '🛡️', 'Civil Guard', '−10 Cores', '+15 Stability'),
-          ('muster', '⚔️', 'Muster Regiments', '−10 Grain, −10 Cores', '+15 Military')] %}
-        <button type="button" class="decree" data-name="{{ name }}" data-cost="{{ cost }}" data-gain="{{ gain }}" onclick="realmApp.executeDomesticAction('{{ key }}', this)">
+        {% for key, icon, name, cost, gain, needs in [
+          ('relief', '🍞', 'Grain Rationing', '−15 Grain', '+15 Vitality', {'grain': 15}),
+          ('forge', '🔥', 'Stoke the Forges', '−10 Grain, −10 Silk', '+15 Cores', {'grain': 10, 'silk': 10}),
+          ('gala', '🎭', 'Grand Gala', '−15 Silk', '+10 Standing, +10 Stability', {'silk': 15}),
+          ('security', '🛡️', 'Civil Guard', '−10 Cores', '+15 Stability', {'cores': 10}),
+          ('muster', '⚔️', 'Muster Regiments', '−10 Grain, −10 Cores', '+15 Military', {'grain': 10, 'cores': 10})] if key not in rules.hidden_decrees %}
+        <button type="button" class="decree" data-name="{{ name }}" data-cost="{{ cost }}" data-gain="{{ gain }}" data-needs='{{ needs | tojson }}' onclick="realmApp.executeDomesticAction('{{ key }}', this)">
           <span class="decree-icon">{{ icon }}</span>
           <span class="decree-name">{{ name }}</span>
           <span class="decree-cost">{{ cost }}</span>
           <span class="decree-gain">{{ gain }}</span>
+          <span class="decree-why"></span>
         </button>
         {% endfor %}
       </div>
     </section>
 
+    {% if rules.war %}
     <!-- War room: weather, scouts and the attack order -->
     <section id="war-section" style="display: none;">
       <h2 class="section-heading">War room</h2>
       <div class="card war-card">
         <div id="war-sieges" class="siege-list"></div>
+        <p id="war-status" class="war-status"></p>
         <div id="war-weather" class="weather-line"></div>
-        <p id="war-status" class="section-sub mt-1"></p>
-        <div class="form-label mt-2">Choose a target</div>
-        <div id="war-targets" class="partner-chips"></div>
-        <div id="war-scout"></div>
-        <div class="war-buttons mt-2">
-          <button id="war-siege-btn" type="button" class="btn btn-danger" disabled onclick="realmApp.attackTarget('siege')">Choose a target</button>
-          <button id="war-surprise-btn" type="button" class="btn btn-secondary" disabled onclick="realmApp.attackTarget('surprise')">Surprise attack</button>
+        <div id="war-open" style="display: none;">
+          <div class="form-label mt-2">Who do you march on?</div>
+          <div id="war-targets" class="partner-chips"></div>
+          <div id="war-scout"></div>
+          <div class="war-buttons mt-2" id="war-buttons" style="display: none;">
+            <button id="war-siege-btn" type="button" class="btn btn-danger" disabled onclick="realmApp.attackTarget('siege')">Choose a target</button>
+            <button id="war-surprise-btn" type="button" class="btn btn-secondary" disabled onclick="realmApp.attackTarget('surprise')">Surprise attack</button>
+          </div>
+          <p class="section-sub mt-1">An attack costs supplies and Standing, win or lose. Armies decide most of it, then how fed, stable and supplied each nation is, the ground and the weather, and a little luck.</p>
         </div>
-        <p class="section-sub mt-1">An attack costs supplies, loses Standing and is never free. The result depends mostly on the armies, but also on how fed, stable and supplied each nation is, on the ground and the weather, and a little on luck.</p>
       </div>
       <div id="war-log" class="stack mt-2"></div>
     </section>
+    {% endif %}
 
-    <!-- Latest dispatch -->
-    <a class="dispatch" href="#" onclick="realmApp.switchView('view-news'); return false;">
-      <span class="dispatch-kicker">Latest from the Spire</span>
-      <strong id="news-headline">&hellip;</strong>
-      <span id="news-body"></span>
-    </a>
+    <!-- About this nation -->
+    <section class="about-nation">
+      <h2 class="section-heading">About {{ realm.name }}</h2>
+      <div class="about-rating">{{ diff.badge(realm) }}{{ diff.note(realm) }}</div>
+      <a class="history-link" href="#" onclick="realmApp.openArticle('{{ realm_article(realm.id) }}'); return false;">Read its history in the wiki &rarr;</a>
+    </section>
   </div>
 
   <!-- ===================================================================== -->
   <!-- WORLD: news + continental registry -->
   <!-- ===================================================================== -->
   <div id="view-news" class="mobile-view">
-    <h2 class="section-heading">The nations at the summit</h2>
-    <p class="section-sub" style="margin: -6px 0 10px;">Other nations' reserves are only estimates. Ask their delegates.</p>
-    <div id="registry-list" class="registry">
-      <p class="empty-state">Loading&hellip;</p>
+    <div class="segmented" role="tablist" aria-label="World">
+      <button type="button" class="segment active" data-world="news" onclick="realmApp.worldShow('news')">News</button>
+      <button type="button" class="segment" data-world="nations" onclick="realmApp.worldShow('nations')">The nations</button>
     </div>
 
-    <h2 class="section-heading">News from the Spire</h2>
-    <div class="chip-row" style="margin-bottom: 10px;">
-      <button type="button" class="chip active news-filter-btn" onclick="realmApp.filterNews('all', this)">All</button>
-      <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('crisis', this)">Crises</button>
-      <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('trade', this)">Trades</button>
-      <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('assembly', this)">Assembly</button>
-      <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('war', this)">War</button>
-      <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('lore', this)">Quiz</button>
+    <div id="world-news">
+      <div class="chip-row" style="margin-bottom: 10px;">
+        <button type="button" class="chip active news-filter-btn" onclick="realmApp.filterNews('all', this)">All</button>
+        <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('crisis', this)">Crises</button>
+        <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('trade', this)">Trades</button>
+        <button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('assembly', this)">Assembly</button>
+        {% if rules.war %}<button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('war', this)">War</button>{% endif %}
+        {% if rules.quiz %}<button type="button" class="chip news-filter-btn" onclick="realmApp.filterNews('lore', this)">Quiz</button>{% endif %}
+      </div>
+      <div id="mobile-news-feed" class="stack"></div>
     </div>
-    <div id="mobile-news-feed" class="stack"></div>
+
+    <div id="world-nations" style="display: none;">
+      <p class="section-intro">Other nations' reserves are only estimates: <span class="pips-key"><span class="pips"><em class="on"></em><em></em><em></em></span> low <span class="pips"><em class="on"></em><em class="on"></em><em></em></span> medium <span class="pips"><em class="on"></em><em class="on"></em><em class="on"></em></span> high</span>. For the real numbers, ask their delegates. Tap a nation for its public mandate.</p>
+      <p class="registry-key">🌾 Grain &nbsp;⚙️ Cores &nbsp;🧵 Silk &nbsp;⚔️ Military &nbsp;🤝 Standing &nbsp;🏛️ Stability. The red seal shows a nation's votes.</p>
+      <div id="registry-list" class="registry">
+        <p class="empty-state">Loading&hellip;</p>
+      </div>
+    </div>
   </div>
 
   <!-- ===================================================================== -->
   <!-- TRADE -->
   <!-- ===================================================================== -->
   <div id="view-trades" class="mobile-view">
+    <!-- What needs an answer comes first. Hidden while there is nothing. -->
+    <section class="card incoming-card" id="incoming-card" style="display: none;">
+      <div class="card-title">Offers to you</div>
+      <div id="incoming-trades-list" class="stack mt-2"></div>
+    </section>
+
     <section class="card">
       <div class="card-title">Make an offer</div>
-      <p class="section-sub">Resources only move when the other nation accepts.</p>
+      <p class="section-sub">Agree it face to face, then send it here. Nothing moves until the other nation accepts.</p>
       <form id="trade-form" class="mt-2" autocomplete="off">
         <input type="hidden" id="trade-receiver">
         <input type="hidden" id="trade-offer-res" value="grain">
@@ -189,7 +233,7 @@
         <div id="trade-partner-chips" class="partner-chips"></div>
 
         <div class="trade-leg give">
-          <div class="form-label">2. You give</div>
+          <div class="row-between"><div class="form-label">2. You give</div><span class="trade-have" id="trade-have"></span></div>
           <div class="res-picker" data-target="trade-offer-res">
             <button type="button" data-res="grain" class="active">🌾 Grain</button>
             <button type="button" data-res="cores">⚙️ Cores</button>
@@ -197,9 +241,9 @@
             <button type="button" data-res="military">⚔️ Military</button>
           </div>
           <div class="stepper">
-            <button type="button" onclick="realmApp.adjustTradeInput('trade-offer-amt', -5)">−5</button>
-            <input type="number" id="trade-offer-amt" min="0" max="500" value="10" inputmode="numeric" oninput="realmApp.updateTradePreview()">
-            <button type="button" onclick="realmApp.adjustTradeInput('trade-offer-amt', 5)">+5</button>
+            <button type="button" aria-label="5 less" onclick="realmApp.adjustTradeInput('trade-offer-amt', -5)">−5</button>
+            <input type="number" id="trade-offer-amt" min="0" max="500" value="10" inputmode="numeric" aria-label="How much you give" oninput="realmApp.updateTradePreview()">
+            <button type="button" aria-label="5 more" onclick="realmApp.adjustTradeInput('trade-offer-amt', 5)">+5</button>
           </div>
         </div>
 
@@ -212,9 +256,9 @@
             <button type="button" data-res="military">⚔️ Military</button>
           </div>
           <div class="stepper">
-            <button type="button" onclick="realmApp.adjustTradeInput('trade-req-amt', -5)">−5</button>
-            <input type="number" id="trade-req-amt" min="0" max="500" value="10" inputmode="numeric" oninput="realmApp.updateTradePreview()">
-            <button type="button" onclick="realmApp.adjustTradeInput('trade-req-amt', 5)">+5</button>
+            <button type="button" aria-label="5 less" onclick="realmApp.adjustTradeInput('trade-req-amt', -5)">−5</button>
+            <input type="number" id="trade-req-amt" min="0" max="500" value="10" inputmode="numeric" aria-label="How much you ask for" oninput="realmApp.updateTradePreview()">
+            <button type="button" aria-label="5 more" onclick="realmApp.adjustTradeInput('trade-req-amt', 5)">+5</button>
           </div>
         </div>
 
@@ -228,13 +272,14 @@
       </form>
     </section>
 
-    <section class="card">
-      <div class="card-title">Offers to you</div>
-      <div id="incoming-trades-list" class="stack mt-2"></div>
-    </section>
-    <section class="card">
+    <section class="card" id="outgoing-card" style="display: none;">
       <div class="card-title">Your open offers</div>
       <div id="outgoing-trades-list" class="stack mt-2"></div>
+    </section>
+
+    <section class="card" id="trade-history-card" style="display: none;">
+      <div class="card-title">Your past offers</div>
+      <div id="trade-history" class="trade-history mt-1"></div>
     </section>
   </div>
 
@@ -242,39 +287,56 @@
   <!-- MOTIONS -->
   <!-- ===================================================================== -->
   <div id="view-declarations" class="mobile-view">
-    <!-- Step 1: pick a motion template; Step 2: edit its wording -->
-    <div class="card">
-      <div class="card-title">Propose a Motion</div>
-      <p class="section-sub">Pick the template closest to your idea, set its numbers, and <b>rewrite the title and terms in your own words</b>. What happens "If passed" is written out under the form and carried out automatically. Another nation must co-sponsor it before the vote.</p>
 
-      <div id="motion-templates" class="stack mt-2">
-        <p class="empty-state">Loading templates&hellip;</p>
+    <!-- The floor: what can be co-sponsored and voted on. This is what most visits to this tab are for. -->
+    <div id="motion-floor">
+      <button type="button" id="motion-new-btn" class="btn btn-primary btn-block motion-new" onclick="realmApp.openMotionBuilder()">+ Propose a motion</button>
+      <p class="section-intro" id="motion-closed-note" style="display: none;">New motions and co-sponsors can wait for the next working session.</p>
+
+      <div class="card">
+        <div class="card-title">On the floor</div>
+        <p class="section-sub">A motion goes to the vote once a second nation co-sponsors it.</p>
+        <div id="pending-motions-list" class="stack mt-2">
+          <p class="empty-state">No motions on the floor yet.</p>
+        </div>
       </div>
 
-      <form id="proposal-form" class="mt-2" style="display: none;" onsubmit="realmApp.handleDraftProposal(event)">
+      <div class="card" id="decided-motions-card" style="display: none;">
+        <div class="card-title">Decided</div>
+        <p class="section-sub">How the Assembly voted</p>
+        <div id="decided-motions-list" class="stack mt-2"></div>
+      </div>
+    </div>
+
+    <!-- Proposing a motion: its own screen, so the floor is one tap away and never hundreds of pixels down -->
+    <div id="motion-builder" class="card" style="display: none;">
+      <button type="button" class="link-back" onclick="realmApp.closeMotionBuilder()">&larr; Back to the floor</button>
+      {% if not rules.free_motions %}
+      <!-- Simplified game: ready-made motions. Only the amount can be changed; everything else is automatic. -->
+      <div class="card-title mt-1">Propose a motion</div>
+      <p class="section-sub">Pick one and table it. Another nation must co-sponsor it before the vote. If it passes, the game carries it out by itself.</p>
+      <div id="motion-templates" class="stack mt-2">
+        <p class="empty-state">Loading motions&hellip;</p>
+      </div>
+      {% else %}
+      <!-- Step 1: pick a kind of motion. Step 2: what it does, then the wording. -->
+      <div id="motion-gallery-head">
+        <div class="card-title mt-1">What kind of motion?</div>
+        <p class="section-sub">Pick the closest one. You choose its numbers and wording next.</p>
+      </div>
+      <div id="motion-templates" class="stack mt-2">
+        <p class="empty-state">Loading&hellip;</p>
+      </div>
+
+      <form id="proposal-form" class="mt-1" style="display: none;" onsubmit="realmApp.handleDraftProposal(event)">
         <input type="hidden" id="proposal-type">
-        <div class="inset motion-chosen">
-          <div class="row-between" style="align-items: flex-start;">
-            <div class="grow">
-              <div class="section-sub" style="margin: 0;">Template</div>
-              <strong id="motion-chosen-name" class="motion-chosen-name">&nbsp;</strong>
-            </div>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="realmApp.chooseMotionTemplate(null)">Change</button>
-          </div>
+        <div class="motion-chosen">
+          <strong id="motion-chosen-name" class="motion-chosen-name">&nbsp;</strong>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="realmApp.chooseMotionTemplate(null)">Change</button>
         </div>
 
-        <div class="edit-hint mt-2">
-          <span class="edit-hint-icon">&#9998;</span>
-          <span><b>This is only the template's example wording.</b> Change the title and terms to explain your proposal. The numbers that really count are the ones you set above: they are applied automatically if the motion passes.</span>
-        </div>
-
-        <div class="form-group mt-2">
-          <label class="form-label" for="proposal-title">Title <span class="edit-tag">&#9998; edit me</span></label>
-          <input type="text" id="proposal-title" class="form-input editable" maxlength="100" required>
-        </div>
-
+        <h3 class="form-step">1. What it does</h3>
         <div id="motion-params"></div>
-
         <div class="form-group" id="proposal-target-nation-group" style="display: none;">
           <label class="form-label" for="proposal-target-nation" id="proposal-target-nation-label">Nation</label>
           <select id="proposal-target-nation" class="form-select" onchange="realmApp.refreshMotionPreview()">
@@ -284,42 +346,36 @@
             {% endfor %}
           </select>
         </div>
+        <div id="motion-preview" class="preview-box" style="display: none;"></div>
 
+        <h3 class="form-step">2. Your wording</h3>
+        <div class="edit-hint">
+          <span class="edit-hint-icon">&#9998;</span>
+          <span>This is only example wording: <b>rewrite it</b> to sell your idea. The game only carries out what is listed under step 1.</span>
+        </div>
+        <div class="form-group mt-2">
+          <label class="form-label" for="proposal-title">Title</label>
+          <input type="text" id="proposal-title" class="form-input editable" maxlength="100" required>
+        </div>
         <div class="form-group">
-          <label class="form-label" for="proposal-desc">Terms <span class="edit-tag">&#9998; rewrite freely</span></label>
-          <textarea id="proposal-desc" class="form-textarea editable" rows="6" maxlength="1000" required></textarea>
+          <label class="form-label" for="proposal-desc">Terms</label>
+          <textarea id="proposal-desc" class="form-textarea editable" rows="5" maxlength="1000" required></textarea>
         </div>
 
+        <h3 class="form-step">3. Who may co-sponsor it?</h3>
         <div class="form-group" id="proposal-cosponsor-group">
-          <label class="form-label" for="proposal-target-realm">Who may co-sponsor?</label>
-          <select id="proposal-target-realm" class="form-select">
+          <select id="proposal-target-realm" class="form-select" aria-label="Who may co-sponsor it">
             <option value="">Any nation</option>
             {% for other in other_realms %}
             <option value="{{ other.id }}">Only {{ other.name }}</option>
             {% endfor %}
           </select>
+          <p class="section-sub" style="margin-top: 4px;">Choose one nation to keep the motion hidden from the others until it reaches the ballot.</p>
         </div>
-
-        <div id="motion-preview" class="preview-box" style="display: none;"></div>
 
         <button type="submit" class="btn btn-primary btn-block mt-2" id="proposal-submit">Table this motion</button>
       </form>
-    </div>
-
-    <!-- Open motions: awaiting a co-sponsor or qualified for the ballot -->
-    <div class="card">
-      <div class="card-title">On the Floor</div>
-      <p class="section-sub">Co-sponsor the motions you want voted on</p>
-      <div id="pending-motions-list" class="stack mt-2">
-        <p class="empty-state">No motions on the floor yet.</p>
-      </div>
-    </div>
-
-    <!-- Decided motions -->
-    <div class="card" id="decided-motions-card" style="display: none;">
-      <div class="card-title">Decided</div>
-      <p class="section-sub">How the Assembly voted</p>
-      <div id="decided-motions-list" class="stack mt-2"></div>
+      {% endif %}
     </div>
   </div>
 
@@ -336,6 +392,7 @@
         <form class="wk-search" onsubmit="realmApp.wikiSearch(event)">
           <input type="search" id="wiki-search-input" placeholder="Search" aria-label="Search the Spireopedia">
         </form>
+        <span id="wk-timer" class="wk-timer" title="Time left"></span>
       </div>
       <div class="wk-nav" id="wiki-nav" style="display: none;">
         <button type="button" onclick="realmApp.wikiBack()">&larr; Back</button>
@@ -347,6 +404,7 @@
     </div>
   </div>
 
+  {% if rules.quiz %}
   <!-- ===================================================================== -->
   <!-- QUIZ -->
   <!-- ===================================================================== -->
@@ -354,24 +412,25 @@
     <div id="quiz-stage" class="card quiz-stage"><p class="empty-state">Loading&hellip;</p></div>
     <div class="card">
       <div class="card-title">Spireopedia Quiz</div>
-      <p class="section-sub">One question at a time, against the clock</p>
-      <div class="quiz-progress">
+      <div class="quiz-progress mt-1">
         <div class="inset quiz-stat ok"><b id="quiz-stat-correct">0</b><span>Correct</span></div>
         <div class="inset quiz-stat bad"><b id="quiz-stat-wrong">0</b><span>Wrong</span></div>
         <div class="inset quiz-stat"><b id="quiz-stat-open">0</b><span>Left now</span></div>
       </div>
-      <div class="callout neutral mt-2">
-        Questions come in a <strong>random order, one at a time</strong>, and a question never starts until you press its start button. Each has a <strong>random stake</strong>
-        (5 on average): a correct answer <strong>earns</strong> it; a wrong answer <strong>or running out of time costs exactly the same</strong> and locks the question.
-        You get <strong id="quiz-seconds-rule">15</strong> seconds per question, and the clock does not stop if you leave. Study the
-        <a href="#" onclick="realmApp.switchView('view-wiki'); return false;" style="text-decoration: underline;">Encyclopedia</a> first.
-      </div>
+      <details class="quiz-rules mt-2">
+        <summary>How the quiz works</summary>
+        <p>Questions come one at a time, in a random order, and never start until you press the start button. Each has a <strong>random stake</strong>
+          (5 on average): a right answer <strong>earns</strong> it; a wrong answer <strong>or running out of time costs exactly the same</strong> and locks the question.
+          You get <strong id="quiz-seconds-rule">15</strong> seconds per question, and the clock does not stop if you leave.
+          The answers are all in the <a href="#" onclick="realmApp.switchView('view-wiki'); return false;">Wiki</a>: read it first.</p>
+      </details>
     </div>
     <div class="card" id="quiz-history-card" style="display: none;">
       <div class="card-title">Your answers</div>
       <div id="quiz-history" class="mt-1"></div>
     </div>
   </div>
+  {% endif %}
 
 </div>
 
@@ -383,6 +442,7 @@
   <button class="bottom-nav-item" data-view="view-news">
     <span class="bottom-nav-icon"><svg><use href="#icon-news"></use></svg></span>
     <span>World</span>
+    <span id="nav-news-badge" class="bottom-nav-badge" style="display: none;">0</span>
   </button>
   <button class="bottom-nav-item" data-view="view-trades">
     <span class="bottom-nav-icon"><svg><use href="#icon-trade"></use></svg></span>
@@ -398,11 +458,13 @@
     <span class="bottom-nav-icon"><svg><use href="#icon-book"></use></svg></span>
     <span>Wiki</span>
   </button>
+  {% if rules.quiz %}
   <button class="bottom-nav-item" data-view="view-quiz">
     <span class="bottom-nav-icon"><svg><use href="#icon-quiz"></use></svg></span>
     <span>Quiz</span>
     <span id="nav-quiz-badge" class="bottom-nav-badge" style="display: none;">0</span>
   </button>
+  {% endif %}
 </nav>
 {% endblock %}
 
@@ -410,7 +472,10 @@
 
 {% block scripts %}
 <script>
-  const realmApp = new RealmApp("{{ realm.id }}");
+  {# What the help texts need before the first poll has answered. #}
+  {% set first_settings = {"rules": {"quiz": rules.quiz, "war": rules.war, "free_motions": rules.free_motions, "grand_plenary": rules.grand_plenary, "hide_vitality": rules.hide_vitality},
+                           "grain_consumption": game_settings.grain_consumption, "max_turns": game_settings.max_turns, "working_session_seconds": game_settings.working_session_seconds} %}
+  const realmApp = new RealmApp("{{ realm.id }}", {{ first_settings | tojson }});
   window.realmApp = realmApp;
   realmApp.start();
   keepScreenAwake();

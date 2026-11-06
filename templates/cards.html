@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Passcode cards · The Summit of Realms{% endblock %}
+
+{% block nav_links %}
+  <a href="/admin" class="nav-link">Command Deck</a>
+  <a href="/admin/setup" class="nav-link">Setup</a>
+{% endblock %}
+
+{% block content %}
+<div class="container cards-page">
+  <div class="cards-head">
+    <div>
+      <h1 class="page-title">Passcode cards</h1>
+      <p class="section-sub">One card for each nation's table. The code opens that nation's login on a phone; everyone in the delegation types the same passcode. If you shuffle the passcodes, print the cards again.</p>
+    </div>
+    <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
+  </div>
+
+  <div class="pass-cards">
+    {% for card in cards %}
+    <article class="pass-card" style="--nc: {{ card.realm.theme_color or '#8c7a5e' }}; --nation: {{ card.realm.theme_color or '#8c7a5e' }};">
+      <div class="pass-card-head">
+        <span class="crest" aria-hidden="true">{{ card.realm.emoji or '🏛️' }}</span>
+        <div>
+          <h2>{{ card.realm.name }}</h2>
+          <p>{{ card.realm.player_count }} seat{{ 's' if card.realm.player_count != 1 else '' }}</p>
+        </div>
+      </div>
+      <div class="pass-card-body">
+        <div class="pass-card-qr">{{ card.qr | safe }}</div>
+        <div>
+          <p class="pass-card-step">1. Scan this code</p>
+          <p class="pass-card-step">2. Type the passcode</p>
+          <p class="pass-card-pin">{{ card.realm.pin }}</p>
+        </div>
+      </div>
+      <p class="pass-card-url">No camera? Open {{ server_url }} and tap {{ card.realm.name }}.</p>
+    </article>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

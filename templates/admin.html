@@ -1,256 +1,279 @@
 {% extends "base.html" %}
 
-{% block title %}Facilitator Command Deck - The Summit of Realms{% endblock %}
+{% block title %}Command deck · The Summit of Realms{% endblock %}
 
-{% block nav_links %}
-  <a href="/admin/setup" class="nav-link">Setup</a>
-  <a href="/overview" target="_blank" class="nav-link">Guide</a>
-  <a href="/projector" target="_blank" class="nav-link">Projector &#8599;</a>
+{% block body_attrs %}class="deck"{% endblock %}
+
+{% block nav_items %}
+  <nav class="nav-links" aria-label="Facilitator">
+    <a href="/admin/setup" class="nav-link">Setup</a>
+    <a href="/overview" target="_blank" rel="noopener" class="nav-link">Guide</a>
+    <a href="/projector" target="_blank" rel="noopener" class="nav-link">Projector&nbsp;&#8599;</a>
+  </nav>
 {% endblock %}
 {% block header_extra %}
-  <button id="btn-sound-chime" class="btn btn-secondary btn-sm hide-sm" title="Sound chime across all devices">Chime</button>
-  <button id="btn-end-turn-header" class="btn btn-primary btn-sm" onclick="adminApp.advanceTurn()">Advance Turn</button>
-  <button class="btn btn-danger btn-sm" onclick="adminApp.logout()" title="Lock Command Deck">Lock</button>
+  <button class="btn btn-secondary btn-sm" onclick="adminApp.logout()" title="Log out of the command deck on this computer">Log out</button>
 {% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 1280px;">
+<div class="container deck-page">
 
-  <!-- Master Facilitator Header Bar -->
-  <div class="page-head">
-    <div>
-      <h1 class="page-title">Facilitator Command Deck</h1>
-      <p class="section-sub">Master workspace &middot; session controls & telemetry</p>
-    </div>
-    <div class="row">
-      <span id="admin-turn-display" class="turn-pill" style="font-size: 0.85rem; padding: 6px 12px;">TURN {{ state.meta.current_turn }}</span>
-      <span id="admin-timer-display" class="timer-pill" style="font-size: 0.85rem; padding: 6px 12px; cursor: pointer;" title="Open the clock console" onclick="document.querySelector('[data-tab=tab-pacing]').click()">05:00</span>
-      <button onclick="adminApp.openResetModal()" class="btn btn-danger btn-sm">Reset Sim</button>
-    </div>
+  <div class="deck-head">
+    <h1 class="page-title">Facilitator Command Deck</h1>
+    <span id="admin-mode-pill" class="status-pill" title="The two difficulty settings: game complexity and scenario. Change them on the setup screen.">{{ rules.name }} · {{ state.game_settings.scenario_name }}</span>
+    <button type="button" id="autosave-chip" class="autosave-chip" onclick="adminApp.showTab('tab-saves')" title="Open the Saves tab"></button>
   </div>
 
-  <!-- Way to the setup screen (the header links are hidden on narrow screens) -->
-  <a href="/admin/setup" class="setup-banner{% if not in_progress %} fresh{% endif %}">
-    <span class="setup-banner-icon">&#9881;</span>
-    <span><b>{% if in_progress %}Summit setup{% else %}Set up this summit before you start{% endif %}</b>
-      <em>Scenario, difficulty, nations and passcodes, clocks, random events{% if in_progress %}, or start a new summit{% endif %}.</em></span>
-    <span class="setup-banner-go">Open setup &rarr;</span>
-  </a>
+  <!-- A game a server restart interrupted: the first thing to offer. Filled by admin.js. -->
+  <div id="resume-banner" class="resume-banner" style="display: none;"></div>
 
-  <!-- Roster: which nations take part (always visible, the first thing to set) -->
-  <section class="roster-card">
-    <div>
-      <div class="card-title">Nations at this summit <span id="roster-count" class="muted"></span></div>
-      <p class="section-sub">Tap a nation to add or remove it. Missions, quotas, trade lists, the projector map and votes adjust automatically.</p>
+  <!-- ===================================================================== -->
+  <!-- NOW: what is going on, what happens next, and the buttons for it.     -->
+  <!-- Stays in sight on every tab.                                          -->
+  <!-- ===================================================================== -->
+  <section class="now-panel" id="now-panel">
+    <div class="now-main">
+      <div class="now-kicker" id="admin-turn-display">Turn {{ state.meta.current_turn }}</div>
+      <h2 class="now-title" id="admin-phase-display">&hellip;</h2>
+      <p class="now-text" id="now-text"></p>
+      <div class="now-alerts" id="now-alerts"></div>
     </div>
-    <div id="roster-chips" class="roster-chips"></div>
+    <div class="now-clock">
+      <button type="button" class="now-time" id="admin-timer-display" title="Open the clock console" onclick="adminApp.showTab('tab-pacing')">--:--</button>
+      <div class="now-clock-label" id="now-clock-label"></div>
+      <div class="now-nudges" id="now-nudges">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-60)">−1 min</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(60)">+1 min</button>
+      </div>
+    </div>
+    <div class="now-actions" id="admin-plenary-controls"></div>
   </section>
 
-  <!-- Functional Workspace Tabs -->
-  <div class="admin-tab-nav" style="display: flex; gap: 6px; border-bottom: 2px solid var(--border-subtle); margin-bottom: 18px; overflow-x: auto;">
-    <button class="admin-tab-btn active" data-tab="tab-pacing">Pacing & Timers</button>
-    <button class="admin-tab-btn" data-tab="tab-events">Events & Crises</button>
-    <button class="admin-tab-btn" data-tab="tab-resources">Resource Overrides</button>
-    <button class="admin-tab-btn" data-tab="tab-resolutions">Resolutions & Questions <span id="gm-tab-badge" class="bottom-nav-badge" style="position:static; display:none; margin-left:4px;">0</span></button>
-    <button class="admin-tab-btn" data-tab="tab-access">Delegations & Passcodes</button>
+  <div class="admin-tab-nav" role="tablist">
+    <button class="admin-tab-btn active" data-tab="tab-pacing">Run the game</button>
+    <button class="admin-tab-btn" data-tab="tab-resolutions">Motions <span id="gm-tab-badge" class="bottom-nav-badge tab-badge" style="display: none;">0</span></button>
+    <button class="admin-tab-btn" data-tab="tab-events">Events</button>
+    <button class="admin-tab-btn" data-tab="tab-resources">Nations' numbers</button>
+    <button class="admin-tab-btn" data-tab="tab-access">Players &amp; passcodes</button>
     <button class="admin-tab-btn" data-tab="tab-saves">Saves</button>
   </div>
 
-  <!-- ========================================================================= -->
-  <!-- TAB 1: PACING & TIME CONTROLS -->
-  <!-- ========================================================================= -->
+  <!-- ===================================================================== -->
+  <!-- RUN THE GAME                                                          -->
+  <!-- ===================================================================== -->
   <div id="tab-pacing" class="admin-tab-content active">
-    <!-- Simulation Phase Banner -->
-    <div class="card" style="border: 2px solid var(--border-white); margin-bottom: 16px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase;">Current Simulation Phase</div>
-          <div id="admin-phase-display" style="font-size: 1.25rem; font-weight: 900; font-family: var(--font-mono); color: var(--text-primary); margin-top: 2px;">
-            WORKING SESSION
+
+    <!-- Before the first turn: the room in four steps. Hidden once the game is under way. -->
+    <section class="card pregame-card" id="pregame-card" {% if in_progress %}style="display: none;"{% endif %}>
+      <div class="card-title">Before you start</div>
+      <ol class="pregame-steps">
+        <li><b>Choose the game.</b> Now set to <span id="pregame-game">{{ rules.name }}, {{ state.game_settings.scenario_name }}</span>.
+          <a class="btn btn-secondary btn-sm" href="/admin/setup">Open setup</a></li>
+        <li><b>Put the map on the big screen.</b>
+          <a class="btn btn-secondary btn-sm" href="/projector" target="_blank" rel="noopener">Open the projector &#8599;</a></li>
+        <li><b>Let everyone join.</b> They scan the QR code on the projector (or open <span class="mono">{{ server_url }}</span>), tap their nation and type its passcode.
+          <a class="btn btn-secondary btn-sm" href="/admin/cards" target="_blank" rel="noopener">Passcode cards to print &#8599;</a>
+          <div id="pregame-pins-note" class="callout warn pregame-pins-note" style="display: none;">
+            These are the default passcodes, which are easy to guess.
+            <button type="button" class="btn btn-secondary btn-sm" onclick="adminApp.shufflePins()">Shuffle passcodes</button>
           </div>
-          <div id="admin-weather" class="section-sub" style="margin: 2px 0 0;"></div>
-        </div>
-        <div id="admin-plenary-controls" style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <!-- Injected via JS -->
-        </div>
-      </div>
-    </div>
+          <div class="table-responsive"><table class="table-deck seat-table"><tbody id="pregame-seats"></tbody></table></div>
+        </li>
+        <li><b>Start the clock</b> with the green button at the top when everyone is in. You can pause it at any time.</li>
+      </ol>
+    </section>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-      <!-- Clock console: acts on the clock of whatever phase the game is in -->
-      <div class="card clock-console">
-        <div class="card-title">Clock console</div>
-        <p class="section-sub">Works in every phase: the working session, the pause before a turn, debate, voting, between turns and after the summit
-          (then it is a free countdown for a break or the debrief).</p>
+    <div class="deck-grid">
+      <div class="stack-lg">
+        <section class="card" id="seats-card" {% if not in_progress %}style="display: none;"{% endif %}>
+          <div class="card-title">Who is connected <span id="seats-count" class="muted"></span></div>
+          <div id="seat-strip" class="seat-strip mt-2"></div>
+          <p class="section-sub mt-1">A phone that sleeps counts as gone for now, and comes back by itself when it wakes.</p>
+        </section>
 
-        <div class="clock-label mt-2"><span id="clock-label">Working session</span><span id="clock-state" class="clock-state">stopped</span></div>
-        <div id="clock-big" class="clock-big stopped">00:00</div>
-
-        <div class="clock-set mt-2">
-          <input type="number" id="clock-min" class="form-input" min="0" max="360" value="5" inputmode="numeric" aria-label="Minutes"><span>min</span>
-          <input type="number" id="clock-sec" class="form-input" min="0" max="59" value="0" inputmode="numeric" aria-label="Seconds"><span>sec</span>
-          <button class="btn btn-primary btn-sm" onclick="adminApp.clockSet()">Set this time</button>
-        </div>
-
-        <div class="row wrap mt-2">
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-300)">−5 min</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-60)">−1 min</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-10)">−10 s</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(10)">+10 s</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(60)">+1 min</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(300)">+5 min</button>
-        </div>
-
-        <div class="row mt-2">
-          <button id="clock-resume" class="btn btn-primary grow" onclick="adminApp.clockAction('resume')">▶ Start / resume</button>
-          <button id="clock-pause" class="btn btn-secondary grow" onclick="adminApp.clockAction('pause')">⏸ Pause</button>
-          <button class="btn btn-secondary grow" onclick="adminApp.clockAction('reset')" title="Back to the length on the setup screen">↺ Default length</button>
-        </div>
-
-        <!-- Room Sound Alerts -->
-        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-subtle);">
-          <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 6px;">FACILITATOR ROOM SOUNDS:</div>
-          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('chime', 'Attention Sovereign Delegates')">Chime</button>
-            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('gong', 'Plenary Assembly Called')">Plenary Gong</button>
-            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('alert', 'Crisis Warning Alert')">Crisis Siren</button>
-          </div>
-        </div>
+        <section class="card">
+          <div class="card-title">How the game runs</div>
+          <div id="run-timeline" class="run-timeline mt-2"></div>
+          <details class="deck-details mt-2">
+            <summary>What happens at the end of a turn</summary>
+            <ul class="deck-list">
+              <li>Armies on the road arrive and fight.</li>
+              <li>Every nation eats (<b id="admin-grain-rule">the amount set for this scenario</b>; a quarter less with Efficient Cores). At 0 Grain a nation starves: {% if rules.hide_vitality %}−20 Stability{% else %}−25 Vitality, −20 Stability{% endif %}.</li>
+              <li>The scenario's storyline moves on (Turn 2 border incident, Turn 3 famine).</li>
+              <li>The clock is set for the next turn. With "Move on automatically" ticked on the setup screen it starts by itself after a short pause.</li>
+            </ul>
+          </details>
+          <div id="admin-weather" class="section-sub mt-1"></div>
+        </section>
       </div>
 
-      <!-- Turn Advance & Settlement Card -->
-      <div class="card">
-        <div class="card-title">Turn Advancement & Cycles</div>
-        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
-          Settle background socioeconomic cycles and advance to the next turn:
-        </p>
+      <div class="stack-lg">
+        <!-- Clock console: acts on the clock of whatever phase the game is in -->
+        <section class="card clock-console">
+          <div class="card-title">Clock console</div>
+          <p class="section-sub">Works on whichever clock is running now. Between turns and after the summit it is a free countdown, for a break or the debrief.</p>
+          <div class="clock-label mt-2"><span id="clock-label">Working session</span><span id="clock-state" class="clock-state">stopped</span></div>
+          <div id="clock-big" class="clock-big stopped">00:00</div>
+          <div class="row wrap mt-2">
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-300)">−5 min</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-60)">−1 min</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(-10)">−10 s</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(10)">+10 s</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(60)">+1 min</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAdjust(300)">+5 min</button>
+          </div>
+          <div class="clock-set mt-2">
+            <input type="number" id="clock-min" class="form-input" min="0" max="360" value="5" inputmode="numeric" aria-label="Minutes"><span>min</span>
+            <input type="number" id="clock-sec" class="form-input" min="0" max="59" value="0" inputmode="numeric" aria-label="Seconds"><span>sec</span>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.clockSet()">Set this time</button>
+          </div>
+          <div class="row wrap mt-2">
+            <button id="clock-resume" class="btn btn-secondary btn-sm" onclick="adminApp.clockAction('resume')">▶ Start / resume</button>
+            <button id="clock-pause" class="btn btn-secondary btn-sm" onclick="adminApp.clockAction('pause')">⏸ Pause</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.clockAction('reset')" title="Back to the length on the setup screen">↺ Default length</button>
+          </div>
+        </section>
 
-        <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 12px; border-radius: var(--radius-sm); margin: 12px 0; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
-          <strong>End-of-Turn Routine Executes:</strong>
-          <ul style="padding-left: 18px; margin-top: 6px;">
-            <li>Deducts grain (20 at Standard difficulty, a quarter less with Technological Efficiency).</li>
-            <li>Enforces Starvation penalties if grain ≤ 0 (-25 Vitality, -20 Stability).</li>
-            <li>Applies the scenario's round rules (Turn 2 border incident, Turn 3 famine).</li>
-            <li>Gives the single wealthiest nation +1 vote.</li>
-            <li>Resets the working session clock (length set on the setup screen).</li>
-          </ul>
-        </div>
-
-        <button class="btn btn-primary btn-block" onclick="adminApp.advanceTurn()" style="padding: 12px; font-weight: 800;">
-          Execute End of Turn Calculations
-        </button>
+        <section class="card">
+          <div class="card-title">Sounds in the room</div>
+          <p class="section-sub">They play on the projector and on every phone.</p>
+          <div class="row wrap mt-2">
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('chime', 'Attention, delegates')">Chime</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('gong', 'The Assembly is called')">Gong</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerRoomAudio('alert', 'Crisis warning')">Alarm</button>
+          </div>
+        </section>
       </div>
     </div>
   </div>
 
-  <!-- ========================================================================= -->
-  <!-- TAB 2: EVENTS & CRISES -->
-  <!-- ========================================================================= -->
+  <!-- ===================================================================== -->
+  <!-- MOTIONS                                                               -->
+  <!-- ===================================================================== -->
+  <div id="tab-resolutions" class="admin-tab-content">
+    {% if rules.free_motions %}
+    <section class="card" id="gm-inbox-card">
+      <div class="card-title">Waiting for you <span id="gm-inbox-count" class="muted"></span></div>
+      <p class="section-sub">Passed questions to the game masters and open motions need you: answer the question for everyone, or carry out the motion (with the numbers tab, or in the room) and mark it as done.</p>
+      <div id="gm-inbox" class="stack mt-2"><p class="empty-state">Nothing yet.</p></div>
+    </section>
+    {% endif %}
+    <section class="card">
+      <div class="card-title">All motions</div>
+      <p class="section-sub">A motion goes to the vote once two nations back it: the one that tabled it and a co-sponsor.</p>
+      <div id="admin-resolutions-list" class="stack mt-2"></div>
+    </section>
+
+    <!-- What each motion template does if it passes (the players see this on their phones) -->
+    <details class="card deck-details">
+      <summary class="card-title">The kinds of motion, and what they do</summary>
+      <p class="section-sub mt-1">{% if rules.free_motions %}Players start from one of these and may rewrite the title and terms; only the effect below is automatic.{% else %}Ready-made motions: players can only change the amount. Everything else is automatic, so nothing here needs you.{% endif %}</p>
+      <div id="admin-motion-templates" class="stack mt-2"></div>
+    </details>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- EVENTS                                                                -->
+  <!-- ===================================================================== -->
   <div id="tab-events" class="admin-tab-content">
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-      <div>
-        <!-- Official MGV 2026 Scripted Crises -->
-        <div class="card" style="border: 2px solid var(--border-white);">
-          <div class="card-title">Official MGV 2026 Scripted Crises</div>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
-            In the Great Famine and Armageddon scenarios each round's effects arrive automatically when its turn begins:
-            these buttons only repeat the announcement (nothing is applied twice). In the Open summit they apply the effect
-            (Round 2 rules for the current turn; the Round 3 famine once).
-          </p>
-          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
-            <button class="btn btn-secondary btn-block" style="text-align: left; padding: 10px;" onclick="adminApp.triggerRoundCrisis(1)">
-              🌾 <strong>Round 1: The Failed Harvest</strong><br>
-              <span style="font-size: 0.72rem; color: var(--text-muted);">Broadcast harvest warning. Standard -20 Grain consumption at end.</span>
-            </button>
-            <button class="btn btn-secondary btn-block" style="text-align: left; padding: 10px;" onclick="adminApp.triggerRoundCrisis(2)">
-              ⚔️ <strong>Round 2: The Security Crisis</strong><br>
-              <span style="font-size: 0.72rem; color: var(--text-muted);">Border incident: Military &lt; 50 takes -10 Stability; Grain trades lose 5 in transit.</span>
-            </button>
-            <button class="btn btn-secondary btn-block" style="text-align: left; padding: 10px;" onclick="adminApp.triggerRoundCrisis(3)">
-              🚨 <strong>Round 3: The Great Famine</strong><br>
-              <span style="font-size: 0.72rem; color: var(--text-muted);">Immediate -15 Grain to all states. Puts Emergency Food Acts into Plenary.</span>
-            </button>
-          </div>
-        </div>
+    <div class="deck-grid">
+      <div class="stack-lg">
+        <section class="card">
+          <div class="card-title">Tell everyone something</div>
+          <p class="section-sub">Appears as news on the projector and on every phone, with a sound.</p>
+          <form id="admin-news-form" class="mt-2" onsubmit="adminApp.handleBroadcastNews(event)">
+            <div class="form-group">
+              <input type="text" id="admin-news-headline" class="form-input" placeholder="Headline, e.g. EMBARGO DECLARED" aria-label="Headline" required>
+            </div>
+            <div class="form-group">
+              <textarea id="admin-news-detail" class="form-textarea" rows="2" placeholder="What has happened" aria-label="What has happened" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-secondary btn-block btn-sm">Send to everyone</button>
+          </form>
+        </section>
 
-        <!-- Automated Event Deck -->
-        <div class="card">
-          <div class="card-title">Automated Event Deck</div>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
-            Dilemmas configured from <code>scenario_config.json</code>:
-          </p>
-
-          <div style="margin-top: 10px;">
-            <button class="btn btn-primary btn-block" onclick="adminApp.triggerAutoNextEvent()" style="padding: 10px;">
-              Trigger Next Recommended Crisis
-            </button>
-          </div>
-
-          <div style="margin-top: 12px;">
-            <label class="form-label" for="catalog-event-select">Select Catalog Dilemma</label>
-            <select id="catalog-event-select" class="form-select" style="font-family: var(--font-mono); font-size: 0.82rem;">
-              <option value="">Loading events...</option>
-            </select>
-            <button class="btn btn-secondary btn-block btn-sm" style="margin-top: 8px;" onclick="adminApp.triggerSelectedCatalogEvent()">
-              Inject Selected Crisis
-            </button>
-          </div>
-
-          <div class="row wrap mt-2" style="padding-top: 10px; border-top: 1px solid var(--border-subtle);">
-            <span class="section-sub" style="margin:0;">Random events (how many per turn: <a href="/admin/setup" style="text-decoration:underline;">setup screen</a>):</span>
+        <section class="card">
+          <div class="card-title">Make something happen</div>
+          <p class="section-sub">The game already posts random events during each working session (how many: <a href="/admin/setup">setup screen</a>). These add one now.</p>
+          <div class="row wrap mt-2">
             <button class="btn btn-secondary btn-sm" onclick="adminApp.minorEvent('good')">Good news now</button>
             <button class="btn btn-secondary btn-sm" onclick="adminApp.minorEvent('bad')">Bad news now</button>
             <button class="btn btn-secondary btn-sm" onclick="adminApp.largeEvent()">Random disaster now</button>
           </div>
-        </div>
+          <label class="form-label mt-2" for="catalog-event-select">Or pick a crisis from the list</label>
+          <select id="catalog-event-select" class="form-select">
+            <option value="">Loading events...</option>
+          </select>
+          <div class="row wrap mt-1">
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerSelectedCatalogEvent()">Start this crisis</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.triggerAutoNextEvent()">Start the next one the game recommends</button>
+          </div>
+        </section>
 
-        <!-- Custom Wire Broadcast -->
-        <div class="card">
-          <div class="card-title">Custom Wire Broadcast</div>
-          <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
-            Broadcast an emergency breaking news bulletin to all smartphones and projector:
-          </p>
-          <form id="admin-news-form" style="margin-top: 8px;" onsubmit="adminApp.handleBroadcastNews(event)">
-            <div class="form-group">
-              <input type="text" id="admin-news-headline" class="form-input" placeholder="Headline (e.g. EMBARGO DECLARED)" required>
-            </div>
-            <div class="form-group">
-              <textarea id="admin-news-detail" class="form-textarea" rows="2" placeholder="Full dispatch narrative..." required></textarea>
-            </div>
-            <button type="submit" class="btn btn-secondary btn-block btn-sm">Broadcast Emergency Dispatch</button>
-          </form>
-        </div>
-
-        <!-- War room, facilitator view: every battle with both sides' numbers -->
-        <div class="card">
+        {% if rules.war %}
+        <section class="card">
           <div class="card-title">War log <span id="war-log-count" class="muted"></span></div>
-          <p class="section-sub">Nations attack from their phones (switch attacks on or off, and when they unlock, on the <a href="/admin/setup" style="text-decoration: underline;">setup screen</a>).
-            Here you see both sides' strength. The players only see their own.</p>
+          <p class="section-sub">Nations attack from their phones (switch it on or off on the <a href="/admin/setup">setup screen</a>). Here you see both sides' strength. The players only see their own.</p>
           <div id="admin-sieges" class="stack mt-2"></div>
           <div id="admin-war-log" class="stack mt-2"><p class="empty-state">No battles yet.</p></div>
-        </div>
+        </section>
+        {% endif %}
+
+        <details class="card deck-details">
+          <summary class="card-title">The story's scripted rounds</summary>
+          <p class="section-sub mt-1">In the Great Famine and Armageddon each round arrives by itself when its turn begins: these buttons only repeat the announcement. In the Open summit they apply it (Round 2 rules for the current turn; the Round 3 famine once).</p>
+          <div class="stack mt-2">
+            <button class="btn btn-secondary btn-block round-btn" onclick="adminApp.triggerRoundCrisis(1)">
+              🌾 <strong>Round 1: The Failed Harvest</strong><span>The harvest warning. Grain is eaten as usual at the end of the turn.</span>
+            </button>
+            <button class="btn btn-secondary btn-block round-btn" onclick="adminApp.triggerRoundCrisis(2)">
+              ⚔️ <strong>Round 2: The Security Crisis</strong><span>Border incident: Military below 50 costs 10 Stability; Grain trades lose 5 in transit.</span>
+            </button>
+            <button class="btn btn-secondary btn-block round-btn" onclick="adminApp.triggerRoundCrisis(3)">
+              🚨 <strong>Round 3: The Great Famine</strong><span>Every nation loses 15 Grain at once; the Food Acts go on the ballot.</span>
+            </button>
+          </div>
+        </details>
       </div>
 
-      <!-- Live Dispatch Audit Log -->
-      <div class="card">
-        <div class="card-title">Dispatch Wire Audit Log</div>
-        <p style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;">
-          CHRONOLOGICAL DISPATCH STREAM
-        </p>
-        <div id="admin-news-feed" style="max-height: 480px; overflow-y: auto; margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
-          <!-- Injected via JS -->
-        </div>
-      </div>
+      <section class="card">
+        <div class="card-title">The news so far</div>
+        <p class="section-sub">Newest first. The full timeline is in the results report.</p>
+        <div id="admin-news-feed" class="admin-news-feed mt-2"></div>
+      </section>
     </div>
   </div>
 
-  <!-- ========================================================================= -->
-  <!-- TAB 3: RESOURCE OVERRIDES & TELEMETRY -->
-  <!-- ========================================================================= -->
+  <!-- ===================================================================== -->
+  <!-- NATIONS' NUMBERS                                                      -->
+  <!-- ===================================================================== -->
   <div id="tab-resources" class="admin-tab-content">
-    <div class="card" id="bulk-card">
-      <div class="card-title">Change resources for several nations at once</div>
-      <p class="section-sub">Choose what to change and by how much (type the numbers), then tick the nations it should affect. Nothing happens until you confirm.</p>
+    <section class="card">
+      <div class="card-title">Every nation's numbers</div>
+      <p class="section-sub">Type a number and press Enter, or use − and + to move it by 5. Nobody is told; it does go into the results report.</p>
+      <div class="table-responsive mt-2">
+        <table class="table-deck numbers-table">
+          <thead>
+            <tr>
+              <th>Nation</th>
+              <th>Grain</th>
+              <th>Cores</th>
+              <th>Silk</th>
+              <th>Military</th>
+              {% if not rules.hide_vitality %}<th>Vitality</th>{% endif %}
+              <th>Standing</th>
+              <th>Stability</th>
+              <th>Votes</th>
+            </tr>
+          </thead>
+          <tbody id="admin-realms-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="bulk-card">
+      <div class="card-title">Change several nations at once</div>
+      <p class="section-sub">Choose what to change and by how much, then tick the nations. Nothing happens until you confirm.</p>
       <div id="bulk-rows"></div>
       <button class="btn btn-secondary btn-sm mt-1" onclick="adminApp.bulkAddRow()">+ Another resource</button>
 
@@ -264,273 +287,100 @@
       <div id="bulk-nations" class="bulk-nations"></div>
 
       <label class="check mt-2"><input type="checkbox" id="bulk-announce" onchange="adminApp.bulkPreview()">
-        <span><b>Tell the nations</b><em>Adds a news item and a sound. Leave it off to correct something quietly (it is still written to the results report).</em></span></label>
-      <input type="text" id="bulk-reason" class="form-input mt-1" maxlength="160" placeholder="Reason shown in the news (optional), e.g. Relief convoys arrive">
+        <span><b>Tell the nations</b><em>Adds a news item and a sound. Leave it off to correct something quietly.</em></span></label>
+      <input type="text" id="bulk-reason" class="form-input mt-1" maxlength="160" placeholder="Reason shown in the news (optional), e.g. Relief convoys arrive" aria-label="Reason shown in the news">
 
       <div id="bulk-preview" class="bulk-preview"></div>
       <button class="btn btn-primary mt-2" onclick="adminApp.bulkApply()">Apply these changes…</button>
-    </div>
+    </section>
 
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-        <div>
-          <div class="card-title">Continental Telemetry & Direct Overrides</div>
-          <p style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:2px;">
-            TYPE A NUMBER AND PRESS ENTER • +/- ADJUST BY 5 • 'EDIT' FOR STATUS PROTOCOLS
-          </p>
-        </div>
-      </div>
-
-      <div class="table-responsive">
-        <table class="table-deck">
-          <thead>
-            <tr>
-              <th>Delegation</th>
-              <th>Grain</th>
-              <th>Cores</th>
-              <th>Silk</th>
-              <th>Military</th>
-              <th>Vitality</th>
-              <th>Standing</th>
-              <th>Stability</th>
-              <th>Votes</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="admin-realms-tbody">
-            <!-- Injected via JS -->
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card" id="journal-card">
-      <div class="card-title">Action log: reverse a mistake <button class="btn btn-secondary btn-sm" style="float:right;" onclick="adminApp.loadJournal()">Refresh</button></div>
-      <p class="section-sub">Every change to a nation's numbers (yours, trades, quiz answers, battles, motion effects) is listed here. Reversing adds the opposite change, so later changes are kept. Battles and motions stay on record; only their resource changes are undone.</p>
+    <section class="card" id="journal-card">
+      <div class="row-between"><div class="card-title">Undo a mistake</div><button class="btn btn-secondary btn-sm" onclick="adminApp.loadJournal()">Refresh</button></div>
+      <p class="section-sub">Every change to a nation's numbers (yours, trades,{% if rules.quiz %} quiz answers,{% endif %}{% if rules.war %} battles,{% endif %} motion effects) is listed here. Reversing adds the opposite change, so later changes are kept. Battles and motions stay on record; only their resource changes are undone.</p>
       <div id="journal-list" class="stack mt-2"><p class="empty-state">Nothing yet.</p></div>
-    </div>
+    </section>
 
-    <div class="card">
-      <div class="card-title">Modifiers of each nation <button class="btn btn-secondary btn-sm" style="float:right;" onclick="adminApp.loadModifiers(true)">Refresh</button></div>
-      <p class="section-sub">Everything that bends the rules for one nation: automatic effects (read-only reasons) and adjustments you can set by hand, for example when the players have rewritten a motion. The war adjustments are never shown to the players.</p>
+    <details class="card deck-details">
+      <summary class="card-title">Special rules for one nation (modifiers)</summary>
+      <p class="section-sub mt-1">Everything that bends the rules for one nation: automatic effects (with their reasons) and adjustments you can set by hand, for example when the players have rewritten a motion.{% if rules.war %} The war adjustments are never shown to the players.{% endif %}</p>
       <div id="modifiers-list" class="stack mt-2"><p class="empty-state">Loading…</p></div>
-    </div>
+    </details>
   </div>
 
-  <!-- ========================================================================= -->
-  <!-- TAB 4: RESOLUTIONS & PLENARY DOCKET -->
-  <!-- ========================================================================= -->
-  <div id="tab-resolutions" class="admin-tab-content">
-    <div class="card" id="gm-inbox-card">
-      <div class="card-title">Questions and open motions <span id="gm-inbox-count" class="muted"></span></div>
-      <p class="section-sub">Questions and open motions (no template) need a co-sponsor and a passing Assembly vote. A passed question is answered here and the answer goes to everyone as news. A passed open motion has no automatic effect: carry it out yourself (bulk editor, modifiers or in the room), then mark it as carried out.</p>
-      <div id="gm-inbox" class="stack mt-2"><p class="empty-state">No questions yet.</p></div>
-    </div>
-    <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <div class="card-title">Floor Resolutions & Plenary Docket</div>
-        <span style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">
-          MOTIONS WITH ≥ 2 CO-SPONSORS QUALIFY FOR PLENARY
-        </span>
-      </div>
-
-      <div id="admin-resolutions-list" style="display: flex; flex-direction: column; gap: 10px;">
-        <!-- Injected via JS -->
-      </div>
-    </div>
-
-    <!-- What each motion template does if it passes (the players see this on their phones) -->
-    <div class="card">
-      <div class="card-title">Motion templates: what happens if they pass</div>
-      <p class="section-sub">Players start from one of these and may rewrite the title and terms; only the effect below is fixed.</p>
-      <div id="admin-motion-templates" class="stack mt-2"></div>
-    </div>
-  </div>
-
-  <!-- ========================================================================= -->
-  <!-- TAB 5: DELEGATIONS & PASSCODES -->
-  <!-- ========================================================================= -->
-  <div id="tab-saves" class="admin-tab-content">
-    <div class="card">
-      <div class="row-between wrap">
-        <div>
-          <div class="card-title">Saved games</div>
-          <p class="section-sub">The game autosaves every 5 minutes, on the server and in this browser.
-            If the server restarts (for example after a redeploy), restore the latest copy from this browser.</p>
-        </div>
-        <div class="row wrap">
-          <button class="btn btn-primary btn-sm" onclick="adminApp.saveNow()">Save now</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.downloadSave()">Download save file</button>
-          <a class="btn btn-secondary btn-sm" href="/admin/report" target="_blank">Results report</a>
-          <label class="btn btn-secondary btn-sm" style="cursor:pointer;">Load save file
-            <input type="file" accept=".json,application/json" style="display:none;" onchange="adminApp.loadSaveFile(this)">
-          </label>
-        </div>
-      </div>
-      <p id="save-status" class="small mt-2 muted"></p>
-    </div>
-    <div class="admin-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-      <div class="card">
-        <div class="card-title">On the server</div>
-        <p class="section-sub">Last 12 saves. Lost if the hosted server restarts.</p>
-        <div id="server-saves" class="stack mt-2"><p class="empty-state">Loading…</p></div>
-      </div>
-      <div class="card">
-        <div class="card-title">In this browser</div>
-        <p class="section-sub">Last 6 saves, kept on this computer even if the server restarts.</p>
-        <div id="browser-saves" class="stack mt-2"><p class="empty-state">None yet.</p></div>
-      </div>
-    </div>
-  </div>
-
+  <!-- ===================================================================== -->
+  <!-- PLAYERS & PASSCODES                                                   -->
+  <!-- ===================================================================== -->
   <div id="tab-access" class="admin-tab-content">
-    <!-- Summit Scale / Active Countries Facilitator Control -->
-    <div class="card" style="margin-bottom: 16px; border: 1px solid var(--border-white);">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <div class="card-title" style="margin-bottom: 4px;">Participating Sovereign Nations</div>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">
-            Set the number of participating countries (MGV standard: 3 to 6 nations). Secret missions and continental quotas automatically rescale for all nations.
-          </p>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.setActiveRealmCount(3)">3 Nations</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.setActiveRealmCount(4)">4 Nations</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.setActiveRealmCount(5)">5 Nations</button>
-          <button class="btn btn-primary btn-sm" onclick="adminApp.setActiveRealmCount(6)">6 Nations (Full)</button>
-          <button class="btn btn-secondary btn-sm" onclick="adminApp.clearRealmSessions(null, 'all delegations')" title="Reset all connected phone sessions">Clear All Sessions ↺</button>
-        </div>
-      </div>
-    </div>
-
-    <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px;">
-      <!-- Active Delegation PINs -->
-      <div class="card">
-        <div class="card-title">Delegation Access & Security Passcodes</div>
-        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
-          Participants must enter their delegation's 4-digit PIN to access their phone terminal:
-        </p>
-
-        <div class="table-responsive" style="margin-top: 12px;">
-          <table class="table-deck">
-            <thead>
-              <tr>
-                <th>Delegation</th>
-                <th>Status</th>
-                <th>Connected Seats</th>
-                <th>Capacity</th>
-                <th>Missions</th>
-                <th>PIN</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="admin-pins-tbody">
-              <!-- Injected via JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Gateway & Add Realm -->
-      <div>
-        <div class="card">
-          <div class="card-title">Network Gateway</div>
-          <div style="background: var(--bg-surface-sunken); border: 1px solid var(--border-subtle); padding: 8px 10px; border-radius: var(--radius-xs); margin: 8px 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-primary); display:flex; justify-content:space-between; align-items:center;">
-            <span id="server-url-display">{{ server_url }}</span>
-            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('{{ server_url }}'); showToast('URL copied to clipboard', 'info');">Copy</button>
+    <div class="deck-grid wide-left">
+      <div class="stack-lg">
+        <section class="card">
+          <div class="card-title">Nations and passcodes <span id="roster-count" class="muted"></span></div>
+          <p class="section-sub">Everyone in a delegation uses the same passcode. A delegation can have as many phones as it has seats.</p>
+          <div class="table-responsive mt-2">
+            <table class="table-deck passcode-table">
+              <thead><tr><th>Nation</th><th>Connected</th><th>Seats</th><th>Secret missions</th><th>Passcode</th></tr></thead>
+              <tbody id="admin-pins-tbody"></tbody>
+            </table>
           </div>
-          <div class="qr-box" style="max-width: 180px; margin: 10px auto;">
-            {{ qr_svg | safe }}
+          <div class="row wrap mt-2">
+            <a class="btn btn-secondary btn-sm" href="/admin/cards" target="_blank" rel="noopener">Passcode cards to print &#8599;</a>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.shufflePins()">Shuffle passcodes</button>
+            <button class="btn btn-secondary btn-sm" onclick="adminApp.clearRealmSessions(null, 'all delegations')" title="Use this if phones are locked out">Free all seats</button>
           </div>
-        </div>
+        </section>
 
-        <!-- Add Delegation -->
-        <div class="card">
-          <div class="card-title">Add Sovereign Delegation</div>
-          <form id="add-realm-form" style="margin-top: 8px;" onsubmit="adminApp.handleAddRealm(event)">
-            <div class="form-group" style="margin-bottom: 6px;">
-              <input type="text" id="new-realm-name" class="form-input" placeholder="Realm Name (e.g. Cloud Collective)" required>
-            </div>
-            <div class="form-group" style="margin-bottom: 6px;">
-              <input type="text" id="new-realm-id" class="form-input" placeholder="Unique ID (e.g. cloud_collective)" required>
-            </div>
-            <div class="form-group" style="margin-bottom: 6px;">
-              <input type="text" id="new-realm-pin" class="form-input" placeholder="4-Digit PIN (e.g. 1007)" value="1007" required>
-            </div>
-            <div class="form-group" style="margin-bottom: 6px;">
-              <input type="text" id="new-realm-values" class="form-input" placeholder="Ethos / Cultural Values" value="Autonomy, Trade, Innovation">
-            </div>
-            <div class="form-group" style="margin-bottom: 8px;">
-              <textarea id="new-realm-agenda" class="form-textarea" rows="2" placeholder="Secret Domestic Directive"></textarea>
-            </div>
-            <button type="submit" class="btn btn-secondary btn-sm btn-block">+ Register Delegation</button>
-          </form>
-        </div>
+        <section class="roster-card">
+          <div>
+            <div class="card-title">Who plays</div>
+            <p class="section-sub">Tap a nation to take it out of the summit or bring it back. Missions, quotas, trade lists, the projector map and votes adjust at once.</p>
+          </div>
+          <div id="roster-chips" class="roster-chips"></div>
+        </section>
       </div>
+
+      <section class="card">
+        <div class="card-title">How players join</div>
+        <p class="section-sub">Same QR code as on the projector (its Join button). The phones must be on the same network as this computer.</p>
+        <div class="join-url mt-2">
+          <span id="server-url-display" class="mono">{{ server_url }}</span>
+          <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('{{ server_url }}'); showToast('Address copied', 'info');">Copy</button>
+        </div>
+        <div class="qr-box">{{ qr_svg | safe }}</div>
+      </section>
     </div>
   </div>
 
-</div>
-
-<!-- Modal for editing a realm stats & flags -->
-<div id="edit-realm-modal" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width: 480px;">
-    <h3 id="edit-modal-title" style="color: var(--text-primary); margin-bottom: 12px; font-size: 1.1rem; text-transform: uppercase;">Edit Delegation</h3>
-    <form id="edit-realm-form" onsubmit="adminApp.handleSaveRealmEdit(event)">
-      <input type="hidden" id="edit-realm-id">
-      
-      <div class="form-group">
-        <label class="form-label">Ethos & Cultural Values</label>
-        <input type="text" id="edit-realm-ethos" class="form-input">
+  <!-- ===================================================================== -->
+  <!-- SAVES                                                                 -->
+  <!-- ===================================================================== -->
+  <div id="tab-saves" class="admin-tab-content">
+    <section class="card">
+      <div class="card-title">Saved games</div>
+      <p class="section-sub">While a game is being played it is saved every 5 minutes on the server, at the start of every turn, and every minute in this browser. If the server stops, restart it and the deck offers to bring the game back.</p>
+      <p id="save-status" class="save-status mt-2"></p>
+      <div class="row wrap mt-2">
+        <button class="btn btn-primary btn-sm" onclick="adminApp.saveNow()">Save now</button>
+        <button class="btn btn-secondary btn-sm" onclick="adminApp.downloadSave()">Download a save file</button>
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer;">Load a save file
+          <input type="file" accept=".json,application/json" style="display:none;" onchange="adminApp.loadSaveFile(this)">
+        </label>
+        <a class="btn btn-secondary btn-sm" href="/admin/report" target="_blank" rel="noopener">Results report &#8599;</a>
       </div>
-
-      <div class="form-group">
-        <label class="form-label">Secret Domestic Directive</label>
-        <textarea id="edit-realm-agenda" class="form-textarea" rows="3"></textarea>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Status Penalties & Protocols</label>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: var(--font-mono); font-size: 0.75rem;">
-          <label style="display:flex; align-items:center; gap:6px; color:#d4d4d8;">
-            <input type="checkbox" id="edit-flag-quarantine"> QUARANTINED
-          </label>
-          <label style="display:flex; align-items:center; gap:6px; color:#d4d4d8;">
-            <input type="checkbox" id="edit-flag-strike"> GENERAL STRIKE
-          </label>
-          <label style="display:flex; align-items:center; gap:6px; color:#d4d4d8;">
-            <input type="checkbox" id="edit-flag-starving"> STARVING
-          </label>
-          <label style="display:flex; align-items:center; gap:6px; color:#d4d4d8;">
-            <input type="checkbox" id="edit-flag-efficiency"> TECH EFFICIENCY
-          </label>
-        </div>
-      </div>
-
-      <div style="display:flex; justify-content:space-between; margin-top: 18px;">
-        <button type="button" class="btn btn-danger btn-sm" onclick="adminApp.deleteCurrentEditingRealm()">Delete Delegation</button>
-        <div style="display:flex; gap: 8px;">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('edit-realm-modal').style.display='none'">Cancel</button>
-          <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
-        </div>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- Reset Confirmation Modal -->
-<div id="modal-confirm-reset" class="modal-overlay" style="display: none;" onclick="if(event.target===this) adminApp.closeResetModal()">
-  <div class="modal-card" style="max-width: 420px; text-align: center;">
-    <div style="font-size: 2rem; margin-bottom: 8px;">⚠️</div>
-    <h3 style="font-size: 1.2rem; font-weight: 900; color: var(--text-primary); text-transform: uppercase;">Confirm Simulation Reset</h3>
-    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.45;">
-      Are you sure you want to reset the simulation back to Turn 1? All ongoing treaties, passed resolutions, and event dispatches will be cleared.
-    </p>
-    <div style="display: flex; gap: 10px; margin-top: 18px;">
-      <button class="btn btn-secondary btn-block" onclick="adminApp.closeResetModal()">Cancel</button>
-      <button class="btn btn-danger btn-block" onclick="adminApp.resetSimulation()">Yes, Reset Sim</button>
+    </section>
+    <div class="deck-grid">
+      <section class="card">
+        <div class="card-title">On the server</div>
+        <p class="section-sub">Lost only if the hosted server is wiped.</p>
+        <div id="server-saves" class="stack mt-2"><p class="empty-state">Loading…</p></div>
+      </section>
+      <section class="card">
+        <div class="card-title">In this browser</div>
+        <p class="section-sub">Kept on this computer, even if the hosted server is wiped.</p>
+        <div id="browser-saves" class="stack mt-2"><p class="empty-state">None yet.</p></div>
+      </section>
     </div>
   </div>
+
 </div>
 {% endblock %}
 
@@ -543,114 +393,5 @@
   adminApp.start();
   keepScreenAwake();
   adminApp.initSaves();
-
-  // Tab switching logic
-  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
-      btn.classList.add('active');
-      const tabId = btn.dataset.tab;
-      const target = document.getElementById(tabId);
-      if (target) target.classList.add('active');
-      if (tabId === 'tab-resources') { adminApp.loadModifiers(true); adminApp.loadJournal(); }
-    });
-  });
-
-  adminApp.editRealmModal = async function(realmId) {
-    const resp = await fetch('/api/state');
-    const state = await resp.json();
-    const realm = state.realms.find(r => r.id === realmId);
-    if (!realm) return;
-
-    document.getElementById('edit-realm-id').value = realm.id;
-    document.getElementById('edit-modal-title').innerText = `Edit: ${realm.name}`;
-    document.getElementById('edit-realm-ethos').value = realm.ethos || realm.values || '';
-    document.getElementById('edit-realm-agenda').value = realm.private_agenda || '';
-    document.getElementById('edit-flag-quarantine').checked = Boolean(realm.is_quarantined);
-    document.getElementById('edit-flag-strike').checked = Boolean(realm.is_striking);
-    document.getElementById('edit-flag-starving').checked = Boolean(realm.is_starving);
-    document.getElementById('edit-flag-efficiency').checked = Boolean(realm.tech_efficiency_unlocked);
-    document.getElementById('edit-realm-modal').style.display = 'flex';
-  };
-
-  adminApp.handleSaveRealmEdit = async function(e) {
-    e.preventDefault();
-    const rid = document.getElementById('edit-realm-id').value;
-    if (!(await confirmAction({ title: 'Save these changes?', message: 'The flags and texts of this delegation are replaced at once.', confirmLabel: 'Save changes' }))) return;
-    const updates = {
-      ethos: document.getElementById('edit-realm-ethos').value,
-      private_agenda: document.getElementById('edit-realm-agenda').value,
-      is_quarantined: document.getElementById('edit-flag-quarantine').checked,
-      is_striking: document.getElementById('edit-flag-strike').checked,
-      is_starving: document.getElementById('edit-flag-starving').checked,
-      tech_efficiency_unlocked: document.getElementById('edit-flag-efficiency').checked,
-    };
-
-    try {
-      await fetch('/api/admin/realm/override', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ realm_id: rid, updates })
-      });
-      document.getElementById('edit-realm-modal').style.display = 'none';
-      showToast('Delegation configuration saved', 'info');
-      this.pollState();
-    } catch(err) {
-      showToast('Failed to save edit', 'danger');
-    }
-  };
-
-  adminApp.deleteCurrentEditingRealm = async function() {
-    const rid = document.getElementById('edit-realm-id').value;
-    if (!(await confirmAction({ title: 'Remove this delegation?', message: 'It leaves the summit for good. Missions and quotas are recalculated.', confirmLabel: 'Remove it', tone: 'danger' }))) return;
-    try {
-      const resp = await fetch('/api/admin/realm/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ realm_id: rid })
-      });
-      const res = await resp.json();
-      if (res.success) {
-        document.getElementById('edit-realm-modal').style.display = 'none';
-        showToast('Delegation removed', 'warning');
-        this.pollState();
-      } else {
-        showToast(res.message, 'danger');
-      }
-    } catch(err) {
-      showToast('Failed to delete delegation', 'danger');
-    }
-  };
-
-  adminApp.handleAddRealm = async function(e) {
-    e.preventDefault();
-    if (!(await confirmAction({ title: 'Register this delegation?', message: document.getElementById('new-realm-name').value, confirmLabel: 'Register' }))) return;
-    const data = {
-      id: document.getElementById('new-realm-id').value,
-      name: document.getElementById('new-realm-name').value,
-      pin: document.getElementById('new-realm-pin').value,
-      values: document.getElementById('new-realm-values').value,
-      private_agenda: document.getElementById('new-realm-agenda').value,
-    };
-
-    try {
-      const resp = await fetch('/api/admin/realm/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      const res = await resp.json();
-      if (res.success) {
-        showToast('New delegation registered', 'info');
-        document.getElementById('add-realm-form').reset();
-        this.pollState();
-      } else {
-        showToast(res.message, 'danger');
-      }
-    } catch(err) {
-      showToast('Failed to add delegation', 'danger');
-    }
-  };
 </script>
 {% endblock %}

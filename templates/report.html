@@ -36,7 +36,7 @@
 <body>
 <main>
   <h1>The Summit of Realms — Results</h1>
-  <div class="sub">Report generated {{ r.generated }} · Turn {{ r.meta.current_turn }} · {{ (r.meta.phase or '').replace('_', ' ') }}</div>
+  <div class="sub">{{ r.complexity }} · {{ r.scenario }} · report generated {{ r.generated }} · Turn {{ r.meta.current_turn }} · {{ (r.meta.phase or '').replace('_', ' ') }}</div>
   <div class="actions">
     <button onclick="window.print()">Print / save as PDF</button>
     <a href="/admin/report?download=1">Download this page</a>
@@ -60,11 +60,11 @@
 
   <h2>Final standings</h2>
   <table>
-    <tr><th>Nation</th><th>Delegates</th><th>Votes</th><th>Grain</th><th>Cores</th><th>Silk</th><th>Military</th><th>Vitality</th><th>Standing</th><th>Stability</th><th>Quiz ✓/✗</th></tr>
+    <tr><th>Nation</th><th>Delegates</th><th>Votes</th><th>Grain</th><th>Cores</th><th>Silk</th><th>Military</th>{% if not r.hide_vitality %}<th>Vitality</th>{% endif %}<th>Standing</th><th>Stability</th>{% if r.quiz_played %}<th>Quiz ✓/✗</th>{% endif %}</tr>
     {% for n in r.nations %}
     <tr><td>{{ n.name }}</td><td class="num">{{ n.delegates }}</td><td class="num">{{ n.votes }}</td><td class="num">{{ n.grain }}</td>
-      <td class="num">{{ n.cores }}</td><td class="num">{{ n.silk }}</td><td class="num">{{ n.military }}</td><td class="num">{{ n.vitality }}</td>
-      <td class="num">{{ n.standing }}</td><td class="num">{{ n.stability }}</td><td class="num">{{ n.quiz_correct }} / {{ n.quiz_wrong }}</td></tr>
+      <td class="num">{{ n.cores }}</td><td class="num">{{ n.silk }}</td><td class="num">{{ n.military }}</td>{% if not r.hide_vitality %}<td class="num">{{ n.vitality }}</td>{% endif %}
+      <td class="num">{{ n.standing }}</td><td class="num">{{ n.stability }}</td>{% if r.quiz_played %}<td class="num">{{ n.quiz_correct }} / {{ n.quiz_wrong }}</td>{% endif %}</tr>
     {% endfor %}
   </table>
 

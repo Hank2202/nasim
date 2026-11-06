@@ -1202,7 +1202,7 @@
     }
 
     drawTrades(ctx, s) {
-      const recent = this.trades.filter(t => t.status === 'accepted').slice(-6);
+      const recent = this.trades.filter(t => t.status === 'accepted').slice(0, 6);   // the list is newest first
       recent.forEach((t, i) => {
         const a = CAPITALS[t.sender_id], b = CAPITALS[t.receiver_id];
         if (!a || !b || !this.isActive(t.sender_id) || !this.isActive(t.receiver_id)) return;

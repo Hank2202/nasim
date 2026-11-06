@@ -1,143 +1,151 @@
 {% extends "base.html" %}
 {% import "_difficulty.html" as diff %}
 
-{% block title %}The Summit of Realms - Sovereign Login{% endblock %}
+{% block title %}Join · The Summit of Realms{% endblock %}
+
+{# No site header: on a phone every nation should fit on the first screen. #}
+{% block header %}{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 920px;">
+<div class="join-page">
 
-  <div class="page-head centered">
-    <span class="eyebrow">Neutral Spire &middot; Year 304 AC</span>
-    <h1 class="page-title" style="font-size: 1.8rem;">The Summit of Realms</h1>
-    {% set playing = realms | selectattr('active', 'ne', false) | list %}
-    <p class="lede">{{ playing|length }} nations, one failing harvest, three rounds of negotiation. Choose your delegation to begin.</p>
-  </div>
+  <header class="join-head">
+    <span class="join-mark" aria-hidden="true">&#10022;</span>
+    <h1 class="page-title join-title">The Summit of Realms</h1>
+    <p class="join-lede">Tap your nation, then type its passcode. Your facilitator will tell you both.</p>
+  </header>
 
-  <div class="card">
-    <div class="row-between wrap">
-      <div class="grow" style="min-width: 220px;">
-        <div class="card-title">New to the summit?</div>
-        <p class="small" style="color: var(--text-secondary); margin-top: 4px;">Read the rules in the Guide. Once you join, the Wiki tab holds the history of every nation &mdash; the quiz questions come from it.</p>
-      </div>
-      <div class="row wrap">
-        <a href="/overview" class="btn btn-secondary btn-sm">Game Guide</a>
-      </div>
-    </div>
-  </div>
-
-  <div class="row-between" style="margin: 22px 0 10px;">
-    <div class="card-title">Select your delegation</div>
-    <span class="section-sub hide-sm" style="margin: 0;">Tap a nation &middot; enter its passcode</span>
+  <!-- This device is already in a delegation: one tap back to the game -->
+  <div id="join-continue" class="join-continue">
+    {% for r in my_realms %}
+    <a class="join-continue-btn" href="/realm/{{ r.id }}" style="--nc: {{ r.theme_color or '#8c7a5e' }};">
+      <span class="crest small" aria-hidden="true">{{ r.emoji or '🏛️' }}</span>
+      <span class="grow"><em>You are in this delegation</em><b>Back to {{ r.name }}</b></span>
+      <span aria-hidden="true">&rarr;</span>
+    </a>
+    {% endfor %}
   </div>
 
   <div class="lobby-grid" id="lobby-grid">
-    {% for r in realms if r.active != false %}
-    <div class="lobby-realm-card" style="--nc: {{ r.theme_color or '#8c7a5e' }};" id="card-{{ r.id }}" role="button" tabindex="0"
-         onclick="handleCardClick('{{ r.id }}', {{ r.name|tojson|forceescape }}, {{ 'true' if r.is_capacity_full else 'false' }})"
-         onkeydown="if (event.key === 'Enter') this.click();">
-      <div>
-        <div class="row-between" style="align-items: flex-start; margin-bottom: 6px;">
-          <h3 class="lobby-realm-name"><span class="crest small">{{ r.emoji or '🏛️' }}</span>{{ r.name }}</h3>
-          <span class="badge">{{ r.assembly_votes }} VOTE{{ 'S' if r.assembly_votes != 1 else '' }}</span>
-        </div>
-        <p class="small" style="color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">{{ r.ethos }}</p>
-        <div style="margin-bottom: 10px;">{{ diff.badge(r) }}{{ diff.note(r) }}</div>
-      </div>
-
-      <div class="lobby-card-foot">
-        <span class="status-pill {{ 'bad' if r.is_capacity_full else '' }}" id="badge-seats-{{ r.id }}">{{ r.connected_players or 0 }} / {{ r.player_count or 2 }} seats</span>
-        <span id="btn-login-{{ r.id }}">
-          {% if r.is_capacity_full %}<span class="btn btn-sm btn-danger">Full</span>{% else %}<span class="btn btn-primary btn-sm">Join</span>{% endif %}
-        </span>
+    {% for r in realms %}
+    <div class="lobby-realm-card" style="--nc: {{ r.theme_color or '#8c7a5e' }};{% if r.active == false %} display: none;{% endif %}" id="card-{{ r.id }}"
+         role="button" tabindex="0" data-realm="{{ r.id }}" data-name="{{ r.name }}">
+      <span class="crest small" aria-hidden="true">{{ r.emoji or '🏛️' }}</span>
+      <span class="lobby-realm-main">
+        <span class="lobby-realm-name">{{ r.name }}</span>
+        <span class="lobby-realm-meta">{{ diff.badge(r) }}<span class="lobby-seats {{ 'full' if r.is_capacity_full else '' }}" id="badge-seats-{{ r.id }}">{% if r.is_capacity_full %}Full{% else %}{{ r.connected_players or 0 }} of {{ r.player_count or 2 }} seat{{ 's' if (r.player_count or 2) != 1 else '' }}{% endif %}</span></span>
+      </span>
+      <span class="lobby-go" aria-hidden="true">&rsaquo;</span>
+      {# What the join sheet shows about this nation #}
+      <div class="lobby-realm-detail" hidden>
+        <p class="lobby-ethos">{{ r.ethos }}</p>
+        <p class="lobby-votes">{{ r.assembly_votes }} vote{{ 's' if r.assembly_votes != 1 else '' }} in the Assembly</p>
+        {{ diff.note(r) }}
       </div>
     </div>
     {% endfor %}
   </div>
 
-  <p class="section-sub" style="text-align: center; margin-top: 26px; text-transform: none;">
-    Facilitators: <a href="/admin" style="text-decoration: underline;">Command Deck</a> &middot;
-    <a href="/projector" style="text-decoration: underline;">Projector</a> &middot;
-    Joining at <span class="mono">{{ server_url }}</span>
+  <p class="join-foot">
+    <a href="/overview">How the game works</a>
+    <span aria-hidden="true">&middot;</span>
+    <a href="/admin">I am the facilitator</a>
   </p>
-
 </div>
 
-<!-- Authentication PIN Modal -->
-<div id="login-pin-modal" class="modal-overlay" style="display: none;" onclick="if(event.target===this) closeLoginModal()">
-  <div class="modal-card" style="max-width: 400px; text-align: center;">
-    <span class="eyebrow">Delegation access</span>
-    <h3 id="modal-realm-name" class="page-title" style="font-size: 1.2rem; margin-top: 10px;">Delegation</h3>
-    <p class="small" style="color: var(--text-secondary); margin: 4px 0 16px;">Enter the passcode your facilitator gave your delegation.</p>
+<!-- Step 2: the chosen nation and its passcode. It sits at the top of the screen so the phone's keyboard never hides the button. -->
+<div id="login-pin-modal" class="modal-overlay join-sheet" style="display: none;">
+  <div class="modal-card join-card" role="dialog" aria-modal="true" aria-labelledby="modal-realm-name">
+    <button type="button" class="join-back" onclick="closeLoginModal()">&larr; All nations</button>
 
-    <form id="pin-login-form" onsubmit="submitPinLogin(event)">
+    <div class="join-nation">
+      <span class="crest" id="modal-realm-crest" aria-hidden="true"></span>
+      <h2 id="modal-realm-name" class="join-nation-name">Delegation</h2>
+    </div>
+    <div id="modal-realm-detail" class="join-nation-detail"></div>
+
+    <div id="login-note" class="callout neutral join-note" style="display: none;"></div>
+
+    <form id="pin-login-form" onsubmit="submitPinLogin(event)" autocomplete="off">
       <input type="hidden" id="login-realm-id">
-      
-      <div class="form-group">
-        <input type="password" id="login-realm-pin" class="form-input" placeholder="Passcode" autocomplete="off" inputmode="numeric" maxlength="10" required style="text-align: center; font-size: 1.3rem; letter-spacing: 0.2em; font-family: var(--font-mono);" autofocus>
-      </div>
-
-      <div id="login-error-msg" class="callout danger" style="display: none; margin-bottom: 12px;">
-        Incorrect passcode. Please try again.
-      </div>
-
-      <div style="display: flex; gap: 8px;">
-        <button type="button" class="btn btn-secondary btn-block" onclick="closeLoginModal()">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-block">Enter</button>
-      </div>
+      <label class="form-label" for="login-realm-pin">Passcode</label>
+      {# Plain text with dots drawn by CSS: a password field makes phones offer to save a password in the middle of the room. #}
+      <input type="text" id="login-realm-pin" class="form-input join-pin" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="10" required aria-describedby="login-hint">
+      <div id="login-error-msg" class="callout danger join-error" role="alert" style="display: none;"></div>
+      <button type="submit" id="login-submit" class="btn btn-primary btn-block join-submit">Join</button>
     </form>
+    <p class="join-hint" id="login-hint">Everyone in a delegation uses the same passcode.</p>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  let activeRealmsData = {{ realms | tojson }};
+  const loginTarget = {{ login_target | tojson }};
+  const loggedOutByNewGame = {{ 'true' if logged_out_by_new_game else 'false' }};
+  let seats = {};              // what the last poll said about each nation's seats
 
-  function hasRealmCookie(realmId) {
-    return document.cookie.split(';').some(c => c.trim().startsWith(`has_auth_${realmId}=`));
-  }
-
-  function handleCardClick(realmId, realmName, isFull) {
-    // If device is already authenticated, allow direct entrance
-    if (hasRealmCookie(realmId)) {
-      window.location.href = `/realm/${realmId}`;
-      return;
-    }
-
-    const realm = activeRealmsData.find(r => r.id === realmId);
-    const capacityFull = (realm && realm.is_capacity_full) || isFull;
-
-    if (capacityFull) {
-      const conn = realm ? realm.connected_players : 2;
-      const cap = realm ? realm.player_count : 2;
-      alert(`${realmName} is full (${conn}/${cap} seats). Pick another nation or ask the facilitator to add a seat.`);
-      return;
-    }
-
-    openLoginModal(realmId, realmName);
-  }
-
-  function openLoginModal(realmId, realmName) {
-    document.getElementById('login-realm-id').value = realmId;
-    document.getElementById('modal-realm-name').innerText = realmName;
+  function openLoginModal(card) {
+    const id = card.dataset.realm;
+    document.getElementById('login-realm-id').value = id;
+    document.getElementById('modal-realm-name').innerText = card.dataset.name;
+    document.getElementById('modal-realm-crest').innerText = card.querySelector('.crest').innerText;
+    const detail = document.getElementById('modal-realm-detail');
+    detail.innerHTML = card.querySelector('.lobby-realm-detail').innerHTML;
+    detail.querySelector('.lobby-votes').after(card.querySelector('.diff-badge').cloneNode(true));
+    document.getElementById('login-submit').innerText = `Join ${card.dataset.name}`;
+    document.querySelector('.join-card').style.setProperty('--nc', card.style.getPropertyValue('--nc'));
     document.getElementById('login-realm-pin').value = '';
     document.getElementById('login-error-msg').style.display = 'none';
+    showSeatNote(id);
     document.getElementById('login-pin-modal').style.display = 'flex';
-    setTimeout(() => {
-      document.getElementById('login-realm-pin').focus();
-    }, 100);
+    // Inside the tap itself, or phones do not bring up the keyboard.
+    document.getElementById('login-realm-pin').focus();
+  }
+
+  function showSeatNote(id) {
+    const note = document.getElementById('login-note');
+    const s = seats[id] || cardSeats(id);
+    if (s.full) {
+      note.className = 'callout warn join-note';
+      note.innerText = `All ${s.capacity} seats are taken right now. A seat frees up within a minute after a phone leaves; if you belong to this delegation and cannot get in, ask your facilitator to add a seat.`;
+      note.style.display = 'block';
+    } else if (loggedOutByNewGame && id === loginTarget) {
+      note.className = 'callout neutral join-note';
+      note.innerText = 'A new game has started, so please type the passcode again.';
+      note.style.display = 'block';
+    } else {
+      note.style.display = 'none';
+    }
+  }
+
+  function cardSeats(id) {
+    const badge = document.getElementById(`badge-seats-${id}`);
+    return { full: !!(badge && badge.classList.contains('full')), capacity: 0 };
   }
 
   function closeLoginModal() {
     document.getElementById('login-pin-modal').style.display = 'none';
   }
 
+  function setLoginError(text) {
+    const errorEl = document.getElementById('login-error-msg');
+    errorEl.innerText = text;
+    errorEl.style.display = 'block';
+    const input = document.getElementById('login-realm-pin');
+    input.classList.remove('shake');
+    void input.offsetWidth;                  // restart the animation
+    input.classList.add('shake');
+    input.focus();
+    input.select();
+  }
+
   async function submitPinLogin(e) {
     e.preventDefault();
     const realmId = document.getElementById('login-realm-id').value;
     const pin = document.getElementById('login-realm-pin').value;
-    const errorEl = document.getElementById('login-error-msg');
-
+    const button = document.getElementById('login-submit');
+    button.disabled = true;
     try {
       const resp = await fetch('/api/auth/realm', {
         method: 'POST',
@@ -147,72 +155,86 @@
       const res = await resp.json();
       if (res.success) {
         window.location.href = `/realm/${realmId}`;
-      } else {
-        errorEl.innerText = res.message || 'Invalid passcode.';
-        errorEl.style.display = 'block';
-        if (window.synth && typeof window.synth.playAlert === 'function') {
-          synth.playAlert();
-        }
+        return;
       }
+      setLoginError(res.message || 'That passcode is not right.');
     } catch (err) {
-      errorEl.innerText = 'Network error contacting host.';
-      errorEl.style.display = 'block';
+      setLoginError('Cannot reach the game. Check that your phone is on the same Wi-Fi as the facilitator, then try again.');
     }
+    button.disabled = false;
   }
+
+  document.getElementById('lobby-grid').addEventListener('click', e => {
+    const card = e.target.closest('.lobby-realm-card');
+    if (card) openLoginModal(card);
+  });
+  document.getElementById('lobby-grid').addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest('.lobby-realm-card');
+    if (card) { e.preventDefault(); openLoginModal(card); }
+  });
+  document.getElementById('login-pin-modal').addEventListener('click', e => {
+    if (e.target.id === 'login-pin-modal') closeLoginModal();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLoginModal(); });
 
   async function pollLobbyState() {
+    let data;
     try {
       const resp = await fetch('/api/state');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      if (!data.realms) return;
-      activeRealmsData = data.realms;
-
-      data.realms.forEach(r => {
-        const card = document.getElementById(`card-${r.id}`);
-        if (!card) return;
-
-        if (r.active === false) {
-          card.style.display = 'none';
-          return;
-        } else {
-          card.style.display = '';
-        }
-
-        const seatsBadge = document.getElementById(`badge-seats-${r.id}`);
-        if (seatsBadge) {
-          const conn = r.connected_players || 0;
-          const cap = r.player_count || 2;
-          seatsBadge.innerText = `${conn} / ${cap} seats`;
-          seatsBadge.classList.toggle('bad', !!r.is_capacity_full);
-        }
-
-        const btnDiv = document.getElementById(`btn-login-${r.id}`);
-        if (btnDiv) {
-          if (r.is_capacity_full) {
-            btnDiv.innerHTML = `<span class="btn btn-sm btn-danger">Full</span>`;
-          } else {
-            btnDiv.innerHTML = `<span class="btn btn-primary btn-sm">Join</span>`;
-          }
-        }
-
-        card.onclick = () => handleCardClick(r.id, r.name, !!r.is_capacity_full);
-      });
+      if (!resp.ok) throw new Error('state');
+      data = await resp.json();
+      connectionWatch.ok();
     } catch (e) {
-      // background poll
+      connectionWatch.failed();
+      return;
+    }
+    if (!data.realms) return;
+
+    // A phone that was sent here by a new game goes straight back if the facilitator restores its old game.
+    const mine = data.my_realms || [];
+    if (loginTarget && mine.includes(loginTarget)) {
+      window.location.href = `/realm/${loginTarget}`;
+      return;
+    }
+
+    data.realms.forEach(r => {
+      const card = document.getElementById(`card-${r.id}`);
+      if (!card) return;
+      card.style.display = r.active === false ? 'none' : '';
+      const conn = r.connected_players || 0;
+      const cap = r.player_count || 2;
+      seats[r.id] = { full: !!r.is_capacity_full, capacity: cap };
+      const badge = document.getElementById(`badge-seats-${r.id}`);
+      if (badge) {
+        badge.innerText = r.is_capacity_full ? 'Full' : `${conn} of ${cap} seat${cap === 1 ? '' : 's'}`;
+        badge.classList.toggle('full', !!r.is_capacity_full);
+      }
+    });
+    const openId = document.getElementById('login-realm-id').value;
+    if (openId && document.getElementById('login-pin-modal').style.display !== 'none') showSeatNote(openId);
+
+    // Logged in on this device (for instance after a restored game): offer the way back.
+    const box = document.getElementById('join-continue');
+    const key = mine.join(',');
+    if (key !== box.dataset.key) {
+      box.dataset.key = key;
+      box.innerHTML = data.realms.filter(r => mine.includes(r.id)).map(r => `
+        <a class="join-continue-btn" href="/realm/${escapeHtml(r.id)}" style="--nc: ${escapeHtml(r.theme_color || '#8c7a5e')};">
+          <span class="crest small" aria-hidden="true">${escapeHtml(r.emoji || '🏛️')}</span>
+          <span class="grow"><em>You are in this delegation</em><b>Back to ${escapeHtml(r.name)}</b></span>
+          <span aria-hidden="true">&rarr;</span>
+        </a>`).join('');
     }
   }
 
+  pollLobbyState();
   setInterval(pollLobbyState, 3000);
 
-  // Auto-open if query param ?login=<id> is present
-  const urlParams = new URLSearchParams(window.location.search);
-  const autoTarget = urlParams.get('login');
-  if (autoTarget) {
-    const target = activeRealmsData.find(r => r.id === autoTarget);
-    if (target) {
-      handleCardClick(target.id, target.name, !!target.is_capacity_full);
-    }
+  // A link or passcode card for one nation (/?login=<id>), or a phone sent back here by a new game.
+  if (loginTarget) {
+    const card = document.getElementById(`card-${loginTarget}`);
+    if (card && card.style.display !== 'none') openLoginModal(card);
   }
 </script>
 {% endblock %}
