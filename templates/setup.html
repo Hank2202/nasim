@@ -10,44 +10,59 @@
 {% endblock %}
 
 {% block content %}
-<div class="container setup" style="max-width: 980px;">
+<div class="container setup" id="setup-page" data-complexity="{{ settings.complexity }}" style="max-width: 980px;">
   <div class="page-head">
     <div>
       <h1 class="page-title">Summit setup</h1>
-      <p class="section-sub">Choose the scenario, the nations at the table, the clocks and the random events. Saved settings apply straight away.</p>
+      <p class="section-sub">Choose the game and who plays. The rest can stay as it is.</p>
     </div>
-    <a href="/admin" class="btn btn-secondary btn-sm">&larr; Command deck</a>
   </div>
 
-  {% if in_progress %}
-  <div class="callout warn" style="margin-bottom: 16px;">
-    A game is in progress (Turn {{ meta.current_turn }}). Saving settings changes it from now on;
-    <b>Start a new summit</b> discards it (a save is kept on the Saves tab).
+  {% if interrupted %}
+  <div class="resume-banner" id="setup-resume">
+    <div class="grow"><b>{{ 'You had prepared a game before the server restarted.' if interrupted.kind == 'setup' else 'A game was interrupted when the server restarted.' }}</b>
+      <p>{{ interrupted.description }}. Bring it back from the command deck.</p></div>
+    <a class="btn btn-primary" href="/admin">Go to the command deck</a>
   </div>
   {% endif %}
 
-  <!-- 1. Scenario -->
+  {% if in_progress %}
+  <div class="callout warn" style="margin-bottom: 16px;">
+    A game is in progress (Turn {{ meta.current_turn }}: {{ rules.name }}). Saving settings changes it from now on, except its complexity,
+    which only changes with a new summit.
+  </div>
+  {% endif %}
+
+  <!-- 1. Complexity: which mechanics the game has -->
   <section class="card">
-    <div class="card-title">1 · Scenario</div>
-    <div class="choice-grid three mt-2">
-      {% for key, sc in scenarios.items() %}
-      <label class="choice">
-        <input type="radio" name="scenario" value="{{ key }}" {% if settings.scenario == key %}checked{% endif %}
-               data-suggested='{{ (sc.suggested or {}) | tojson }}' onchange="setup.applySuggested(this)">
-        <span><b>{{ sc.name }}</b><em>{{ sc.description }}</em></span>
+    <div class="card-title setup-step">Game complexity</div>
+    <p class="section-sub">How much there is to learn and to do. It is fixed once play has begun.</p>
+    <div class="choice-grid mt-2">
+      {% for key, c in complexities.items() %}
+      <label class="choice complexity-choice">
+        <input type="radio" name="complexity" value="{{ key }}" {% if settings.complexity == key %}checked{% endif %} onchange="setup.showComplexity()">
+        <span><b>{{ c.name }}</b><em>{{ c.tagline }}</em>
+          <ul class="choice-points">{% for point in c.points %}<li>{{ point }}</li>{% endfor %}</ul>
+          {% if c.starting_bonus %}<em class="choice-bonus">Every nation starts with {% for res, amount in c.starting_bonus.items() %}+{{ amount }} {{ res | capitalize }}{% if not loop.last %}, {% endif %}{% endfor %}.</em>{% endif %}
+        </span>
       </label>
       {% endfor %}
     </div>
   </section>
 
-  <!-- 2. Difficulty -->
+  <!-- 2. Scenario: how hard the world is -->
   <section class="card">
-    <div class="card-title">2 · Difficulty</div>
+    <div class="card-title setup-step">Scenario</div>
+    <p class="section-sub">How hard the world is on the nations.</p>
     <div class="choice-grid three mt-2">
-      {% for key, d in difficulties.items() %}
+      {% for key, sc in scenarios.items() %}
+      {% set level = difficulty_info(sc.level) %}
       <label class="choice">
-        <input type="radio" name="difficulty" value="{{ key }}" {% if settings.difficulty == key %}checked{% endif %}>
-        <span><b>{{ d.name }}</b><em>{{ d.description }}</em></span>
+        <input type="radio" name="scenario" value="{{ key }}" {% if settings.scenario == key %}checked{% endif %}
+               data-suggested='{{ (sc.suggested or {}) | tojson }}' onchange="setup.applySuggested(this)">
+        <span><b>{{ sc.name }}</b>
+          <span class="diff-badge diff-{{ level.css }}">{{ sc.level_label }} <i>{{ level.stars }}</i></span>
+          <em>{{ sc.description }}</em></span>
       </label>
       {% endfor %}
     </div>
@@ -57,30 +72,37 @@
   <section class="card">
     <div class="row-between wrap">
       <div>
-        <div class="card-title">3 · Nations at the table</div>
-        <p class="section-sub">Untick nations nobody will play. Delegates = seats on phones; each delegate brings one secret mission, as far as the nation has them.</p>
+        <div class="card-title setup-step">Nations at the table</div>
+        <p class="section-sub">Untick nations nobody will play. These changes apply at once. Delegates = seats on phones.
+          <span class="only-full">Each delegate brings one secret mission, as far as the nation has them.</span>
+          <span class="only-simplified">The whole delegation shares one secret mission.</span></p>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="setup.shufflePins()">Shuffle passcodes</button>
+      <div class="row wrap">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="setup.shufflePins()">Shuffle passcodes</button>
+        <a class="btn btn-secondary btn-sm" href="/admin/cards" target="_blank" rel="noopener">Passcode cards &#8599;</a>
+      </div>
     </div>
     <table class="table-deck setup-nations mt-2">
-      <tr><th>Plays</th><th>Nation</th><th>Difficulty</th><th>Delegates</th><th>Secret missions</th><th>Passcode</th></tr>
+      <thead><tr><th>Plays</th><th>Nation</th><th>How hard to play</th><th>Delegates</th><th>Secret missions</th><th>Passcode</th></tr></thead>
+      <tbody>
       {% for r in realms %}
       <tr data-realm="{{ r.id }}">
-        <td><input type="checkbox" class="realm-active" {% if r.active != false %}checked{% endif %} onchange="setup.toggleRealm('{{ r.id }}', this)"></td>
+        <td><input type="checkbox" class="realm-active" aria-label="{{ r.name }} plays" {% if r.active != false %}checked{% endif %} onchange="setup.toggleRealm('{{ r.id }}', this)"></td>
         <td><span class="crest small" style="--nc: {{ r.theme_color }};">{{ r.emoji }}</span> <b>{{ r.name }}</b></td>
-        <td>{{ diff.badge(r) }}</td>
-        <td>
+        <td data-label="How hard">{{ diff.badge(r) }}</td>
+        <td data-label="Delegates">
           <div class="stepper small-stepper">
             <button type="button" onclick="setup.delegates('{{ r.id }}', -1)">−</button>
             <input type="number" class="realm-delegates" min="1" max="6" value="{{ r.player_count }}" readonly>
             <button type="button" onclick="setup.delegates('{{ r.id }}', 1)">+</button>
           </div>
         </td>
-        <td class="realm-secrets">{{ (r.active_secret_missions or []) | length if r.active != false else '—' }}</td>
-        <td><input type="text" class="form-input mono realm-pin" inputmode="numeric" maxlength="8" value="{{ r.pin }}" style="width: 110px;"
-                   onchange="setup.setPin('{{ r.id }}', this)"></td>
+        <td class="realm-secrets" data-label="Secret missions">{{ (r.active_secret_missions or []) | length if r.active != false else '—' }}</td>
+        <td data-label="Passcode"><input type="text" class="form-input mono realm-pin" inputmode="numeric" maxlength="8" value="{{ r.pin }}" style="width: 110px;"
+                   aria-label="Passcode of {{ r.name }}" onchange="setup.setPin('{{ r.id }}', this)"></td>
       </tr>
       {% endfor %}
+      </tbody>
     </table>
     <div class="callout neutral mt-2 small">
       <b>Fewer players?</b> Leave out <b>Umbra</b> (1 delegate) or <b>Aquila</b> (2) first: no other nation's missions depend on them.
@@ -90,16 +112,20 @@
     </div>
   </section>
 
-  <!-- 4. Clocks -->
-  <section class="card">
-    <div class="card-title">4 · Clocks and limits</div>
+  <!-- Everything else is optional: it starts closed, with the current values in its title -->
+  <details class="card setup-more" id="setup-more">
+    <summary><span class="card-title">Fine-tuning (optional)</span><span class="section-sub" id="setup-more-summary"></span></summary>
+
+  <!-- Clocks -->
+  <section class="setup-group">
+    <div class="form-step">Clocks</div>
     <div class="setup-fields mt-2">
       <label>Working session <span><input type="number" id="working_min" min="1" max="60" value="{{ '%g' % (settings.working_session_seconds / 60) }}"> min</span></label>
-      <label>Assembly vote (Turns 1–2) <span><input type="number" id="vote_min" min="0.5" max="15" step="0.5" value="{{ '%g' % (settings.plenary_vote_seconds / 60) }}"> min</span></label>
-      <label>Grand Plenary debate, per motion <span><input type="number" id="debate_min" min="0.5" max="20" step="0.5" value="{{ '%g' % (settings.debate_session_seconds / 60) }}"> min</span></label>
-      <label>Grand Plenary vote, per motion <span><input type="number" id="grand_vote_sec" min="20" max="600" step="10" value="{{ settings.grand_vote_seconds }}"> s</span></label>
+      <label><span>Assembly vote <span class="only-full">(Turns 1–2)</span><span class="only-simplified">(every turn)</span></span> <span><input type="number" id="vote_min" min="0.5" max="15" step="0.5" value="{{ '%g' % (settings.plenary_vote_seconds / 60) }}"> min</span></label>
+      <label class="only-full">Grand Plenary debate, per motion <span><input type="number" id="debate_min" min="0.5" max="20" step="0.5" value="{{ '%g' % (settings.debate_session_seconds / 60) }}"> min</span></label>
+      <label class="only-full">Grand Plenary vote, per motion <span><input type="number" id="grand_vote_sec" min="20" max="600" step="10" value="{{ settings.grand_vote_seconds }}"> s</span></label>
       <label>Pause before the next turn <span><input type="number" id="intermission_sec" min="0" max="600" step="15" value="{{ settings.intermission_seconds }}"> s</span></label>
-      <label>Time per quiz question <span><input type="number" id="quiz_seconds" min="5" max="60" step="1" value="{{ settings.quiz_seconds or 15 }}"> s</span></label>
+      <label class="only-full">Time per quiz question <span><input type="number" id="quiz_seconds" min="5" max="60" step="1" value="{{ settings.quiz_seconds or 15 }}"> s</span></label>
     </div>
     <label class="check mt-2">
       <input type="checkbox" id="auto_advance" {% if settings.auto_advance %}checked{% endif %}>
@@ -108,8 +134,8 @@
   </section>
 
   <!-- War -->
-  <section class="card">
-    <div class="card-title">War</div>
+  <section class="setup-group only-full">
+    <div class="form-step">War</div>
     <p class="section-sub">Nations can attack each other from their phones. The result depends mostly on the armies, then on how fed, stable and supplied each side is, on the ground and the weather, and a little on luck.</p>
     <label class="check mt-2">
       <input type="checkbox" id="attacks_enabled" {% if settings.attacks_enabled is not defined or settings.attacks_enabled %}checked{% endif %}>
@@ -121,22 +147,34 @@
     </div>
   </section>
 
-  <!-- 5. Random events -->
-  <section class="card">
-    <div class="card-title">5 · Random events</div>
-    <p class="section-sub">Events strike at random moments of each working session. Choosing a scenario fills in its suggested values; change them freely.</p>
+  <!-- The numbers a scenario brings along -->
+  <section class="setup-group">
+    <div class="form-step">Scenario numbers</div>
+    <p class="section-sub">Choosing a scenario fills these in; change them freely to make it gentler or harsher. Events strike at random moments of each working session.</p>
     <div class="setup-fields mt-2">
+      <label>Grain each nation eats per turn <span><input type="number" id="grain_per_turn" min="5" max="60" step="1" value="{{ settings.grain_consumption }}"> Grain</span></label>
+      <label>Share of good news among small items <span><input type="number" id="good_news" min="0" max="100" step="5" value="{{ settings.good_news_percent }}"> %</span></label>
       <label>Small news items per turn <span><input type="number" id="events_per_turn" min="0" max="30" step="1" value="{{ settings.minor_events_per_turn }}"> per turn</span></label>
       <label>Largest change per small item <span><input type="number" id="event_max" min="1" max="50" step="0.5" value="{{ '%g' % settings.minor_event_max }}"> points</span></label>
       <label>Large disasters per turn <span><input type="number" id="large_per_turn" min="0" max="10" step="1" value="{{ settings.large_events_per_turn or 0 }}"> per turn</span></label>
     </div>
     <p class="section-sub mt-1">Each small item hits one nation (good or bad news) and moves each resource it touches by a random amount between 0 and the largest change. Large disasters (earthquakes, dragon raids, plagues…, usually −10 to −25) strike one nation and are meant for the Armageddon scenario; at 0 you can still trigger them by hand from the command deck.</p>
   </section>
+  </details>
 
-  <div class="setup-actions">
+  <div class="setup-actions" id="setup-actions">
+    <span class="setup-dirty" id="setup-dirty" role="status"></span>
     <button type="button" class="btn btn-secondary" onclick="setup.save()">Save settings</button>
-    <button type="button" class="btn btn-primary" onclick="setup.newSummit()">Start a new summit with these settings</button>
+    <button type="button" class="btn btn-primary" onclick="setup.saveAndContinue()">{{ 'Back to the command deck' if in_progress else 'Continue to the command deck' }} &rarr;</button>
   </div>
+
+  {% if in_progress %}
+  <section class="card danger-zone">
+    <div class="card-title">Start over</div>
+    <p class="section-sub">Replaces the game in progress with a fresh Turn 1, using the settings above. A copy of the current game stays on the Saves tab. Every phone has to log in again; nations and passcodes stay as they are.</p>
+    <button type="button" class="btn btn-danger mt-2" onclick="setup.newSummit()">Start a new summit with these settings</button>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -152,7 +190,9 @@
       const pick = name => (document.querySelector(`input[name=${name}]:checked`) || {}).value;
       const num = id => parseFloat(document.getElementById(id).value);
       return {
-        scenario: pick('scenario'), difficulty: pick('difficulty'),
+        scenario: pick('scenario'), complexity: pick('complexity'),
+        grain_consumption: parseInt(document.getElementById('grain_per_turn').value, 10) || 20,
+        good_news_percent: parseInt(document.getElementById('good_news').value, 10) || 0,
         working_session_seconds: Math.round(num('working_min') * 60), plenary_vote_seconds: Math.round(num('vote_min') * 60),
         debate_session_seconds: Math.round(num('debate_min') * 60), grand_vote_seconds: Math.round(num('grand_vote_sec')),
         intermission_seconds: Math.round(num('intermission_sec')), auto_advance: document.getElementById('auto_advance').checked,
@@ -168,17 +208,51 @@
     applySuggested(radio) {
       const s = JSON.parse(radio.dataset.suggested || '{}');
       const set = (id, v) => { if (v !== undefined) document.getElementById(id).value = v; };
+      set('grain_per_turn', s.grain_consumption);
+      set('good_news', s.good_news_percent);
       set('events_per_turn', s.minor_events_per_turn);
       set('event_max', s.minor_event_max);
       set('large_per_turn', s.large_events_per_turn);
     },
+    // Fields that only exist in one kind of game are hidden when the other is chosen (their values are kept).
+    showComplexity() {
+      document.getElementById('setup-page').dataset.complexity = this.chosenComplexity();
+      this.refreshMissionCounts();
+    },
+    chosenComplexity() {
+      return (document.querySelector('input[name=complexity]:checked') || {}).value || 'full';
+    },
     async save() {
       const res = await this.post('/api/admin/settings', this.values());
-      if (res.success) showToast('Settings saved', 'success');
+      if (res.success) {
+        this.setDirty(false);
+        showToast(res.message || 'Settings saved', 'success');
+        // The nation ratings on this page follow the game now in force.
+        if (res.settings.rules.id !== '{{ rules.id }}') setTimeout(() => location.reload(), 700);
+        else this.refreshMissionCounts();
+      }
       return res.success;
     },
+    async saveAndContinue() {
+      const res = await this.post('/api/admin/settings', this.values());
+      if (!res.success) return;
+      this.setDirty(false);
+      location.href = '/admin';
+    },
+    // Settings that wait for a Save button say so, and leaving the page without saving asks first.
+    setDirty(dirty) {
+      this.dirty = dirty;
+      document.getElementById('setup-dirty').innerText = dirty ? 'You have changes that are not saved yet.' : '';
+      this.summarize();
+    },
+    // The closed section still says what is in it.
+    summarize() {
+      const val = id => document.getElementById(id).value;
+      document.getElementById('setup-more-summary').innerText =
+        `${val('working_min')} min sessions, ${val('vote_min')} min votes, ${val('grain_per_turn')} Grain per turn, ${val('events_per_turn')} small events and ${val('large_per_turn')} disasters per turn`;
+    },
     async newSummit() {
-      if (!(await confirmAction({ title: 'Start a new summit?', message: 'The current game is replaced (a save of it is kept on the Saves tab). Every phone is logged out.', confirmLabel: 'Start a new summit', tone: 'danger' }))) return;
+      if (!(await confirmAction({ title: 'Start a new summit?', message: 'The current game is replaced (a save of it is kept on the Saves tab). Every phone has to log in again.', confirmLabel: 'Start a new summit', tone: 'danger' }))) return;
       if (!(await this.save())) return;
       const res = await this.post('/api/admin/setup/new');
       if (res.success) { showToast(res.message, 'success'); setTimeout(() => location.href = '/admin', 900); }
@@ -195,11 +269,14 @@
       this.refreshMissionCounts();
     },
     async refreshMissionCounts() {
-      // Missions depend on who plays and how many delegates each nation has.
+      // Missions depend on who plays, how many delegates each nation has and the kind of game chosen above.
       const state = await (await fetch('/api/state')).json();
+      const chosen = this.chosenComplexity(), inForce = state.game_settings.rules.id === chosen;
       for (const r of state.realms || []) {
         const cell = document.querySelector(`tr[data-realm="${r.id}"] .realm-secrets`);
-        if (cell) cell.innerText = r.active === false ? '—' : (r.active_secret_missions || []).length;
+        if (!cell) continue;
+        cell.innerText = r.active === false ? '—' : inForce ? (r.active_secret_missions || []).length
+          : chosen === 'simplified' ? 1 : Math.min(r.player_count, (r.secret_missions_pool || []).length);
       }
     },
     async delegates(id, delta) {
@@ -211,10 +288,11 @@
     },
     async setPin(id, input) {
       const res = await this.post('/api/admin/pin/reset', { realm_id: id, pin: input.value.trim() });
-      if (res.success) showToast(res.message, 'success');
+      if (res.success) { input.defaultValue = input.value; showToast(res.message, 'success'); }
+      else input.value = input.defaultValue;       // a refused passcode must not look as if it had worked
     },
     async shufflePins() {
-      if (!(await confirmAction({ title: 'Give every nation a new passcode?', message: 'Phones that are logged in will need the new code.', confirmLabel: 'Shuffle passcodes' }))) return;
+      if (!(await confirmAction({ title: 'Give every nation a new passcode?', message: 'Phones already in the game stay in. New phones need the new code, and printed cards no longer work.', confirmLabel: 'Shuffle passcodes' }))) return;
       const res = await this.post('/api/admin/pins/shuffle');
       if (!res.success) return;
       for (const [id, pin] of Object.entries(res.pins)) {
@@ -224,5 +302,11 @@
       showToast(res.message, 'success');
     },
   };
+  // The settings fields wait for Save; the nations table above them applies at once.
+  document.getElementById('setup-page').addEventListener('input', e => {
+    if (!e.target.closest('.setup-nations')) setup.setDirty(true);
+  });
+  window.addEventListener('beforeunload', e => { if (setup.dirty) { e.preventDefault(); e.returnValue = ''; } });
+  setup.summarize();
 </script>
 {% endblock %}

@@ -17,7 +17,12 @@ Validates:
 import unittest
 import os
 import json
+import tempfile
 import time
+
+# Everything the tests do goes to a throwaway database, never to the summit.db of a real game (set before app is imported).
+os.environ["SUMMIT_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "summit_under_test.db")
+
 from models import Database
 from engine import SummitEngine, load_scenario_config, load_events_catalog, load_quiz
 from app import app
@@ -462,7 +467,7 @@ class TestFlaskEndpoints(unittest.TestCase):
         
         # Encyclopedia (reading) and Quiz (answering) live in separate tabs
         self.assertIn(b"Spireopedia Quiz", resp_auth.data)
-        self.assertIn(b"The nations at the summit", resp_auth.data)
+        self.assertIn(b"The nations", resp_auth.data)
         self.assertIn(b"Royal decrees", resp_auth.data)
 
         # 3. Facilitator Command Deck
@@ -532,8 +537,8 @@ class TestFlaskEndpoints(unittest.TestCase):
 
         resp_admin = self.client.get("/admin")
         self.assertEqual(resp_admin.status_code, 200)
-        self.assertIn(b"modal-confirm-reset", resp_admin.data)
-        self.assertIn(b"FACILITATOR ROOM SOUNDS", resp_admin.data)
+        self.assertIn(b"now-panel", resp_admin.data)
+        self.assertIn(b"Sounds in the room", resp_admin.data)
 
         resp_realm = self.client.get("/realm/sylvan?auth=1")
         self.assertEqual(resp_realm.status_code, 200)
@@ -838,7 +843,7 @@ class TestFlaskEndpoints(unittest.TestCase):
         try:
             resp = self.client.get("/admin")
             self.assertEqual(resp.status_code, 200)
-            self.assertIn(b"Facilitator Master Passcode", resp.data)
+            self.assertIn(b"Facilitator passcode", resp.data)
 
             # 2. Rejection of invalid passcode
             bad_auth = self.client.post("/api/auth/admin", json={"passcode": "wrong_passcode"})
@@ -855,7 +860,7 @@ class TestFlaskEndpoints(unittest.TestCase):
             # login response already set the signed auth_admin cookie on the client
             authed_resp = self.client.get("/admin")
             self.assertEqual(authed_resp.status_code, 200)
-            self.assertIn(b"Master workspace", authed_resp.data)
+            self.assertIn(b'id="now-panel"', authed_resp.data)
 
             # 5. Logout clears cookie
             logout_resp = self.client.post("/api/auth/admin/logout")
@@ -984,7 +989,7 @@ class TestFlaskEndpoints(unittest.TestCase):
         data3 = json.loads(r3.data)
         self.assertFalse(data3["success"])
         self.assertTrue(data3.get("is_full"))
-        self.assertIn("capacity reached", data3["message"].lower())
+        self.assertIn("seats of sylvan concordat are taken", data3["message"].lower())
 
         # Existing Delegate 1 re-authenticates -> allowed without 403
         r1_reentry = client1.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
@@ -1023,6 +1028,885 @@ class TestFlaskEndpoints(unittest.TestCase):
         html = resp.data.decode("utf-8")
         self.assertIn("seats", html)
 
+class TestRulesAreKept(unittest.TestCase):
+    """Regressions from the code review: rejected motions, lost sounds, the last turn, restored saves."""
+
+    def setUp(self):
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
+        self.engine = SummitEngine(Database(TEST_DB))
+
+    def tearDown(self):
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
+
+    def _realm(self, rid):
+        return next(r for r in self.engine.db.get_state("realms") if r["id"] == rid)
+
+    def _vote_through_grand_plenary(self, choice):
+        e = self.engine
+        while e.db.get_state("meta")["phase"] in ("grand_plenary_discussion", "grand_plenary_voting"):
+            e.start_grand_motion_vote()
+            meta = e.db.get_state("meta")
+            pid = meta["plenary_docket"][meta["current_motion_index"]]
+            for r in e.db.get_state("realms"):
+                e.cast_plenary_vote(r["id"], pid, choice)
+            e.advance_grand_plenary_next()
+
+    def test_a_rejected_motion_changes_nothing_in_the_grand_plenary(self):
+        e = self.engine
+        e.process_end_of_turn()
+        e.process_end_of_turn()
+        ok, _, pid = e.draft_proposal("sylvan", "Sanction", "x", "embargo", params={"target": "aethelgard", "resource": "stability", "amount": 30})
+        self.assertTrue(ok)
+        e.support_proposal(pid, "umbra")
+        before = {r["id"]: (r["civil_stability"], r["aether_cores"], r["alchemical_grain"]) for r in e.db.get_state("realms")}
+        e.start_plenary_session()
+        self._vote_through_grand_plenary("oppose")
+        prop = next(p for p in e.db.get_state("proposals") if p["id"] == pid)
+        self.assertEqual(prop["status"], "rejected")
+        self.assertIsNone(prop.get("result_text"))
+        after = {r["id"]: (r["civil_stability"], r["aether_cores"], r["alchemical_grain"]) for r in e.db.get_state("realms")}
+        self.assertEqual(before, after)                      # neither the sanction nor the rejected Food Acts took effect
+
+    def test_a_passed_motion_still_works_in_the_grand_plenary(self):
+        e = self.engine
+        e.process_end_of_turn()
+        e.process_end_of_turn()
+        ok, _, pid = e.draft_proposal("sylvan", "Sanction", "x", "embargo", params={"target": "aethelgard", "resource": "stability", "amount": 30})
+        e.support_proposal(pid, "umbra")
+        stability = self._realm("aethelgard")["civil_stability"]
+        cores = self._realm("sylvan")["aether_cores"]
+        e.start_plenary_session()
+        self._vote_through_grand_plenary("support")
+        self.assertEqual(self._realm("aethelgard")["civil_stability"], stability - 30)
+        self.assertEqual(self._realm("sylvan")["aether_cores"], cores - 10)    # Food Act B passed as well
+
+    def test_new_turns_can_be_heard_and_their_news_carry_the_new_turn(self):
+        e = self.engine
+        seq = e.db.get_state("meta")["audio_cue"]["seq"]
+        e.process_end_of_turn()
+        cue = e.db.get_state("meta")["audio_cue"]
+        self.assertGreater(cue["seq"], seq)
+        self.assertEqual(cue["type"], "alert")
+        incident = next(n for n in e.db.get_state("news_feed") if "BORDER INCIDENT" in n["headline"])
+        self.assertTrue(incident["time_str"].startswith("Turn 2"), incident["time_str"])
+        e.process_end_of_turn()
+        meta = e.db.get_state("meta")
+        self.assertEqual(meta["audio_cue"]["type"], "siren")
+        self.assertTrue(meta["famine_applied"])
+
+    def test_every_sound_the_engine_asks_for_can_be_played(self):
+        common = open("static/js/common.js", encoding="utf-8").read()
+        for kind in ("gong", "turn", "chime", "trade", "alert", "siren", "battle"):
+            self.assertIn(f"{kind}:", common, kind)
+        self.assertIn("playSiren()", common)
+
+    def test_only_motions_on_the_ballot_can_be_voted_on(self):
+        e = self.engine
+        ok, _, on_ballot = e.draft_proposal("sylvan", "A", "x", "aid")
+        e.support_proposal(on_ballot, "umbra")
+        ok, _, not_on_ballot = e.draft_proposal("sylvan", "B", "x", "aid")
+        e.start_plenary_session()
+        self.assertTrue(e.cast_plenary_vote("umbra", on_ballot, "support")[0])
+        self.assertFalse(e.cast_plenary_vote("umbra", not_on_ballot, "support")[0])
+        self.assertEqual(next(p for p in e.db.get_state("proposals") if p["id"] == not_on_ballot)["votes"], {})
+
+    def test_catalogue_events_leave_absent_nations_alone(self):
+        e = self.engine
+        e.admin_toggle_realm("sylvan", False)
+        before = {k: v for k, v in self._realm("sylvan").items() if k in ("alchemical_grain", "aether_cores", "echo_silk", "public_vitality", "diplomatic_standing", "civil_stability")}
+        for event in e.get_catalog_events():
+            e.trigger_catalog_event(event["id"])
+            self.assertNotIn("Sylvan", e.db.get_state("news_feed")[0]["detail"].split("Impacted Delegations:")[-1], event["id"])
+        self.assertEqual(before, {k: self._realm("sylvan")[k] for k in before})
+
+    def test_a_save_restored_during_a_vote_keeps_the_time_it_had_left(self):
+        e = self.engine
+        ok, _, pid = e.draft_proposal("sylvan", "A", "x", "aid")
+        e.support_proposal(pid, "umbra")
+        e.start_plenary_session()
+        snapshot = e.db.dump_all()
+        snapshot["meta"]["vote_timer_end"] = time.time() - 600     # saved ten minutes ago
+        snapshot["meta"]["vote_timer_remaining"] = 120
+        self.assertTrue(e.restore_snapshot(snapshot)[0])
+        e.get_full_state()
+        meta = e.db.get_state("meta")
+        self.assertEqual(meta["phase"], "plenary_quick")           # no jump past the vote
+        self.assertIsNone(meta["vote_timer_end"])                  # the clock waits for the facilitator...
+        self.assertEqual(meta["vote_timer_remaining"], 120)
+        e.admin_clock("resume")                                    # ...and goes on with the time it had
+        self.assertAlmostEqual(e.db.get_state("meta")["vote_timer_end"] - time.time(), 120, delta=3)
+
+    def test_a_save_restored_during_a_debate_keeps_the_time_it_had_left(self):
+        e = self.engine
+        e.process_end_of_turn()
+        e.process_end_of_turn()
+        e.start_plenary_session()
+        snapshot = e.db.dump_all()
+        snapshot["meta"]["discussion_timer_end"] = time.time() - 600
+        snapshot["meta"]["discussion_timer_remaining"] = 90
+        e.restore_snapshot(snapshot)
+        e.get_full_state()
+        meta = e.db.get_state("meta")
+        self.assertEqual(meta["phase"], "grand_plenary_discussion")
+        self.assertFalse(meta["is_discussion_timer_running"])
+        self.assertEqual(meta["discussion_timer_remaining"], 90)
+        e.admin_clock("resume")
+        self.assertAlmostEqual(e.db.get_state("meta")["discussion_timer_end"] - time.time(), 90, delta=3)
+
+    def test_a_quiz_question_open_in_a_restored_save_is_not_charged(self):
+        e = self.engine
+        ok, _, question = e.quiz_start("sylvan")
+        snapshot = e.db.dump_all()
+        stake = next(r for r in snapshot["realms"] if r["id"] == "sylvan")["quiz_active"]["stake"]
+        for r in snapshot["realms"]:
+            if r.get("quiz_active"):
+                r["quiz_active"]["deadline"] = time.time() - 600
+        e.restore_snapshot(snapshot)
+        e.get_full_state()
+        sylvan = self._realm("sylvan")
+        self.assertEqual(sylvan.get("failed_lore", []), [])
+        self.assertEqual(sylvan["quiz_next"], {"question_id": question["question_id"], "stake": stake})
+
+    def test_removing_a_nation_removes_its_trades(self):
+        e = self.engine
+        e.create_trade("umbra", "sylvan", "cores", 5, "grain", 5)
+        e.create_trade("aquila", "sylvan", "silk", 5, "grain", 5)
+        e.admin_remove_realm("umbra")
+        self.assertEqual([t["sender_id"] for t in e.db.get_state("trades")], ["aquila"])
+
+
+class TestApiIsKept(unittest.TestCase):
+    """Regressions through the real API with logins enforced."""
+
+    def setUp(self):
+        from app import engine, _failed_logins
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.reset_simulation()
+        engine.clear_realm_sessions(None)
+        _failed_logins.clear()
+        app.config["TESTING"] = False
+        self.phone = app.test_client()
+        pin = next(r for r in engine.db.get_state("realms") if r["id"] == "umbra")["pin"]
+        self.assertTrue(self.phone.post("/api/auth/realm", json={"realm_id": "umbra", "pin": pin}).json["success"])
+
+    def tearDown(self):
+        app.config["TESTING"] = True
+
+    def _grain(self, rid):
+        return next(r for r in self.engine.db.get_state("realms") if r["id"] == rid)["alchemical_grain"]
+
+    def test_a_phone_cannot_act_in_another_nations_name(self):
+        attempts = [
+            ("/api/trade/create", {"realm_id": "umbra", "sender_id": "sylvan", "receiver_id": "umbra", "offer_resource": "grain",
+                                   "offer_amount": 50, "request_resource": "silk", "request_amount": 0}),
+            ("/api/proposal/create", {"realm_id": "umbra", "proposer_id": "sylvan", "title": "x", "description": "y", "effect_type": "aid"}),
+            ("/api/proposal/abc/support", {"realm_id": "umbra", "supporter_id": "sylvan"}),
+        ]
+        for path, body in attempts:
+            self.assertEqual(self.phone.post(path, json=body).status_code, 401, path)
+        self.assertEqual(self.engine.db.get_state("trades"), [])
+        self.assertEqual(self.engine.db.get_state("proposals"), [])
+
+    def test_a_phone_can_still_act_for_itself(self):
+        res = self.phone.post("/api/trade/create", json={"sender_id": "umbra", "receiver_id": "sylvan", "offer_resource": "cores",
+                                                         "offer_amount": 5, "request_resource": "grain", "request_amount": 5})
+        self.assertEqual(res.status_code, 200)
+
+    def test_a_request_with_a_strange_body_is_refused_not_a_crash(self):
+        self.assertEqual(self.phone.post("/api/realm/action", json=["umbra"]).status_code, 401)
+        self.assertEqual(self.phone.post("/api/realm/action", json={"realm_id": ["umbra"], "action": "gala"}).status_code, 401)
+
+    def test_a_blank_trade_amount_gets_a_message(self):
+        res = self.phone.post("/api/trade/create", json={"sender_id": "umbra", "receiver_id": "sylvan", "offer_resource": "grain",
+                                                         "offer_amount": None, "request_resource": "silk", "request_amount": 5})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("whole numbers", res.json["message"])
+
+    def test_trade_offers_stay_between_the_two_nations(self):
+        self.engine.create_trade("sylvan", "aquila", "grain", 5, "silk", 5, "our secret")
+        self.engine.create_trade("sylvan", "umbra", "grain", 5, "silk", 5, "for you")
+        visible = self.phone.get("/api/state").json["trades"]
+        self.assertEqual([t["note"] for t in visible], ["for you"])
+        self.assertEqual(app.test_client().get("/api/state").json["trades"], [])
+
+    def test_everyone_can_see_that_two_nations_traded_but_not_what(self):
+        self.engine.create_trade("sylvan", "aquila", "grain", 5, "silk", 5, "our secret")
+        trade = self.engine.db.get_state("trades")[0]
+        self.engine.respond_trade(trade["id"], "accept", "aquila")
+        seen = app.test_client().get("/api/state").json["trades"][0]          # the projector draws the route from this
+        self.assertEqual((seen["sender_id"], seen["receiver_id"], seen["status"]), ("sylvan", "aquila", "accepted"))
+        for private in ("note", "offer_amount", "request_amount", "offer_resource", "request_resource"):
+            self.assertNotIn(private, seen)
+
+    def test_the_crisis_catalogue_is_for_the_facilitators(self):
+        self.assertEqual(self.phone.get("/api/events").status_code, 401)
+
+    def test_nobody_sees_another_nations_next_quiz_question(self):
+        self.engine.get_quiz_status("sylvan")
+        realms = {r["id"]: r for r in self.phone.get("/api/state").json["realms"]}
+        self.assertNotIn("quiz_next", realms["sylvan"])
+
+    def test_the_last_turn_cannot_be_advanced_past(self):
+        app.config["TESTING"] = True
+        client = app.test_client()
+        self.assertTrue(client.post("/api/admin/turn/next", json={}).json["success"])
+        self.assertTrue(client.post("/api/admin/turn/next", json={}).json["success"])
+        res = client.post("/api/admin/turn/next", json={})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(self.engine.db.get_state("meta")["current_turn"], 3)
+        self.engine.conclude_summit()
+        self.assertEqual(client.post("/api/admin/turn/next", json={}).status_code, 400)      # a finished game stays finished
+        self.assertEqual(self.engine.db.get_state("meta")["phase"], "summit_concluded")
+
+
+class TestDifficultySettings(unittest.TestCase):
+    """Difficulty has two settings: the game's complexity and the scenario."""
+
+    def setUp(self):
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
+        self.engine = SummitEngine(Database(TEST_DB))
+        self.cfg = load_scenario_config()
+
+    def tearDown(self):
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
+
+    def test_the_old_third_setting_is_gone(self):
+        self.assertNotIn("difficulties", self.cfg)
+        self.assertNotIn("difficulty", self.cfg["game_settings_defaults"])
+        self.assertNotIn("difficulty", self.engine.settings())
+
+    def test_the_full_game_is_the_default_and_the_famine_numbers_are_unchanged(self):
+        s = self.engine.settings()
+        self.assertEqual((s["complexity"], s["scenario"]), ("full", "famine"))
+        self.assertEqual((s["grain_consumption"], s["positive_share"], s["minor_events_per_turn"], s["large_events_per_turn"]), (20, 0.5, 6, 0))
+        self.assertTrue(s["rules"]["quiz"] and s["rules"]["war"] and s["rules"]["free_motions"] and s["rules"]["grand_plenary"])
+        self.assertFalse(s["rules"]["one_secret_mission"] or s["rules"]["hide_vitality"] or s["rules"]["live_hints"])
+        self.assertEqual(s["rules"]["starting_bonus"], {})
+
+    def test_the_full_game_starts_from_the_facilitator_notes(self):
+        expected = {"sylvan": (100, 25, 30), "val_khor": (30, 80, 25), "solaria": (50, 40, 75), "umbra": (40, 70, 30),
+                    "aquila": (50, 40, 80), "aethelgard": (60, 50, 25)}
+        for r in self.engine.db.get_state("realms"):
+            self.assertEqual((r["alchemical_grain"], r["aether_cores"], r["echo_silk"]), expected[r["id"]], r["id"])
+
+    def test_scenarios_are_ranked_and_bring_their_own_numbers(self):
+        levels = {k: v["level"] for k, v in self.cfg["scenarios"].items()}
+        self.assertEqual(levels, {"open": 1, "famine": 2, "armageddon": 3})
+        for key, sc in self.cfg["scenarios"].items():
+            self.engine.db.set_state("settings", {})
+            self.engine.update_settings({"scenario": key})
+            s = self.engine.settings()
+            self.assertEqual(s["grain_consumption"], sc["suggested"]["grain_consumption"], key)
+            self.assertEqual(s["good_news_percent"], sc["suggested"]["good_news_percent"], key)
+
+    def test_typed_numbers_beat_the_scenario_until_the_scenario_changes(self):
+        e = self.engine
+        e.update_settings({"grain_consumption": 25, "good_news_percent": 35})
+        self.assertEqual(e.settings()["grain_consumption"], 25)
+        e.update_settings({"scenario": "open"})                       # nothing typed along: the new scenario's own numbers
+        self.assertEqual(e.settings()["grain_consumption"], 15)
+        e.update_settings({"scenario": "famine", "grain_consumption": 30})
+        self.assertEqual(e.settings()["grain_consumption"], 30)
+        realms = e.db.get_state("realms")
+        before = next(r for r in realms if r["id"] == "sylvan")["alchemical_grain"]
+        e.process_end_of_turn()
+        self.assertEqual(next(r for r in e.db.get_state("realms") if r["id"] == "sylvan")["alchemical_grain"], before - 30)
+
+    def test_the_new_summit_news_names_both_settings(self):
+        self.engine.update_settings({"complexity": "simplified", "scenario": "armageddon"})
+        self.engine.start_new_summit()
+        headline = next(n for n in self.engine.db.get_state("news_feed") if n["headline"] == "A NEW SUMMIT IS PREPARED")
+        self.assertIn("Simplified", headline["detail"])
+        self.assertIn("Armageddon", headline["detail"])
+
+
+class TestSimplifiedGame(unittest.TestCase):
+    """The reduced-complexity game: ready-made motions, no quiz, no war, one secret mission."""
+
+    def setUp(self):
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
+        self.engine = SummitEngine(Database(TEST_DB))
+        self.engine.db.set_state("settings", {"complexity": "simplified"})
+        self.engine.reset_simulation()
+        self.cfg = load_scenario_config()
+        self.bonus = self.cfg["complexities"]["simplified"]["starting_bonus"]
+
+    def tearDown(self):
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
+
+    def _realm(self, rid):
+        return next(r for r in self.engine.db.get_state("realms") if r["id"] == rid)
+
+    def _table_and_pass(self, proposer, motion, amount=None, co_sponsor=None):
+        e = self.engine
+        params = {"amount": amount} if amount is not None else None
+        ok, msg, pid = e.draft_proposal(proposer, "", "", motion, params=params)
+        self.assertTrue(ok, msg)
+        co_sponsor = co_sponsor or next(r["id"] for r in e.db.get_state("realms") if r["id"] != proposer)
+        self.assertTrue(e.support_proposal(pid, co_sponsor)[0])
+        self.assertTrue(e.start_plenary_session()[0])
+        for r in e.db.get_state("realms"):
+            e.cast_plenary_vote(r["id"], pid, "support")
+        self.assertTrue(e.conclude_quick_plenary()[0])
+        # back to a working session for the next motion
+        meta = e.db.get_state("meta")
+        meta["phase"] = "working"
+        e.db.set_state("meta", meta)
+        return next(p for p in e.db.get_state("proposals") if p["id"] == pid)
+
+    # ---- resources instead of the quiz
+    def test_nations_start_with_what_the_quiz_would_have_paid(self):
+        for raw in self.cfg["realms"]:
+            r = self._realm(raw["id"])
+            for res, field in (("grain", "alchemical_grain"), ("cores", "aether_cores"), ("silk", "echo_silk")):
+                self.assertEqual(r[field], raw[field] + self.bonus[res], (raw["id"], res))
+            self.assertEqual(r["military_power"], raw["military_power"])
+
+    def test_the_bonus_keeps_the_gaps_between_nations(self):
+        grain = {r["id"]: r["alchemical_grain"] for r in self.engine.db.get_state("realms")}
+        self.assertEqual(grain["sylvan"] - grain["val_khor"], 70)            # the breadbasket is still the breadbasket
+
+    def test_all_twelve_missions_can_be_met_on_the_food_there_is(self):
+        """Grain left after the meals, the famine and Food Act B must cover what the secret missions ask for."""
+        realms = self.engine.db.get_state("realms")
+        total = sum(r["alchemical_grain"] for r in realms)
+        eat = self.engine.settings()["grain_consumption"]
+        meals = sum(3 * (round(eat * 0.75) if r.get("tech_efficiency_unlocked") else eat) for r in realms)
+        left = total - 10 - meals - 15 * len(realms) + 15 * len(realms)        # 10: Sylvan musters once for its mission
+        required = 30 + 35 + 4                                                 # Val-Khor, Aethelgard, and something for the other four
+        self.assertGreaterEqual(left, required + 20, "too little room for bad news and human mistakes")
+
+    def test_changing_complexity_before_play_swaps_the_bonus_without_a_new_game(self):
+        e = self.engine
+        game = e.db.get_state("meta")["game_id"]
+        self.assertEqual(e.update_settings({"complexity": "full"}), (True, "Settings saved."))
+        self.assertEqual(e.db.get_state("meta")["game_id"], game)
+        self.assertEqual(self._realm("sylvan")["alchemical_grain"], 100)
+        self.assertFalse(e.rules()["live_hints"])
+        e.update_settings({"complexity": "simplified"})
+        self.assertEqual(self._realm("sylvan")["alchemical_grain"], 100 + self.bonus["grain"])
+        self.assertTrue(e.rules()["live_hints"])
+
+    def test_a_running_game_keeps_its_complexity_until_a_new_summit(self):
+        e = self.engine
+        e.db.set_state("settings", {})
+        e.reset_simulation()
+        e.admin_control_timer("start")
+        ok, msg = e.update_settings({"complexity": "simplified"})
+        self.assertTrue(ok)
+        self.assertIn("next new summit", msg)
+        self.assertEqual(e.rules()["id"], "full")
+        self.assertEqual(self._realm("sylvan")["alchemical_grain"], 100)
+        self.assertEqual(e.settings()["complexity"], "simplified")           # chosen for the next game
+        e.start_new_summit()
+        self.assertEqual(e.rules()["id"], "simplified")
+        self.assertEqual(self._realm("sylvan")["alchemical_grain"], 100 + self.bonus["grain"])
+
+    def test_a_save_from_before_complexity_existed_plays_the_full_game(self):
+        meta = self.engine.db.get_state("meta")
+        del meta["complexity"]
+        self.engine.db.set_state("meta", meta)
+        self.assertEqual(self.engine.rules()["id"], "full")
+
+    # ---- the quiz
+    def test_there_is_no_quiz(self):
+        e = self.engine
+        self.assertFalse(e.quiz_start("sylvan")[0])
+        self.assertFalse(e.submit_lore_quiz("sylvan", "q01", 0)[0])
+        self.assertFalse(e.get_quiz_status("sylvan")["enabled"])
+        self.assertIsNone(self._realm("sylvan")["quiz_active"])
+
+    # ---- war
+    def test_there_is_no_war(self):
+        e = self.engine
+        e.process_end_of_turn()
+        self.assertFalse(e.settings()["attacks_enabled"])
+        ok, msg, _ = e.declare_attack("aethelgard", "sylvan", "siege")
+        self.assertFalse(ok)
+        self.assertIn("switched off", msg)
+
+    def test_the_war_setting_is_kept_for_the_next_full_game(self):
+        e = self.engine
+        e.update_settings({"attacks_enabled": True})
+        self.assertFalse(e.settings()["attacks_enabled"])
+        self.assertTrue(e.settings(as_chosen=True)["attacks_enabled"])
+
+    # ---- motions
+    def test_only_ready_made_motions_can_be_tabled(self):
+        e = self.engine
+        for full_game_motion in ("tax", "pact", "open", "gm_question", "aid", "cordon"):
+            self.assertFalse(e.draft_proposal("sylvan", "Mine", "Mine", full_game_motion)[0], full_game_motion)
+        self.assertEqual(e.db.get_state("proposals"), [])
+
+    def test_a_player_cannot_change_the_wording_or_address_a_motion(self):
+        e = self.engine
+        ok, _, pid = e.draft_proposal("sylvan", "My own title", "My own terms", "relief_mission", target_seconder_id="umbra", target_realm_id="umbra")
+        self.assertTrue(ok)
+        prop = next(p for p in e.db.get_state("proposals") if p["id"] == pid)
+        self.assertEqual(prop["title"], "Relief Mission led by Sylvan Concordat")
+        self.assertNotIn("My own", prop["description"])
+        self.assertIsNone(prop["target_seconder_id"])
+        self.assertIsNone(prop["target_realm_id"])
+
+    def test_the_amount_is_the_one_thing_that_can_be_chosen(self):
+        e = self.engine
+        spec = next(m for m in self.cfg["simple_motions"] if m["id"] == "share_grain")["amount"]
+        ok, _, pid = e.draft_proposal("sylvan", "", "", "share_grain", params={"amount": spec["max"], "resource": "silk", "above": 1, "lines": []})
+        self.assertTrue(ok)
+        prop = next(p for p in e.db.get_state("proposals") if p["id"] == pid)
+        self.assertEqual(prop["effects"][0]["give"], spec["max"])
+        self.assertEqual((prop["effects"][0]["resource"], prop["effects"][0]["above"]), ("grain", 50))   # the rest cannot be changed
+        self.assertIn(str(spec["max"]), prop["title"])
+        self.assertIn(str(spec["max"]), prop["effect_text"][0])
+        for bad in (spec["max"] + 1, spec["min"] - 1, "lots", None):
+            self.assertFalse(e.draft_proposal("sylvan", "", "", "share_grain", params={"amount": bad})[0], bad)
+
+    def test_a_motion_with_no_amount_has_nothing_to_choose(self):
+        e = self.engine
+        prop_id = e.draft_proposal("sylvan", "", "", "relief_mission", params={"amount": 999})[2]
+        prop = next(p for p in e.db.get_state("proposals") if p["id"] == prop_id)
+        self.assertEqual(prop["effects"][0]["amount"], 10)
+
+    def test_every_motion_is_automatic_and_says_what_it_does(self):
+        e = self.engine
+        self.assertTrue(self.cfg["simple_motions"])
+        for m in self.cfg["simple_motions"]:
+            ok, msg, sentences = e.preview_proposal("umbra", m["id"], {"amount": (m.get("amount") or {}).get("default")})
+            self.assertTrue(ok, msg)
+            self.assertEqual(len(sentences), 1)
+            self.assertNotIn("{", sentences[0], m["id"])
+            self.assertTrue(m["lines"], m["id"])
+            self.assertFalse(m.get("needs_target"), m["id"])
+
+    def test_share_the_grain_moves_only_what_exists(self):
+        e = self.engine
+        realms = e.db.get_state("realms")
+        for r in realms:
+            r["alchemical_grain"] = {"sylvan": 100, "aethelgard": 60, "umbra": 10, "val_khor": 20}.get(r["id"], 30)
+        e.db.set_state("realms", realms)
+        total = sum(r["alchemical_grain"] for r in realms)
+        self._table_and_pass("umbra", "share_grain", 10)
+        self.assertEqual(sum(r["alchemical_grain"] for r in e.db.get_state("realms")), total)
+        self.assertEqual(self._realm("sylvan")["alchemical_grain"], 90)
+        self.assertEqual(self._realm("aethelgard")["alchemical_grain"], 50)
+        self.assertEqual(self._realm("umbra")["alchemical_grain"], 20)
+        self.assertEqual(self._realm("val_khor")["alchemical_grain"], 30)
+        self.assertEqual(self._realm("aquila")["alchemical_grain"], 30)      # between the limits: neither gives nor receives
+
+    def test_the_modernisation_fund_helps_the_nations_behind(self):
+        before = {r["id"]: r["aether_cores"] for r in self.engine.db.get_state("realms")}
+        total = sum(before.values())
+        self._table_and_pass("val_khor", "modernisation_fund", 10)
+        after = {r["id"]: r["aether_cores"] for r in self.engine.db.get_state("realms")}
+        self.assertEqual(sum(after.values()), total)
+        self.assertEqual(after["val_khor"], before["val_khor"] - 10)
+        self.assertEqual(after["umbra"], before["umbra"] - 10)
+        self.assertGreater(after["sylvan"], before["sylvan"])
+
+    def test_a_plea_for_aid_brings_grain_from_every_other_nation(self):
+        before = {r["id"]: r["alchemical_grain"] for r in self.engine.db.get_state("realms")}
+        prop = self._table_and_pass("umbra", "plea_for_aid", 5)
+        after = {r["id"]: r["alchemical_grain"] for r in self.engine.db.get_state("realms")}
+        self.assertEqual(after["umbra"], before["umbra"] + 25)
+        self.assertEqual(after["sylvan"], before["sylvan"] - 5)
+        self.assertIn("Umbral Enclave", prop["effect_text"][0])
+        self.assertIn("Umbral Enclave +25 Grain", prop["result_text"])
+
+    def test_the_richest_nation_can_be_sanctioned(self):
+        richest = max(self.engine.db.get_state("realms"), key=lambda r: r["total_wealth"])
+        before = richest["civil_stability"]
+        self._table_and_pass("umbra", "sanction_richest", 15)
+        self.assertEqual(self._realm(richest["id"])["civil_stability"], before - 15)
+
+    def test_the_motions_that_reward_the_nation_itself(self):
+        standing, stability = self._realm("umbra")["diplomatic_standing"], self._realm("umbra")["civil_stability"]
+        self._table_and_pass("umbra", "relief_mission")
+        self.assertEqual(self._realm("umbra")["diplomatic_standing"], standing + 10)
+        self._table_and_pass("umbra", "guard_borders")
+        self.assertEqual(self._realm("umbra")["civil_stability"], stability + 10)
+        self.assertTrue(self._realm("umbra")["is_quarantined"])
+
+    def test_no_motion_waits_for_the_game_masters(self):
+        prop = self._table_and_pass("umbra", "relief_mission")
+        self.assertFalse(prop.get("awaiting_gm"))
+        for m in self.cfg["simple_motions"]:
+            self.assertNotIn(m.get("builder"), ("open",), m["id"])
+
+    def test_the_screens_only_offer_ready_made_motions(self):
+        types = {t["id"]: t for t in self.engine.get_full_state()["resolution_types"]}
+        selectable = {k for k, t in types.items() if t.get("player_selectable", True)}
+        self.assertEqual(selectable, {m["id"] for m in self.cfg["simple_motions"]})
+        self.assertIn("emergency_food_a", types)                            # the Food Acts keep their name and icon on the ballot
+
+    # ---- the Assembly
+    def test_turn_three_is_one_vote_like_the_others(self):
+        e = self.engine
+        e.process_end_of_turn()
+        e.process_end_of_turn()
+        self.assertTrue(e.start_plenary_session()[0])
+        meta = e.db.get_state("meta")
+        self.assertEqual(meta["phase"], "plenary_quick")
+        acts = [p["id"] for p in e.db.get_state("proposals") if p["effect_type"].startswith("emergency_food")]
+        self.assertEqual(len(acts), 2)
+        self.assertEqual(sorted(meta["plenary_docket"]), sorted(acts))
+        for pid in acts:
+            self.assertTrue(e.cast_plenary_vote("umbra", pid, "support")[0])
+
+    def test_when_the_last_vote_closes_the_summit_ends_by_itself(self):
+        e = self.engine
+        e.process_end_of_turn()
+        e.process_end_of_turn()
+        e.start_plenary_session()
+        meta = e.db.get_state("meta")
+        for pid in meta["plenary_docket"]:
+            for r in e.db.get_state("realms"):
+                e.cast_plenary_vote(r["id"], pid, "support")
+        meta = e.db.get_state("meta")
+        meta["vote_timer_end"] = time.time() - 1
+        e.db.set_state("meta", meta)
+        e.get_full_state()
+        self.assertEqual(e.db.get_state("meta")["phase"], "summit_concluded")
+        self.assertIsNotNone(e.db.get_state("summit_outcome"))
+        self.assertEqual(next(p for p in e.db.get_state("proposals") if p["effect_type"] == "emergency_food_b")["status"], "passed")
+
+    def test_the_full_game_still_has_its_grand_plenary(self):
+        e = self.engine
+        e.db.set_state("settings", {})
+        e.reset_simulation()
+        e.process_end_of_turn()
+        e.process_end_of_turn()
+        e.start_plenary_session()
+        self.assertEqual(e.db.get_state("meta")["phase"], "grand_plenary_discussion")
+
+    # ---- missions
+    def test_each_nation_has_one_secret_mission_about_itself(self):
+        for r in self.engine.db.get_state("realms"):
+            secrets = r["active_secret_missions"]
+            self.assertEqual(len(secrets), 1, r["id"])
+            self.assertEqual(secrets[0]["id"], r["simple_secret"])
+
+    def test_each_nation_keeps_a_secret_mission_with_fewer_nations(self):
+        for absent in ("sylvan", "val_khor", "solaria", "umbra", "aquila", "aethelgard"):
+            self.engine.db.set_state("settings", {"complexity": "simplified"})
+            self.engine.reset_simulation()
+            self.engine.admin_toggle_realm(absent, False)
+            for r in self.engine.db.get_state("realms"):
+                if r.get("active", True):
+                    self.assertEqual(len(r["active_secret_missions"]), 1, (absent, r["id"]))
+
+    def test_sylvan_plays_the_stand_in_without_aethelgard(self):
+        self.engine.admin_toggle_realm("aethelgard", False)
+        self.assertEqual(self._realm("sylvan")["active_secret_missions"][0]["id"], "sylvan_defense_home")
+
+    def test_the_delegation_size_does_not_add_missions(self):
+        self.engine.admin_set_player_count("solaria", 4)
+        self.assertEqual(len(self._realm("solaria")["active_secret_missions"]), 1)
+
+    def test_a_perfect_game_meets_every_mission(self):
+        """Not luck: a group that plays well can meet all twelve missions and keep the continent stable."""
+        e = self.engine
+        e.update_settings({"minor_events_per_turn": 0})
+
+        def trade(a, b, give, n, get, m):
+            self.assertTrue(e.create_trade(a, b, give, n, get, m)[0], (a, b))
+            self.assertTrue(e.respond_trade(e.db.get_state("trades")[0]["id"], "accept", b)[0], (a, b))
+
+        def assembly(*motions):
+            for proposer, motion, co in motions:
+                ok, msg, pid = e.draft_proposal(proposer, "", "", motion)
+                self.assertTrue(ok, msg)
+                e.support_proposal(pid, co)
+            self.assertTrue(e.start_plenary_session()[0])
+            for pid in e.db.get_state("meta")["plenary_docket"]:
+                for r in e.db.get_state("realms"):
+                    e.cast_plenary_vote(r["id"], pid, "support")
+            e.conclude_quick_plenary()
+
+        # Turn 1: Sylvan arms itself. Solaris and Aquila modernise (Food Act B will take 10 Cores from everyone, so
+        # they need 70 by then). Sylvan's surplus goes to the nations whose missions need Grain, before the border
+        # incident makes Grain trades lose 5 in transit. Aquila also deals with the nations it has not met yet.
+        self.assertTrue(e.execute_sovereign_action("sylvan", "muster")[0])
+        self.assertTrue(e.execute_sovereign_action("solaria", "forge")[0])
+        trade("aquila", "val_khor", "silk", 15, "cores", 20)
+        trade("solaria", "umbra", "silk", 5, "cores", 5)
+        trade("sylvan", "val_khor", "grain", 25, "silk", 5)
+        trade("sylvan", "aethelgard", "grain", 15, "silk", 5)
+        trade("sylvan", "solaria", "grain", 5, "silk", 5)
+        trade("aquila", "umbra", "silk", 5, "cores", 0)
+        trade("aquila", "aethelgard", "silk", 5, "cores", 0)
+        trade("aquila", "solaria", "silk", 5, "silk", 5)
+        assembly(("solaria", "relief_mission", "aquila"))
+        e.process_end_of_turn()
+        # Turn 2: the border incident costs the nations below 50 Military some Stability, which they can afford.
+        assembly(("umbra", "relief_mission", "solaria"))
+        e.process_end_of_turn()
+        # Turn 3: the famine strikes, the Assembly passes both Food Acts, and everyone gets through the last meal.
+        assembly()
+        ok, _, outcome = e.conclude_summit()
+        self.assertTrue(ok)
+        failed = [(ev["realm_id"], ev["public_mission_eval"]["explanation"]) for ev in outcome["realm_evaluations"] if not ev["public_mission_eval"]["achieved"]]
+        failed += [(ev["realm_id"], s["explanation"]) for ev in outcome["realm_evaluations"] for s in ev["secret_missions_eval"] if not s["achieved"]]
+        self.assertEqual(failed, [])
+        self.assertEqual(outcome["continental_verdict"], "STABLE CONTINENT")
+
+    # ---- what the phones are told
+    def test_phones_see_how_their_missions_stand(self):
+        state = self.engine.get_full_state()
+        umbra = next(r for r in state["realms"] if r["id"] == "umbra")
+        status = umbra["mission_status"]
+        self.assertTrue(status["public"]["met"])
+        self.assertTrue(status["secrets"][0]["met"])                         # 80 Cores and 70 Stability at the start
+        self.assertIn("80", status["secrets"][0]["note"])
+
+    def test_hints_never_quote_another_nations_numbers(self):
+        realms = self.engine.db.get_state("realms")
+        next(r for r in realms if r["id"] == "aethelgard")["military_power"] = 95
+        self.engine.db.set_state("realms", realms)
+        state = self.engine.get_full_state()
+        umbra = next(r for r in state["realms"] if r["id"] == "umbra")
+        self.assertFalse(umbra["mission_status"]["public"]["met"])
+        self.assertNotIn("95", umbra["mission_status"]["public"]["note"])
+
+    def test_the_full_game_has_no_hints(self):
+        self.engine.db.set_state("settings", {})
+        self.engine.reset_simulation()
+        self.assertNotIn("mission_status", self.engine.get_full_state()["realms"][0])
+
+    def test_the_hints_agree_with_the_final_results(self):
+        ok, _, outcome = self.engine.conclude_summit()
+        state = self.engine.get_full_state()
+        hints = {r["id"]: r["mission_status"] for r in state["realms"]}
+        for ev in outcome["realm_evaluations"]:
+            self.assertEqual(hints[ev["realm_id"]]["public"]["met"], ev["public_mission_eval"]["achieved"], ev["realm_id"])
+            self.assertEqual([s["met"] for s in hints[ev["realm_id"]]["secrets"]], [s["achieved"] for s in ev["secret_missions_eval"]], ev["realm_id"])
+
+    # ---- fewer things to watch
+    def test_grain_rationing_is_not_available(self):
+        e = self.engine
+        grain = self._realm("sylvan")["alchemical_grain"]
+        self.assertFalse(e.execute_sovereign_action("sylvan", "relief")[0])
+        self.assertEqual(self._realm("sylvan")["alchemical_grain"], grain)
+        self.assertTrue(e.execute_sovereign_action("sylvan", "gala")[0])
+
+    def test_the_news_never_mentions_vitality(self):
+        e = self.engine
+        realms = e.db.get_state("realms")
+        for r in realms:
+            r["alchemical_grain"] = 0
+        e.db.set_state("realms", realms)
+        e.process_end_of_turn()                                               # everyone starves
+        for _ in range(80):
+            e.fire_minor_event()
+        for cat in load_scenario_config()["catastrophes_catalog"]:
+            e.trigger_catastrophe(cat["id"])
+        for n in e.db.get_state("news_archive"):
+            self.assertNotIn("Vitality", n["detail"], n["headline"])
+
+    def test_the_full_game_news_still_reports_vitality(self):
+        e = self.engine
+        e.db.set_state("settings", {})
+        e.reset_simulation()
+        realms = e.db.get_state("realms")
+        for r in realms:
+            r["alchemical_grain"] = 0
+        e.db.set_state("realms", realms)
+        e.process_end_of_turn()
+        self.assertTrue(any("-25 Vitality" in n["detail"] for n in e.db.get_state("news_archive")))
+
+    def test_the_reflection_question_fits_a_shared_secret_mission(self):
+        texts = [q["text"] for q in self.engine.get_full_state()["reflection_questions"]]
+        self.assertFalse(any("personal secret mission" in t for t in texts))
+        self.assertTrue(any("your secret mission" in t for t in texts))
+
+
+class TestNationRatings(unittest.TestCase):
+    """How hard a nation is to play depends on the kind of game. The lobby is public, so no note may give away a secret mission."""
+
+    def setUp(self):
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
+        self.engine = SummitEngine(Database(TEST_DB))
+
+    def tearDown(self):
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
+
+    def test_notes_do_not_give_away_secret_missions(self):
+        giveaways = {"aquila": ("wealthiest", "25 points"), "aethelgard": ("20 ahead", "reserves"), "val_khor": ("20 more", "hegemony"),
+                     "solaria": ("veto", "highest standing"), "sylvan": ("70 grain", "long winter"), "umbra": ("hegemon", "60 cores")}
+        for r in load_scenario_config()["realms"]:
+            for note in (r["difficulty_note"], r["simple_difficulty_note"]):
+                self.assertNotIn("secret", note.lower(), r["id"])
+                for word in giveaways[r["id"]]:
+                    self.assertNotIn(word, note.lower(), r["id"])
+
+    def test_the_rating_follows_the_kind_of_game(self):
+        e = self.engine
+        realm = lambda rid: next(r for r in e.get_full_state()["realms"] if r["id"] == rid)
+        self.assertEqual(realm("sylvan")["play_difficulty"], 3)
+        self.assertIn("tempting target", realm("sylvan")["play_difficulty_note"])
+        e.update_settings({"complexity": "simplified"})
+        self.assertEqual(realm("sylvan")["play_difficulty"], 2)
+        self.assertNotIn("tempting target", realm("sylvan")["play_difficulty_note"])    # nobody attacks in this game
+        self.assertEqual(realm("val_khor")["play_difficulty"], 3)
+        self.assertEqual(realm("aquila")["play_difficulty"], 1)
+
+    def test_every_nation_is_rated_for_the_simplified_game(self):
+        levels = set()
+        for r in load_scenario_config()["realms"]:
+            self.assertIn(r["simple_difficulty"], (1, 2, 3), r["id"])
+            self.assertGreater(len(r["simple_difficulty_note"]), 30, r["id"])
+            self.assertNotIn("attack", r["simple_difficulty_note"].lower(), r["id"])
+            levels.add(r["simple_difficulty"])
+        self.assertEqual(levels, {1, 2, 3})
+
+    def test_an_old_save_without_ratings_still_shows_one(self):
+        realms = self.engine.db.get_state("realms")
+        for r in realms:
+            r.pop("simple_difficulty", None)
+            r.pop("simple_difficulty_note", None)
+        self.engine.db.set_state("realms", realms)
+        self.engine.update_settings({"complexity": "simplified"})
+        self.assertEqual(next(r for r in self.engine.get_full_state()["realms"] if r["id"] == "sylvan")["play_difficulty"], 3)
+
+
+class TestSimplifiedScreens(unittest.TestCase):
+    """What the pages contain in each kind of game."""
+
+    def setUp(self):
+        from app import engine
+        self.engine = engine
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+        engine.db.set_state("settings", {"complexity": "simplified"})
+        engine.reset_simulation()
+
+    def tearDown(self):
+        self.engine.db.set_state("settings", {})
+        self.engine.reset_simulation()
+
+    def _full(self):
+        self.engine.db.set_state("settings", {})
+        self.engine.reset_simulation()
+
+    def test_the_phone_has_no_quiz_war_room_or_motion_editor(self):
+        html = self.client.get("/realm/sylvan?auth=1").get_data(as_text=True)
+        self.assertNotIn('data-view="view-quiz"', html)
+        self.assertNotIn('id="view-quiz"', html)
+        self.assertNotIn('id="war-section"', html)
+        self.assertNotIn('id="proposal-form"', html)
+        self.assertNotIn('id="proposal-title"', html)
+        self.assertNotIn('id="vitality-bar"', html)
+        self.assertNotIn("Grain Rationing", html)
+        self.assertIn('id="food-forecast"', html)
+        self.assertIn('id="public-hint"', html)
+        self.assertIn('id="motion-templates"', html)
+        self.assertIn('data-view="view-wiki"', html)
+
+    def test_the_full_phone_is_unchanged(self):
+        self._full()
+        html = self.client.get("/realm/sylvan?auth=1").get_data(as_text=True)
+        for present in ('data-view="view-quiz"', 'id="view-quiz"', 'id="war-section"', 'id="proposal-form"', 'id="proposal-title"',
+                        'id="vitality-bar"', "Grain Rationing", 'id="motion-params"'):
+            self.assertIn(present, html)
+        for absent in ('id="food-forecast"', 'id="public-hint"'):
+            self.assertNotIn(absent, html)
+
+    def test_the_setup_page_offers_both_settings_and_nothing_else(self):
+        html = self.client.get("/admin/setup").get_data(as_text=True)
+        for present in ('name="complexity" value="simplified"', 'name="complexity" value="full"', 'name="scenario" value="open"',
+                        'name="scenario" value="famine"', 'name="scenario" value="armageddon"', 'id="grain_per_turn"', 'id="good_news"',
+                        "Game complexity", "+20 Grain"):
+            self.assertIn(present, html)
+        self.assertNotIn('name="difficulty"', html)
+
+    def test_the_setup_page_shows_the_choice_for_the_next_game(self):
+        self.engine.db.set_state("settings", {"complexity": "full"})
+        self.engine.reset_simulation()
+        self.engine.admin_control_timer("start")
+        self.engine.update_settings({"complexity": "simplified"})
+        html = self.client.get("/admin/setup").get_data(as_text=True)
+        self.assertIn('value="simplified" checked', html)
+        self.assertIn("Full game", html)                                     # the running game is named in the warning
+
+    def test_the_guide_describes_the_game_being_played(self):
+        html = self.client.get("/overview").get_data(as_text=True)
+        self.assertIn("Game complexity: Simplified", html)
+        self.assertIn("Share the Grain", html)
+        self.assertIn("Grain: <strong>120 (HIGH)</strong>", html)            # Sylvan, with the starting bonus
+        self.assertNotIn("Vitality:", html)
+        self.assertNotIn("Lore Quiz", html)
+        self.assertNotIn("Grand Plenary debates", html)
+        self.assertNotIn("Emergency Grain Rationing", html)
+        self.assertNotIn("{amount}", html)
+        self.assertNotIn("{me}", html)
+        self._full()
+        html = self.client.get("/overview").get_data(as_text=True)
+        self.assertIn("Game complexity: Full game", html)
+        self.assertIn("Grain: <strong>100 (HIGH)</strong>", html)
+        self.assertIn("Lore Quiz", html)
+        self.assertIn("Resource Pact", html)
+        self.assertIn("Emergency Grain Rationing", html)
+
+    def test_the_facilitator_deck_drops_what_the_game_does_not_have(self):
+        html = self.client.get("/admin").get_data(as_text=True)
+        self.assertIn("Simplified", html)
+        self.assertNotIn('id="gm-inbox-card"', html)
+        self.assertNotIn('id="admin-war-log"', html)
+        self._full()
+        html = self.client.get("/admin").get_data(as_text=True)
+        self.assertIn('id="gm-inbox-card"', html)
+        self.assertIn('id="admin-war-log"', html)
+
+    def test_the_report_names_the_game_and_skips_the_quiz_column(self):
+        self.engine.conclude_summit()
+        html = self.client.get("/admin/report").get_data(as_text=True)
+        self.assertIn("Simplified", html)
+        self.assertNotIn("Quiz ✓/✗", html)
+        self.assertNotIn("<th>Vitality</th>", html)
+        self._full()
+        html = self.client.get("/admin/report").get_data(as_text=True)
+        self.assertIn("Quiz ✓/✗", html)
+        self.assertIn("<th>Vitality</th>", html)
+
+    def test_the_quiz_api_says_there_is_none(self):
+        self.assertFalse(self.client.get("/api/quiz/sylvan").json["success"])
+        self.assertEqual(self.client.post("/api/quiz/start", json={"realm_id": "sylvan"}).status_code, 400)
+
+    def test_a_motion_goes_all_the_way_through_the_api(self):
+        res = self.client.post("/api/proposal/create", json={"proposer_id": "umbra", "effect_type": "plea_for_aid", "params": {"amount": 10}}).json
+        self.assertTrue(res["success"], res)
+        self.assertTrue(self.client.post(f"/api/proposal/{res['proposal_id']}/support", json={"supporter_id": "sylvan"}).json["success"])
+        self.assertTrue(self.client.post("/api/admin/plenary/start", json={}).json["success"])
+        for r in self.engine.db.get_state("realms"):
+            self.client.post("/api/plenary/vote", json={"realm_id": r["id"], "proposal_id": res["proposal_id"], "choice": "support"})
+        grain = next(r for r in self.engine.db.get_state("realms") if r["id"] == "umbra")["alchemical_grain"]
+        self.assertTrue(self.client.post("/api/admin/plenary/conclude_quick", json={}).json["success"])
+        self.assertEqual(next(r for r in self.engine.db.get_state("realms") if r["id"] == "umbra")["alchemical_grain"], grain + 50)
+
+    def test_mission_hints_stay_on_the_nations_own_phone(self):
+        from app import _failed_logins
+        _failed_logins.clear()
+        app.config["TESTING"] = False
+        try:
+            phone = app.test_client()
+            pin = next(r for r in self.engine.db.get_state("realms") if r["id"] == "umbra")["pin"]
+            phone.post("/api/auth/realm", json={"realm_id": "umbra", "pin": pin})
+            realms = {r["id"]: r for r in phone.get("/api/state").json["realms"]}
+            self.assertIn("mission_status", realms["umbra"])
+            self.assertNotIn("mission_status", realms["sylvan"])
+            self.assertNotIn("mission_status", app.test_client().get("/api/state").json["realms"][0])
+        finally:
+            app.config["TESTING"] = True
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -1047,7 +1931,7 @@ class TestHostedAuthHardening(unittest.TestCase):
     def test_forged_cookie_rejected(self):
         self.client.set_cookie("auth_admin", "authenticated")
         self.assertEqual(self.client.post("/api/admin/reset").status_code, 401)
-        self.assertEqual(self.client.get("/admin?auth=1").data.count(b"Master workspace"), 0)
+        self.assertEqual(self.client.get("/admin?auth=1").data.count(b'id="now-panel"'), 0)
 
     def test_realm_write_requires_own_cookie(self):
         r = self.client.post("/api/realm/action", json={"realm_id": "sylvan", "action": "relief"})
@@ -1122,16 +2006,273 @@ class TestSaves(unittest.TestCase):
         app.config["TESTING"] = True
         self.client = app.test_client()
         from app import engine
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.db.set_state("resume_dismissed", None)
         engine.reset_simulation()
+        with engine.db._get_conn() as conn:           # every test starts without saves
+            conn.execute("DELETE FROM autosaves")
+            conn.commit()
+
+    def tearDown(self):
+        self.engine.db.set_state("settings", {})
+        self.engine.reset_simulation()
+
+    def _saves(self):
+        return self.engine.db.list_autosaves()
+
+    def _poll_after_the_interval(self):
+        self.engine._last_autosave = 0                # as if five minutes had passed
+        return self.engine.get_full_state()
+
+    def _start_a_game(self):
+        self.engine.admin_clock("resume")
+
+    # --- the five-minute autosave ------------------------------------------------------------------
+    def test_a_game_being_played_is_saved_every_interval(self):
+        self._start_a_game()
+        self._poll_after_the_interval()
+        self.assertEqual([s["kind"] for s in self._saves()], ["auto"])
+        self.assertTrue(self._saves()[0]["label"].startswith("Autosave · Turn 1"))
+        self.engine.get_full_state()                  # no second save within five minutes
+        self.assertEqual(len(self._saves()), 1)
+        time.sleep(1.1)                               # the clock moved on: that is worth a new save
+        self._poll_after_the_interval()
+        self.assertEqual(len(self._saves()), 2)
+
+    def test_a_game_nobody_has_started_is_not_saved(self):
+        for _ in range(3):
+            self._poll_after_the_interval()
+        self.assertEqual(self._saves(), [])
+
+    def test_a_save_is_not_repeated_when_nothing_has_changed(self):
+        self._start_a_game()
+        self.engine.create_trade("sylvan", "aquila", "grain", 5, "silk", 5)
+        self.engine.admin_clock("pause")
+        self._poll_after_the_interval()
+        self.assertEqual(len(self._saves()), 1)
+        for _ in range(3):                            # a projector polling a paused game for hours
+            self._poll_after_the_interval()
+        self.assertEqual(len(self._saves()), 1)
+        self.engine.admin_override_realm("sylvan", {"alchemical_grain": 1})
+        self._poll_after_the_interval()
+        self.assertEqual(len(self._saves()), 2)
+
+    def test_a_finished_game_stops_filling_the_list(self):
+        self._start_a_game()
+        self.engine.conclude_summit()
+        count = len(self._saves())
+        self.assertEqual(self._saves()[0]["label"], "Summit concluded")
+        self._poll_after_the_interval()               # the first check after the end has nothing new to keep...
+        settled = len(self._saves())
+        self.assertLessEqual(settled, count + 1)
+        for _ in range(3):
+            self._poll_after_the_interval()
+        self.assertEqual(len(self._saves()), settled)  # ...and neither does any later one
+
+    def test_every_turn_leaves_a_checkpoint(self):
+        self._start_a_game()
+        self.engine.process_end_of_turn()
+        self.assertEqual(self._saves()[0]["label"], "Start of Turn 2")
+        self.assertEqual(self._saves()[0]["kind"], "kept")
+        self.assertEqual(self._saves()[0]["turn"], 2)
+
+    def test_automatic_saves_cannot_push_out_a_deliberate_one(self):
+        self._start_a_game()
+        keep = self.engine.autosave(label="Manual save", force=True)
+        for i in range(Database.KEEP_AUTOMATIC + 5):
+            self.engine.db.add_autosave({"meta": {}, "realms": []}, f"Autosave {i}")
+        saves = self._saves()
+        self.assertIn(keep, [s["id"] for s in saves])
+        self.assertEqual(sum(s["kind"] == "auto" for s in saves), Database.KEEP_AUTOMATIC)
+        self.assertEqual(sum(s["kind"] != "auto" for s in saves), 1)
+
+    def test_a_failing_autosave_does_not_stop_the_game_and_is_reported(self):
+        self._start_a_game()
+        self.engine._last_autosave = 0
+        real = self.engine.db.add_autosave
+        def broken(*args, **kwargs):
+            raise OSError("disk full")
+        self.engine.db.add_autosave = broken
+        try:
+            self.assertIn("realms", self.engine.get_full_state())        # the poll still works
+            self.assertIn("disk full", self.engine.save_status()["error"])
+        finally:
+            self.engine.db.add_autosave = real
+        self._poll_after_the_interval()
+        self.assertIsNone(self.engine.save_status()["error"])
+
+    def test_a_database_from_before_the_new_columns_keeps_its_saves(self):
+        import sqlite3, tempfile
+        path = os.path.join(tempfile.mkdtemp(), "old.db")
+        conn = sqlite3.connect(path)
+        conn.execute("CREATE TABLE autosaves (id INTEGER PRIMARY KEY AUTOINCREMENT, created REAL NOT NULL, label TEXT NOT NULL, data TEXT NOT NULL)")
+        conn.execute("INSERT INTO autosaves (created, label, data) VALUES (1, 'Autosave · Turn 2 · working', '{}')")
+        conn.execute("INSERT INTO autosaves (created, label, data) VALUES (2, 'Manual save', '{}')")
+        conn.commit()
+        conn.close()
+        kinds = {s["label"]: s["kind"] for s in Database(path).list_autosaves()}
+        self.assertEqual(kinds, {"Autosave · Turn 2 · working": "auto", "Manual save": "kept"})
+
+    # --- a server restart --------------------------------------------------------------------------
+    def test_a_restart_offers_the_interrupted_game_back(self):
+        e = self.engine
+        self._start_a_game()
+        e.create_trade("sylvan", "aquila", "grain", 5, "silk", 5)
+        e.admin_override_realm("sylvan", {"alchemical_grain": 77})
+        game = e.db.get_state("meta")["game_id"]
+        time.sleep(1.1)
+        e.get_full_state()
+        left = e.db.get_state("meta")["turn_timer_remaining"]
+        e.fresh_start()
+
+        offer = e.interrupted_game()
+        self.assertEqual(offer["game_id"], game)
+        self.assertEqual(offer["kind"], "restart")
+        self.assertIn("Turn 1", offer["description"])
+        self.assertEqual(self.client.get("/api/state").json["interrupted_game"]["id"], offer["id"])
+
+        res = self.client.post("/api/admin/save/restore", json={"id": offer["id"]})
+        self.assertTrue(res.json["success"])
+        self.assertIn("paused", res.json["message"])
+        meta = e.db.get_state("meta")
+        self.assertEqual(meta["game_id"], game)
+        self.assertFalse(meta["is_timer_running"])                     # the clock waits until everyone is back
+        self.assertLessEqual(abs(meta["turn_timer_remaining"] - left), 1)
+        self.assertEqual(next(r for r in e.db.get_state("realms") if r["id"] == "sylvan")["alchemical_grain"], 77)
+        self.assertEqual(len(e.db.get_state("trades")), 1)
+        self.assertIsNone(e.interrupted_game())                        # back in that game: nothing left to offer
+
+    def test_an_idle_screen_cannot_wipe_the_interrupted_game(self):
+        e = self.engine
+        self._start_a_game()
+        e.autosave(label="Manual save", force=True)
+        e.fresh_start()
+        for _ in range(Database.KEEP_AUTOMATIC + 5):                   # the projector stays open all night
+            self._poll_after_the_interval()
+        labels = [s["label"] for s in self._saves()]
+        self.assertIn("Manual save", labels)
+        self.assertTrue(any(label.startswith("Before server restart") for label in labels))
+        self.assertIsNotNone(e.interrupted_game())
+
+    def test_the_offer_ends_when_a_new_game_starts_or_is_declined(self):
+        e = self.engine
+        self._start_a_game()
+        e.fresh_start()
+        self.assertIsNotNone(e.interrupted_game())
+        self._start_a_game()
+        self.assertIsNone(e.interrupted_game())
+
+        self.engine.reset_simulation()
+        self._start_a_game()
+        e.fresh_start()
+        self.assertTrue(self.client.post("/api/admin/resume/dismiss").json["success"])
+        self.assertIsNone(e.interrupted_game())
+        self.assertTrue(any(s["kind"] == "restart" for s in self._saves()))   # it stays on the Saves tab
+        e.fresh_start()                                                # and is not offered again after one more restart
+        self.assertIsNone(e.interrupted_game())
+
+    def test_an_old_interruption_is_not_offered_forever(self):
+        e = self.engine
+        self._start_a_game()
+        e.fresh_start()
+        with e.db._get_conn() as conn:
+            conn.execute("UPDATE autosaves SET created = created - ?", (e.RESUME_OFFER_HOURS * 3600 + 60,))
+            conn.commit()
+        self.assertIsNone(e.interrupted_game())
+
+    def test_a_finished_game_is_kept_but_not_offered(self):
+        e = self.engine
+        self._start_a_game()
+        e.conclude_summit()
+        e.fresh_start()
+        self.assertTrue(self._saves()[0]["label"].startswith("Before server restart"))
+        self.assertIsNone(e.interrupted_game())
+
+    def test_a_prepared_game_survives_a_restart(self):
+        e = self.engine
+        ok, _ = e.admin_set_realm_pin("sylvan", "4242")
+        self.assertTrue(ok)
+        e.update_settings({"scenario": "armageddon"})
+        self.assertFalse(e.game_in_progress())
+        e.fresh_start()
+        offer = e.interrupted_game()
+        self.assertEqual(offer["kind"], "setup")
+        self.assertNotEqual(next(r for r in e.db.get_state("realms") if r["id"] == "sylvan")["pin"], "4242")
+        self.client.post("/api/admin/save/restore", json={"id": offer["id"]})
+        self.assertEqual(next(r for r in e.db.get_state("realms") if r["id"] == "sylvan")["pin"], "4242")
+        self.assertEqual(e.settings()["scenario"], "armageddon")
+
+    def test_nothing_is_kept_for_a_restart_when_nothing_was_prepared(self):
+        self.engine.update_settings(load_scenario_config()["game_settings_defaults"])   # saved, but nothing changed
+        self.engine.fresh_start()
+        self.assertEqual(self._saves(), [])
+        self.assertIsNone(self.engine.interrupted_game())
+
+    def test_a_phone_is_back_in_when_its_game_is_restored(self):
+        e = self.engine
+        app.config["TESTING"] = False
+        try:
+            phone = app.test_client()
+            self.assertEqual(phone.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"}).status_code, 200)
+            self.assertEqual(phone.get("/api/state").json["my_realms"], ["sylvan"])
+            self._start_a_game()
+            e.fresh_start()
+            self.assertEqual(phone.get("/api/state").json["my_realms"], [])
+            self.assertEqual(phone.get("/?login=sylvan").status_code, 200)         # asks for the passcode meanwhile
+            e.restore_snapshot(e.db.get_autosave(e.interrupted_game()["id"]))
+            self.assertEqual(phone.get("/api/state").json["my_realms"], ["sylvan"])
+            resp = phone.get("/?login=sylvan")                                     # the waiting phone goes straight back
+            self.assertEqual(resp.status_code, 302)
+            self.assertIn("/realm/sylvan", resp.headers["Location"])
+        finally:
+            app.config["TESTING"] = True
+
+    def test_only_the_facilitator_hears_about_saves(self):
+        app.config["TESTING"] = False
+        try:
+            data = app.test_client().get("/api/state").json
+            for secret in ("save_status", "interrupted_game", "pins_are_default"):
+                self.assertNotIn(secret, data)
+            self.assertEqual(app.test_client().post("/api/admin/resume/dismiss").status_code, 401)
+            self.assertEqual(app.test_client().get("/admin/cards").status_code, 302)
+        finally:
+            app.config["TESTING"] = True
+        self.assertIn("save_status", self.client.get("/api/state").json)
+
+    # --- other ways to lose a game --------------------------------------------------------------------
+    def test_a_reset_keeps_a_copy_of_the_game_it_replaces(self):
+        self._start_a_game()
+        self.engine.create_trade("sylvan", "aquila", "grain", 5, "silk", 5)
+        self.assertTrue(self.client.post("/api/admin/reset").json["success"])
+        self.assertEqual(self._saves()[0]["label"], "Before reset")
+        self.assertEqual(len(self.engine.db.get_autosave(self._saves()[0]["id"])["trades"]), 1)
+
+    def test_starting_over_with_nothing_played_leaves_no_clutter(self):
+        self.client.post("/api/admin/reset")
+        self.engine.start_new_summit()
+        self.assertEqual(self._saves(), [])
+
+    def test_restoring_garbage_is_refused_without_touching_the_game(self):
+        self._start_a_game()
+        game = self.engine.db.get_state("meta")["game_id"]
+        for body in ({"id": "nonsense"}, {"id": 999999}, {"snapshot": {"realms": "x", "meta": {}}}, {"snapshot": None}):
+            self.assertEqual(self.client.post("/api/admin/save/restore", json=body).status_code, 400, body)
+        self.assertEqual(self.engine.db.get_state("meta")["game_id"], game)
+
+    def test_a_restored_save_counts_as_the_running_game_for_later_saves(self):
+        self._start_a_game()
+        saved = self.engine.autosave(label="Manual save", force=True)
+        self.client.post("/api/admin/save/restore", json={"id": saved})
+        self.assertEqual(self.engine.save_status()["game_id"], self.engine.db.get_state("meta")["game_id"])
+        self.assertTrue(self.engine.save_status()["last_at"])
 
     def test_autosave_and_restore_round_trip(self):
         from app import engine
-        engine._last_autosave = 0
-        engine.get_full_state()                       # first poll triggers an autosave
-        saves = self.client.get("/api/admin/saves").json["saves"]
-        self.assertTrue(saves)
-        engine.get_full_state()                       # no second autosave within 5 minutes
-        self.assertEqual(len(self.client.get("/api/admin/saves").json["saves"]), len(saves))
+        self._start_a_game()
+        self._poll_after_the_interval()
+        self.assertTrue(self.client.get("/api/admin/saves").json["saves"])
+        self.assertTrue(self.client.get("/api/admin/save/export").json["in_progress"])
 
         exported = self.client.get("/api/admin/save/export").json["snapshot"]
         grain = next(r for r in exported["realms"] if r["id"] == "sylvan")["alchemical_grain"]
@@ -1151,6 +2292,78 @@ class TestSaves(unittest.TestCase):
             self.assertEqual(c.post("/api/admin/save/restore", json={"id": 1}).status_code, 401)
         finally:
             app.config["TESTING"] = True
+
+
+class TestJoiningAndScreens(unittest.TestCase):
+    """What the first screens need from the server."""
+
+    def setUp(self):
+        from app import engine
+        self.engine = engine
+        engine.db.set_state("settings", {})
+        engine.reset_simulation()
+        app.config["TESTING"] = False
+        self.client = app.test_client()
+
+    def tearDown(self):
+        app.config["TESTING"] = True
+        self.engine.reset_simulation()
+
+    def test_the_join_page_offers_the_way_back_to_a_logged_in_phone(self):
+        self.assertNotIn(b"Back to Sylvan Concordat", self.client.get("/").data)
+        self.client.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "1001"})
+        self.assertIn(b"Back to Sylvan Concordat", self.client.get("/").data)
+        self.assertEqual(self.client.get("/?login=sylvan").status_code, 302)
+        self.assertEqual(self.client.get("/?login=umbra").status_code, 200)    # another nation's card still asks for its passcode
+
+    def test_the_join_page_does_not_give_anything_away(self):
+        html = self.client.get("/").get_data(as_text=True)
+        for secret in ("1001", '"pin"', "secret_missions", "active_secret"):
+            self.assertNotIn(secret, html)
+
+    def test_nations_not_playing_are_ready_to_appear_without_a_reload(self):
+        self.engine.admin_toggle_realm("umbra", False)
+        html = self.client.get("/").get_data(as_text=True)
+        self.assertRegex(html, r'style="[^"]*display: none;[^"]*" id="card-umbra"')
+
+    def test_login_messages_say_what_to_do(self):
+        wrong = self.client.post("/api/auth/realm", json={"realm_id": "sylvan", "pin": "9999"}).json
+        self.assertIn("facilitator", wrong["message"])
+        for i in range(2):
+            app.test_client().post("/api/auth/realm", json={"realm_id": "umbra", "pin": "1004"})
+        full = self.client.post("/api/auth/realm", json={"realm_id": "umbra", "pin": "1004"}).json
+        self.assertTrue(full["is_full"])
+        self.assertIn("facilitator", full["message"])
+
+    def test_passcode_cards_show_every_nation_playing(self):
+        app.config["TESTING"] = True
+        self.engine.admin_toggle_realm("umbra", False)
+        html = self.client.get("/admin/cards").get_data(as_text=True)
+        self.assertIn("Sylvan Concordat", html)
+        self.assertIn("1001", html)
+        self.assertEqual(html.count('class="pass-card"'), 5)
+        self.assertNotIn("Umbral Enclave", html)
+
+    def test_the_deck_knows_when_passcodes_are_still_the_defaults(self):
+        self.assertTrue(self.engine.pins_are_default())
+        self.engine.shuffle_pins()
+        # (a shuffle could by chance give a nation its old code back; that is rare enough, and harmless, to retry)
+        for _ in range(5):
+            if not self.engine.pins_are_default():
+                break
+            self.engine.shuffle_pins()
+        self.assertFalse(self.engine.pins_are_default())
+
+    def test_setting_the_clock_before_the_start_does_not_start_the_game(self):
+        self.engine.admin_clock("set", 150)
+        self.engine.admin_clock("adjust", 60)
+        meta = self.engine.db.get_state("meta")
+        self.assertEqual((meta["turn_timer_remaining"], meta["turn_timer_total"]), (210, 210))
+        self.assertFalse(self.engine.game_in_progress())
+
+    def test_a_decree_is_news_on_the_phones_not_a_sound(self):
+        self.engine.execute_sovereign_action("sylvan", "gala")
+        self.assertEqual(self.engine.db.get_state("meta")["audio_cue"]["type"], "decree")
 
 
 class TestDebriefAndReport(unittest.TestCase):
@@ -1220,15 +2433,17 @@ class TestClockAndEvents(unittest.TestCase):
         self.engine.admin_control_timer("start")
 
     def test_settings_are_validated_and_clamped(self):
-        ok, _ = self.engine.update_settings({"working_session_seconds": 5, "minor_event_max": 99,
-                                             "difficulty": "harsh", "scenario": "nope", "auto_advance": False})
+        ok, _ = self.engine.update_settings({"working_session_seconds": 5, "minor_event_max": 99, "grain_consumption": 25,
+                                             "good_news_percent": 500, "scenario": "nope", "complexity": "nope", "auto_advance": False})
         self.assertTrue(ok)
         s = self.engine.settings()
         self.assertEqual(s["working_session_seconds"], 60)
         self.assertEqual(s["minor_event_max"], 50)
-        self.assertEqual(s["difficulty"], "harsh")
         self.assertEqual(s["grain_consumption"], 25)
+        self.assertEqual(s["good_news_percent"], 100)
+        self.assertEqual(s["positive_share"], 1)
         self.assertEqual(s["scenario"], "famine")
+        self.assertEqual(s["complexity"], "full")
         self.assertFalse(s["auto_advance"])
 
     def test_time_up_without_motions_ends_the_turn_and_pauses(self):
@@ -1608,8 +2823,7 @@ class TestFreshStart(unittest.TestCase):
         self.assertNotIn("active_secret_missions", mine)              # the old login no longer counts
         resp = phone.get("/realm/sylvan")
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("/?login=sylvan", resp.headers["Location"])
-        self.assertIn("has_auth_sylvan=;", resp.headers.get("Set-Cookie", ""))  # lobby asks for the passcode again
+        self.assertIn("/?login=sylvan&again=1", resp.headers["Location"])   # the join page says why it asks again
 
     def test_browsers_do_not_keep_stale_copies(self):
         self.assertEqual(app.test_client().get("/static/js/realm.js").headers["Cache-Control"], "no-cache")

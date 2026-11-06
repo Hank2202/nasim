@@ -4,13 +4,17 @@
 {% block title %}Game Overview & Simulation Guide - The Summit of Realms{% endblock %}
 
 {% block nav_links %}
-  <a href="/" class="nav-link">Lobby</a>
+  <a href="/" class="nav-link">Join</a>
   <a href="/overview" class="nav-link active">Guide</a>
   <a href="/projector" target="_blank" class="nav-link">Projector</a>
   <a href="/admin" class="nav-link">Command Deck</a>
 {% endblock %}
 
 {% block content %}
+{% macro stats(rows) %}<div class="overview-stats-grid">{% for row in rows %}<div>{{ row.label }}: <strong>{{ row.value }}{% if row.tier %} ({{ row.tier }}){% endif %}</strong></div>{% endfor %}</div>{% endmacro %}
+{% set grain = settings.grain_consumption %}
+{% set grain_efficient = (grain * 0.75) | round | int %}
+{% set starving_penalty = '-20 Stability' if rules.hide_vitality else '-25 Vitality, -20 Stability' %}
 <div class="container" style="max-width: 1160px; padding-bottom: 60px;">
 
   <!-- Hero Header -->
@@ -29,7 +33,7 @@
       </div>
 
       <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-        <a href="/" class="btn btn-primary btn-sm">Enter Lobby</a>
+        <a href="/" class="btn btn-primary btn-sm">Join the game</a>
         <a href="/admin" class="btn btn-secondary btn-sm">Command Deck</a>
       </div>
     </div>
@@ -42,7 +46,7 @@
       </div>
       <div class="overview-stat-pill">
         <span class="pill-label">Duration</span>
-        <span class="pill-val">3 Turns (~30–45 Mins)</span>
+        <span class="pill-val">3 Turns (about {{ game_minutes }} min)</span>
       </div>
       <div class="overview-stat-pill">
         <span class="pill-label">Primary Tangibles</span>
@@ -50,11 +54,27 @@
       </div>
       <div class="overview-stat-pill">
         <span class="pill-label">National Metrics</span>
-        <span class="pill-val">Vitality • Standing • Stability</span>
+        <span class="pill-val">{% if not rules.hide_vitality %}Vitality • {% endif %}Standing • Stability</span>
       </div>
       <div class="overview-stat-pill">
         <span class="pill-label">Architecture</span>
         <span class="pill-val">Phones via QR code &middot; LAN or hosted</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- The two difficulty settings of the summit being played -->
+  <div class="card" id="guide-difficulty" style="margin-bottom: 20px;">
+    <div class="card-title" style="margin-bottom: 8px;">How hard is this summit?</div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px;">
+      <div class="overview-rule-box">
+        <div class="rule-title">Game complexity: {{ rules.name }}</div>
+        <p class="rule-desc">{{ rules.tagline }}</p>
+        <ul class="rule-desc" style="margin: 6px 0 0 16px;">{% for point in rules.points %}<li>{{ point }}</li>{% endfor %}</ul>
+      </div>
+      <div class="overview-rule-box">
+        <div class="rule-title">Scenario: {{ settings.scenario_name }}</div>
+        <p class="rule-desc">{{ cfg.scenarios[settings.scenario].description }}</p>
       </div>
     </div>
   </div>
@@ -101,21 +121,21 @@
         <div class="overview-rule-box">
           <div class="rule-title">I. Domestic Survival</div>
           <p class="rule-desc">
-            Prevent famine at all costs. Populations consume <strong>20 Alchemical Grain</strong> every turn (15 if Technological Efficiency is unlocked). Silos reaching 0 trigger severe civil starvation riots (-25 Vitality, -20 Stability).
+            Prevent famine at all costs. Populations consume <strong>{{ grain }} Alchemical Grain</strong> every turn ({{ grain_efficient }} if Technological Efficiency is unlocked). Silos reaching 0 trigger severe civil starvation riots ({{ starving_penalty }}).
           </p>
         </div>
 
         <div class="overview-rule-box">
           <div class="rule-title">II. Continental Governance</div>
           <p class="rule-desc">
-            Leverage Diplomatic Standing to author and pass statutory resolutions—including humanitarian grain transfers, wealth surtaxes, and border quarantines—to shape continental order.
+            Use your Assembly votes to pass resolutions, such as shared grain, sanctions on the richest and border guards, to shape continental order.
           </p>
         </div>
 
         <div class="overview-rule-box">
           <div class="rule-title">III. Classified Directives</div>
           <p class="rule-desc">
-            Each sovereign nation harbors a secret strategic objective accessible only to their delegation terminal. Achieving this classified mandate before Turn 3 concludes secures sovereign victory.
+            {% if rules.one_secret_mission %}Each nation has one secret mission{% else %}Each delegate brings a secret mission{% endif %}, visible only on its delegation's phones. Every mission, public or secret, counts the same when the summit ends.
           </p>
         </div>
       </div>
@@ -137,12 +157,12 @@
         <div style="background: var(--bg-surface-sunken); border-left: 3px solid #38bdf8; border-radius: var(--radius-xs); padding: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
             <strong style="color: var(--text-primary); font-size: 0.92rem; font-family: var(--font-mono);">
-              Phase 1: Working & Bilateral Trade Session (5 Minutes)
+              Phase 1: Working & Bilateral Trade Session ({{ working_minutes }} Minutes)
             </strong>
             <span class="badge">ACTIVE ROOM FLOOR</span>
           </div>
           <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-            Delegates move freely through the room conducting face-to-face negotiations. Via smartphone terminals, delegations execute atomic P2P trades, trigger internal domestic policies (relief, forges, galas), read the Spireopedia and answer its quiz for resources, and author statutory motions for the Plenary docket.
+            Delegates move freely through the room conducting face-to-face negotiations. On their phones, delegations trade, enact decrees{% if rules.quiz %}, read the Spireopedia and answer its quiz for resources{% endif %}, and table motions for the Assembly.
           </p>
         </div>
 
@@ -150,12 +170,12 @@
         <div style="background: var(--bg-surface-sunken); border-left: 3px solid #eab308; border-radius: var(--radius-xs); padding: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
             <strong style="color: var(--text-primary); font-size: 0.92rem; font-family: var(--font-mono);">
-              Phase 2: Plenary Floor & Flash Assembly (3–5 Minutes)
+              Phase 2: The Assembly Votes
             </strong>
             <span class="badge">PARLIAMENTARY ROLL-CALL</span>
           </div>
           <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-            Delegations return to their seats. Statutory motions that secured a Second Endorsement are called to the floor. Nations cast weighted votes (1, 2, or 3 votes). If affirmative votes exceed negative votes, the statute is enacted immediately across all nations.
+            Motions with a co-sponsor go to the vote. Nations cast weighted votes (1, 2 or 3, and 1 more for the richest). If the votes for outnumber the votes against, the motion takes effect at once.{% if rules.grand_plenary %} In Turn 3 the Grand Plenary debates and votes on one motion at a time.{% else %} Every turn ends with the same single vote.{% endif %}
           </p>
         </div>
 
@@ -168,7 +188,7 @@
             <span class="badge">ENGINE EXECUTION</span>
           </div>
           <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-            The engine deducts grain consumption (20 per turn at Standard difficulty, a quarter less with Technological Efficiency), executes starvation penalties if silos empty, awards the bonus vote to the wealthiest nation, and publishes continental news dispatches.
+            The game deducts grain consumption ({{ grain }} per turn in this summit, a quarter less with Technological Efficiency), applies starvation penalties if silos empty, gives the bonus vote to the wealthiest nation, and publishes the news.
           </p>
         </div>
 
@@ -181,7 +201,7 @@
             <span class="badge">STRATEGIC REVELATION</span>
           </div>
           <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
-            At the conclusion of Turn 3, the facilitator triggers simulation conclusion. Secret directives are unveiled, continental awards (Hegemon, Plutocrat, Shield) are tallied, and final rankings are broadcasted on the auditorium projector.
+            After the last vote of Turn 3 nations eat one last time and the summit ends. Secret missions are revealed, the continent's verdict and the honours are announced, and the rankings go up on the projector.
           </p>
         </div>
       </div>
@@ -199,8 +219,7 @@
       </p>
       <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.55; margin: -8px 0 18px;">
         <strong>Fewer than six nations?</strong> Mission targets written for six nations scale down (e.g. "4 of 6 nations" becomes
-        "3 of 5"), and a secret mission about a nation that is not playing is replaced by a stand-in version, so every delegate
-        still has one. Phones always show the current wording.
+        "3 of 5"), and a secret mission about a nation that is not playing is replaced by a stand-in version. Phones always show the current wording.
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
@@ -220,15 +239,7 @@
               Stewards of the ancient Greatweald. Master bio-herbalists with massive alchemical grain silos, but vulnerable to military coercion.
             </p>
           </div>
-          <div class="overview-stats-grid">
-            <div>Grain: <strong>100 (HIGH)</strong></div>
-            <div>Cores: <strong>25 (LOW)</strong></div>
-            <div>Silk: <strong>30 (MEDIUM)</strong></div>
-            <div>Military: <strong>25 (LOW)</strong></div>
-            <div>Vitality: <strong>85</strong></div>
-            <div>Standing: <strong>65</strong></div>
-            <div>Stability: <strong>80</strong></div>
-          </div>
+          {{ stats(start['sylvan']) }}
           <div class="overview-directive-box">
             <strong>Public Mandate:</strong> Feed the continent & prevent famine (no active state finishes with 0 Grain).<br>
             <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
@@ -253,15 +264,7 @@
               Mountainous civilization of master smiths and geothermal turbines. Rich in heavy metallurgy and energy, but dangerously short on food.
             </p>
           </div>
-          <div class="overview-stats-grid">
-            <div>Grain: <strong>30 (MEDIUM)</strong></div>
-            <div>Cores: <strong>80 (HIGH)</strong></div>
-            <div>Silk: <strong>25 (LOW)</strong></div>
-            <div>Military: <strong>65 (HIGH)</strong></div>
-            <div>Vitality: <strong>70</strong></div>
-            <div>Standing: <strong>50</strong></div>
-            <div>Stability: <strong>70</strong></div>
-          </div>
+          {{ stats(start['val_khor']) }}
           <div class="overview-directive-box">
             <strong>Public Mandate:</strong> Continental modernisation (reach 60 Cores across active sovereign states).<br>
             <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
@@ -286,15 +289,7 @@
               Marble sun towers and aristocratic courts. Solaris commands supreme diplomatic prestige, cultural silk reserves, and 3 Assembly votes.
             </p>
           </div>
-          <div class="overview-stats-grid">
-            <div>Grain: <strong>50 (MEDIUM)</strong></div>
-            <div>Cores: <strong>40 (MEDIUM)</strong></div>
-            <div>Silk: <strong>75 (HIGH)</strong></div>
-            <div>Military: <strong>45 (MEDIUM)</strong></div>
-            <div>Vitality: <strong>85</strong></div>
-            <div>Standing: <strong>90 (Supreme)</strong></div>
-            <div>Stability: <strong>80</strong></div>
-          </div>
+          {{ stats(start['solaria']) }}
           <div class="overview-directive-box">
             <strong>Public Mandate:</strong> Preserve the international order & broad consensus (pass multilateral resolutions in Grand Plenary).<br>
             <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
@@ -319,15 +314,7 @@
               Clandestine sanctuary of void researchers and energy synthesizers. Boasts unmatched core reserves and covert intelligence.
             </p>
           </div>
-          <div class="overview-stats-grid">
-            <div>Grain: <strong>40 (MEDIUM)</strong></div>
-            <div>Cores: <strong>70 (HIGH)</strong></div>
-            <div>Silk: <strong>30 (MEDIUM)</strong></div>
-            <div>Military: <strong>55 (MEDIUM)</strong></div>
-            <div>Vitality: <strong>65</strong></div>
-            <div>Standing: <strong>40 (Isolated)</strong></div>
-            <div>Stability: <strong>70</strong></div>
-          </div>
+          {{ stats(start['umbra']) }}
           <div class="overview-directive-box">
             <strong>Public Mandate:</strong> Continental balance of power (prevent unchecked militarisation across any single realm).<br>
             <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
@@ -352,15 +339,7 @@
               Opulent island league of commercial merchant fleets, silk guilds, and bankers. Controls luxury silk routes and liquid wealth.
             </p>
           </div>
-          <div class="overview-stats-grid">
-            <div>Grain: <strong>50 (MEDIUM)</strong></div>
-            <div>Cores: <strong>40 (MEDIUM)</strong></div>
-            <div>Silk: <strong>80 (HIGH)</strong></div>
-            <div>Military: <strong>35 (LOW)</strong></div>
-            <div>Vitality: <strong>80</strong></div>
-            <div>Standing: <strong>70</strong></div>
-            <div>Stability: <strong>70</strong></div>
-          </div>
+          {{ stats(start['aquila']) }}
           <div class="overview-directive-box">
             <strong>Public Mandate:</strong> Connect the continent (ensure multilateral trade networks across all sovereign states).<br>
             <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
@@ -385,15 +364,7 @@
               Chivalric feudal knights and frontier fortresses. Possesses supreme military force and iron domestic stability.
             </p>
           </div>
-          <div class="overview-stats-grid">
-            <div>Grain: <strong>60 (HIGH)</strong></div>
-            <div>Cores: <strong>50 (MEDIUM)</strong></div>
-            <div>Silk: <strong>25 (LOW)</strong></div>
-            <div>Military: <strong>80 (HIGH)</strong></div>
-            <div>Vitality: <strong>80</strong></div>
-            <div>Standing: <strong>55</strong></div>
-            <div>Stability: <strong>85</strong></div>
-          </div>
+          {{ stats(start['aethelgard']) }}
           <div class="overview-directive-box">
             <strong>Public Mandate:</strong> Continental security & domestic stability (preserve high civil stability across all sovereign states).<br>
             <strong style="margin-top: 4px; display: inline-block;">Strategic Posture:</strong>
@@ -414,7 +385,7 @@
     <div class="card">
       <div class="card-title" style="margin-bottom: 10px;">Socioeconomic Algorithms & Formulas</div>
       <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 18px;">
-        The simulation engine executes transparent, deterministic socioeconomic equations at each turn settlement:
+        What the game calculates at each turn settlement:
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
@@ -435,9 +406,9 @@
         <div class="overview-rule-box">
           <div class="rule-title">Baseline Consumption & Famine</div>
           <div class="rule-math">
-            Turn Consumption = -20 Grain (Standard)<br>
-            With Tech Efficiency = -15 Grain (-25% cut)<br>
-            If Grain &le; 0: -25 Vitality, -20 Stability
+            Turn Consumption = -{{ grain }} Grain<br>
+            With Tech Efficiency = -{{ grain_efficient }} Grain (-25% cut)<br>
+            If Grain &le; 0: {{ starving_penalty }}
           </div>
           <p class="rule-desc">
             Civil populations consume grain every turn. Running out of grain triggers immediate domestic starvation riots.
@@ -451,7 +422,7 @@
             Effect: Permanent -25% Grain Consumption
           </div>
           <p class="rule-desc">
-            Industrializing with 75+ active aether matrices unlocks automation that permanently cuts food consumption from 20 to 15.
+            Industrializing with 75+ active aether matrices unlocks automation that permanently cuts food consumption from {{ grain }} to {{ grain_efficient }}.
           </p>
         </div>
 
@@ -494,6 +465,7 @@
       </p>
 
       <div style="display: flex; flex-direction: column; gap: 10px;">
+        {% if 'relief' not in rules.hidden_decrees %}
         <div class="overview-lever-row">
           <div>
             <strong style="color: var(--text-primary); font-size: 0.9rem;">Emergency Grain Rationing (Relief)</strong>
@@ -505,6 +477,7 @@
             <span style="color: #10b981; font-weight: 700;">+15 Public Vitality</span>
           </div>
         </div>
+        {% endif %}
 
         <div class="overview-lever-row">
           <div>
@@ -562,7 +535,24 @@
   <!-- ======================================================================= -->
   <div id="tab-assembly" class="overview-tab-content">
     <div class="card">
-      <div class="card-title" style="margin-bottom: 10px;">Statutory Motions & Two-Sponsor Mandate</div>
+      <div class="card-title" style="margin-bottom: 10px;">Motions &amp; the Two-Sponsor Rule</div>
+      {% if not rules.free_motions %}
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 14px;">
+        Any nation can table a motion from the list on its phone. Some let it set an amount; nothing else can be changed and nothing has to be written.
+        A motion reaches the vote once a <strong>different nation co-sponsors it</strong>. If it passes, the game carries it out by itself.
+      </p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 20px;">
+        {% for m in simple_motions if m.player_selectable %}
+        <div class="overview-resolution-card">
+          <h4 style="font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 0 0 6px;">{{ m.icon }} {{ m.name }}</h4>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">{{ m.summary }}</p>
+          <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
+            {{ m.effect_plain | replace('{amount}', 'N') | replace('{me}', 'the nation that tabled it') }}{% if m.amount %} (N: {{ m.amount.min }} to {{ m.amount.max }}){% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
       <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 14px;">
         Any nation can author a motion, but to prevent filibustering a motion only qualifies for a plenary vote once a <strong>different sovereign nation seconds it</strong>.
         Players pick a template, <strong>set its numbers</strong> and rewrite the title and terms in their own words. The sentence under "If passed" is written by the game from the numbers, and the game carries it out when the motion passes:
@@ -587,7 +577,7 @@
             Punish one nation. You choose who and what it loses.
           </p>
           <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-surface); padding: 6px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
-            Default: the richest nation loses 15 Stability. Limits: 30 of a resource, 15 of a value.
+            Default: the richest nation loses 15 Stability. There is no limit on the amount, but a nation can never lose more than it has.
           </div>
         </div>
 
@@ -632,20 +622,29 @@
           </p>
         </div>
       </div>
+      {% endif %}
 
+      {% if rules.quiz %}
       <div class="card-title" style="margin-bottom: 10px;">Spireopedia & the Lore Quiz</div>
       <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
         The <strong>Spireopedia</strong> is the game's built-in, Wikipedia-style encyclopaedia of the Continent: the history of all six nations, its wars, treaties, geography and resources.
         Delegates read it in the <strong>Wiki</strong> tab of their phone console and answer questions in the separate <strong>Quiz</strong> tab.
       </p>
       <ul style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.6; margin-left: 20px; margin-top: 6px;">
-        <li>The quiz is a <strong>timed run, one question at a time</strong>. A nation sees the stake and the topic, <strong>confirms that it wants the next question</strong>, and then has a short time (15 seconds by default, set on the setup screen) to answer. There is no pause, no skipping once it has started, and no pointer to the article.</li>
-        <li>Every nation meets the <strong>same {{ quiz_count }} questions in the same order</strong>; about a third unlock each turn. Standard questions stake 5, hard ones 8.</li>
+        <li>The quiz is a <strong>timed run, one question at a time</strong>. A nation sees the stake and the topic, <strong>presses Start when it is ready</strong>, and then has {{ settings.quiz_seconds }} seconds to answer. There is no pause, no skipping once it has started, and no pointer to the article.</li>
+        <li>Every nation meets the <strong>same {{ quiz_count }} questions in its own random order</strong>; about a third unlock each turn. The stake of each question is random, from 1 to 9 (5 on average).</li>
         <li><strong style="color: var(--ok);">Correct answer:</strong> the stake in Grain, Cores or Silk.</li>
         <li><strong style="color: var(--danger);">Wrong answer or no answer in time:</strong> loses the <strong>same resource and amount</strong>, and the question is locked for that nation.</li>
         <li>A nation's delegates share one open question. The news only carries a summary of the quiz every five minutes, never who answered what.</li>
       </ul>
+      {% else %}
+      <div class="card-title" style="margin-bottom: 10px;">The Spireopedia</div>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+        The <strong>Wiki</strong> tab on your phone holds the history of all six nations. It is there to read if you are curious; nothing in the game depends on it.
+      </p>
+      {% endif %}
 
+      {% if rules.war %}
       <div class="card-title" style="margin: 18px 0 10px;">War</div>
       <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
         From the turn the facilitator allows (Turn 2 by default) a nation can <strong>attack another nation</strong> from the War room on its phone, once per turn. The army decides most of the fight, but not all of it:
@@ -658,6 +657,7 @@
         <li><strong>Result:</strong> the loser loses soldiers, Stability and Vitality and a part of its Grain, Cores and Silk goes to the winner (some is lost in the fighting). The bigger the win, the more is taken. Attacking always costs supplies (10 Grain) and Standing, and a lost attack costs more.</li>
         <li>A battle is announced on the news and pops up on the projector with an animation.</li>
       </ul>
+      {% endif %}
     </div>
   </div>
 
@@ -676,15 +676,15 @@
           <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Participant Screen</div>
           <h4 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); margin: 4px 0 8px;">Mobile Cockpit (/realm/&lt;id&gt;)</h4>
           <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
-            Students scan the QR code and log in with their delegation passcode. Six tabs:
+            Students scan the QR code and log in with their delegation passcode. The tabs:
           </p>
           <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); line-height: 1.6; margin-top: 8px;">
-            1. Realm: Resources, metrics, domestic decrees, secret directives.<br>
-            2. World: Live news wire and the continental registry.<br>
-            3. Trade: Bilateral resource offers.<br>
-            4. Motions: Draft and co-sponsor resolutions.<br>
-            5. Wiki: The Spireopedia (reading only).<br>
-            6. Quiz: Timed lore questions, one at a time.
+            Realm: Resources, metrics, domestic decrees, secret directives.<br>
+            World: Live news wire and the continental registry.<br>
+            Trade: Bilateral resource offers.<br>
+            Motions: {% if rules.free_motions %}Draft{% else %}Table{% endif %} and co-sponsor resolutions.<br>
+            Wiki: The Spireopedia (reading only).{% if rules.quiz %}<br>
+            Quiz: Timed lore questions, one at a time.{% endif %}
           </div>
         </div>
 
@@ -707,14 +707,15 @@
           <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Facilitator Laptop</div>
           <h4 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); margin: 4px 0 8px;">Command Deck (/admin)</h4>
           <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
-            Master operations deck for the workshop instructor:
+            For the person running the game:
           </p>
           <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-primary); line-height: 1.6; margin-top: 8px;">
-            • Master timer controls (Start, Pause, Reset, +60s).<br>
-            • One-click Turn advancement with automated equation processing.<br>
-            • Crisis injection deck from narrative catalog.<br>
-            • Real-time resource overrides (+ / - buttons).<br>
-            • Passcode inspection and PIN reset utility.
+            • What is going on, what comes next, and the button for it.<br>
+            • The clock: start, pause, adjust.<br>
+            • News, random events and crises by hand.<br>
+            • Every nation's numbers, with undo.<br>
+            • Passcodes, seats and passcode cards to print.<br>
+            • Saves, and the way back after a server restart.
           </div>
         </div>
       </div>

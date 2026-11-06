@@ -1,6 +1,6 @@
 # Summit of Realms — Status & Review Notes
 
-Last updated 2026-10-19. Run tests with `venv/bin/python -m pytest -q` (see the Tests line at the bottom for the current count).
+Last updated 2026-11-07. Run tests with `venv/bin/python -m pytest -q` (see the Tests line at the bottom for the current count).
 
 ## Decisions from the user
 - Host on the easiest free option: **Render** (`render.yaml`). Players join by scanning a QR code.
@@ -293,3 +293,105 @@ Last updated 2026-10-19. Run tests with `venv/bin/python -m pytest -q` (see the 
 **Simulation with random quiz stakes (1–9, mean 5; 12 games per row for the sweep, 6 for `--war`):** `devoted` peaceful 100 % Stable with a quiz at 80 %, with a weak quiz (45 %) 0 / 67 / 33 % Stable / Fragile / Crisis; `warlike` with a good quiz 67 / 33 / 0 % (about 3 battles a game), with a weak quiz 83 % Crisis. Plain `cooperative` (no last-minute rescue): Gentle 92 % Stable, Standard with a good quiz 8 / 50 / 42 %, Harsh 92 % Crisis. Conclusion unchanged: Standard needs good cooperation and a decent quiz; the random stakes did not change the picture noticeably.
 
 **Tests:** 192 (173 unit/API, 19 browser). Added in the last round: random quiz stakes/order, no motion limit, uncapped amounts bounded by holdings, the open motion, modifiers (sheet, limits, votes, grain use, war power, efficiency flag, privacy), the action journal (record, undo, later changes kept, non-reversible entries, reset), war intel (reach grows with wealth, accuracy grows with Silk and Cores, never exact, no luck or facilitator adjustments in reports), and browser tests for the new quiz start flow, reversing a mistaken change, editing modifiers and carrying out an open motion. The browser check of the army animation was done by eye (screenshots), not by an automated test.
+
+## Update 2026-11-06: two difficulty settings, the Simplified game, code review
+**Decisions from the user**
+- Difficulty is **two settings**: the game's **complexity** and the **scenario**. The old third setting (`difficulties`: gentle/standard/harsh) is gone; what it set now belongs to the scenario and can be typed on the setup screen.
+- The reduced-complexity game: motions cannot be edited (only the amount), and they are fully automated. No quiz, and the starting resources make up for it. Other reductions were left to the implementer. The Full game stays as it was.
+
+**Engine**
+- `rules()` gives the rules of the game being played: `{**FULL_RULES, **complexities[meta.complexity]}` with switches `quiz`, `war`, `free_motions`, `grand_plenary`, `one_secret_mission`, `hide_vitality`, `live_hints`, `hidden_decrees`, `starting_bonus`. A game keeps the complexity it was dealt with: `meta.complexity` is set in `reset_simulation`. Saves without it play the full game. The default is `full`.
+- `settings()` returns `rules` too and forces `attacks_enabled` off when the game has no war; `settings(as_chosen=True)` gives what the setup screen chose, so the War card keeps its value for the next full game. `update_settings` applies a new complexity at once while `game_in_progress()` is false (`_switch_complexity` swaps the starting bonus, same `game_id`, and open phones reload by themselves because `realm.js`/`admin.js` compare `rules.id`); during a game it is stored for the next new summit and the message says so.
+- Grain and good news: `grain_consumption` (5–60) and `good_news_percent` (0–100) are ordinary settings. `settings()` falls back to the scenario's `suggested` values, and `update_settings` drops typed values when the scenario changes without new ones. `positive_share` is derived.
+- `motion_templates(rules)`: `resolution_types`, or `simple_motions` plus the Food Acts. `_fill_simple_motion` fills `{amount}` and `{me}` into `lines`, `effect_plain`, `title`, `terms`; `draft_proposal` ignores the client's title, terms and targets in the simplified game. The carrying out is the same `motions.apply_lines`.
+- `start_plenary_session`: quick vote in the last turn too when `grand_plenary` is off. `_evaluate_missions`/`_mission_context` were moved out of `conclude_summit` (same checks) and also feed `mission_status` on each realm when `live_hints` is on (`_attach_mission_status`); `sanitize_state` only lets a nation see its own, and the hint never quotes another nation's numbers (`SELF_CONTAINED_MISSIONS`, `pub_hint`).
+- `hide_vitality`: vitality effects are skipped in small events and disasters, so the news never mentions it. The number still exists on the realm (old code paths, facilitator table) and only the starvation penalty and hand-triggered catalogue events move it; nothing reads it in a game without war.
+- Nation ratings: `play_difficulty`/`play_difficulty_note` on each realm come from `difficulty*` or `simple_difficulty*`, set in `_recalculate_all_realms`.
+- `load_scenario_config` now caches by file time like the quiz: **treat the result as read-only**.
+
+**Screens**
+- Setup: "1 · Game complexity", "2 · Scenario", "5 · Scenario numbers"; `.only-full`/`.only-simplified` follow `data-complexity` on the page. Phone (`realm.html`): the Quiz tab, War room, motion form, Vitality bar and Rationing decree are not rendered in the simplified game; `#food-forecast` and `.mission-hint` are added. Admin, projector, Guide and report follow `rules`. The Guide's nation stats now come from the config plus the bonus.
+- `setHtml(el, html)` in `common.js`: lists polled once a second are only rebuilt when they change.
+
+**Bugs found in the review and fixed (each has a regression test)**
+- In the Grand Plenary a **rejected motion still took effect**, including rejected Food Acts (`advance_grand_plenary_next` applied it whatever the vote).
+- **A phone could act in another nation's name** by naming itself in `realm_id` and the victim in `sender_id`/`proposer_id`/`supporter_id`, for example emptying its silos with a trade to itself. `enforce_api_auth` now requires every nation named in the request to be logged in.
+- **Players could run code on the projector and phones**: motion titles were inserted unescaped on the results screens (a title reaches the phones through Solaris' veto mission). Confirmed in a browser against the old script.
+- **Trade offers and notes reached everyone** through `/api/state`, even logged out, although the news had been made private. `_trade_view`: the two nations see the offer; others only see that a trade was concluded (the map needs that).
+- **Sounds of a new turn were lost** (`process_end_of_turn` and the famine saved an older `meta` over the cue), and their news carried the old turn's stamp. Cue type `siren` (famine, disasters) was silent everywhere, and `adminApp.triggerRoundCrisis` called a missing `synth.playSiren`, so the button reported a failure after succeeding. Now `synth.playCue`.
+- **Advance Turn went past the last turn** (Turn 4) and even revived a finished summit. `/api/admin/turn/next` refuses, and the buttons become "End Summit" in the last turn.
+- Screens rebuilt lists every second: "Read the terms" closed itself, the facilitator's seat dropdown shut, and a tap between press and release could be lost. `setHtml`.
+- Restoring a save skipped past a running vote or debate (their clocks were not rebased) and charged an open quiz question as wrong. Now they resume; the question becomes the nation's next one again.
+- A nation could vote on a motion that was not on the ballot. Catalogue events hit nations that are not playing. A blank trade amount was a server error. The projector drew the *oldest* six trades instead of the newest. `admin_remove_realm` filtered trades on keys that do not exist. Motion amount fields refused anything above 30 although the rule is "no cap". `/api/events` was open to everyone. Other nations' `quiz_next` was sent to everyone.
+- **Aquila's public lobby note gave away its secret mission** ("wealthiest by 25 points"). Reworded; a test checks the notes.
+- Text: the phone's hard-coded "5 minutes" of debate; the Guide's old quiz rules and motion limits; the README's old vote rule, quiz payouts and motions; "1 nations".
+
+**Balance (`tools/simulate.py --simplified`, 40 games per row, no attacks)**
+
+| Complexity and scenario | Delegations | Stable | Fragile | Crisis | Missions met |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| Simplified, Open summit | cooperative | 100 % | 0 % | 0 % | 86 % |
+| Simplified, Great Famine | cooperative | 32 % | 68 % | 0 % | 74 % |
+| Simplified, Great Famine | devoted (the rich rescue the starving in the last turn) | 100 % | 0 % | 0 % | 76 % |
+| Simplified, Great Famine | selfish | 5 % | 15 % | 80 % | 29 % |
+| Simplified, Armageddon | cooperative | 2 % | 12 % | 85 % | 49 % |
+| Simplified, Armageddon | devoted | 75 % | 18 % | 8 % | 62 % |
+| Full, Open summit | cooperative, good quiz (80 %) | 78 % | 20 % | 2 % | 64 % |
+| Full, Great Famine | cooperative, good quiz | 8 % | 45 % | 48 % | 57 % |
+| Full, Great Famine | cooperative, no quiz | 0 % | 0 % | 100 % | 58 % |
+| Full, Great Famine | devoted, good quiz | 100 % | 0 % | 0 % | 63 % |
+| Full, Armageddon | devoted, good quiz | 45 % | 42 % | 12 % | 56 % |
+
+The Full game's rows match the figures measured before this round within noise (Standard with a good quiz was 8 / 50 / 42 %), so the bug fixes did not shift its balance.
+
+The sim's delegations rarely pursue Val-Khor's public mission or Aethelgard's reserves, so those look harder than they are: `test_a_perfect_game_meets_every_mission` plays a full game that meets all twelve and ends Stable. Numbers for humans will differ, and nobody has played the Simplified game with real people yet.
+
+**Open questions for the user** (not changed)
+- The notes put the meal *before* the quick vote in Rounds 1 and 2 ("−20 Grain, then Quick Plenary"); the game votes first and eats afterwards, as it did before this round.
+- Reset Sim returns the roster and passcodes to the config, while Start a new summit keeps them.
+- `tools/simulate.py` models sensible and selfish delegations, not newcomers; the bonus may need tuning after a first real session (`complexities.simplified.starting_bonus`).
+
+**Tests:** 288 (260 unit/API, 28 browser). New: `TestRulesAreKept`, `TestApiIsKept`, `TestDifficultySettings`, `TestSimplifiedGame` (including a scripted game that meets all twelve missions), `TestNationRatings`, `TestSimplifiedScreens`, and browser tests for the setup screen, a complete Simplified game, the projector and Guide, screens that refresh without closing what is open, the last-turn button and injected HTML.
+
+## Update 2026-11-07: intuitive phone and deck, saves that really work
+**Decision from the user:** the game should overwhelm through its complexity and possibilities, never through its UI. "Make sure that the autosave works." The projector is fine as it is and was left alone (only a connection bar was added).
+
+**Join page and logins (`lobby.html`, `admin_login.html`)**
+- All six nations fit on the first screen of a 360×640 phone. Tap a nation for a sheet with its details and the passcode field, at the top of the screen so the keyboard never covers the button. The field is plain text with dots drawn by CSS (`-webkit-text-security`), because a password field makes phones offer to save a password.
+- A logged-in phone gets "Back to <nation>" (decided on the server: `my_realms`). `has_auth_*` cookies are gone. `/?login=<id>` when already in goes straight to the console; a phone waiting at the passcode prompt polls `my_realms` and returns by itself if its game is restored. A stale login arrives with `&again=1` and the sheet says why it asks again.
+- A full delegation explains itself in the sheet (no more `alert()`). The facilitator login says where to find the passcode; `app.py` prints it at start.
+- `/admin/cards` (`cards.html`): one printable card per nation with a QR code to `/?login=<id>` and the passcode. Fits one A4 page.
+
+**Phone console (`realm.html`, `realm.js`)**
+- `clockStage(meta)` in `common.js` (ready, intermission, running, paused, timeup, other) drives the phase card, which now says when the game has not started or is paused. Actions before the clock starts stay allowed as before; only the words changed.
+- The ✕ is gone: the `?` button opens `openHelp()` (how a turn goes, where things are, Guide, sound switch, leave). `explain(key)` on every number. First-time card (`localStorage.summit_welcome_seen`). `showSheet` in `common.js`.
+- Order: latest news and numbers near the top, then goals, decrees, war room, and "About <nation>" (the difficulty note moved out of the public mandate). Vitals are three compact tiles, with bars turning amber below 50 and red below 25.
+- Number changes show a mark on the tile (`_noteChange`), and a toast if another tab is showing. Decrees show `.cannot` and why (`data-needs`).
+- Trade: offers to you first and hidden when empty, "You have N", warnings in the summary (not enough stock, border-crisis transit loss), past offers listed, and toasts when an offer arrives or is answered (`_announceTradeNews`).
+- Motions: the floor first; `#motion-builder` is its own screen behind "+ Propose a motion". Gallery rows are short. Form order: what it does (with the live preview), then the wording, then who may co-sponsor. Summaries of three templates were reworded in `scenario_config.json`. The badge only counts motions that still need a co-sponsor.
+- World: News / The nations segments, an unread badge, pip legend, nations open for their public mandate.
+- Vote: "For / Against / Abstain" (`.vote-for`…), the real countdown, plain words. It closes the wiki and scrolls up when a vote opens. A siege alarm (`#siege-alert`) is on every tab. The wiki bar has a clock. The debrief card uses classes (`.verdict-card`).
+- **Phones no longer chime for other nations' decrees and trades** (new cue type `decree`; the projector still plays it). A cue's toast is skipped for `decree` and `trade`.
+
+**Command deck (`admin.html`, `admin.js`)**
+- `renderNow(state)`: the sticky panel on every tab with what is going on, what comes next, the clock and the buttons. Other buttons were removed: header Advance Turn, Chime, the setup banner, "Execute End of Turn". Who still has to vote is listed; things waiting elsewhere appear as `.now-alert` links.
+- Tabs renamed: Run the game, Motions, Events, Nations' numbers, Players & passcodes, Saves. `showTab` keeps the tab in the address (`#tab-…`).
+- Run tab: "Before you start" checklist with seats and passcodes until the game starts (and a nudge if the passcodes are still the guessable defaults, `pins_are_default`), then "Who is connected"; a game timeline; the clock console; room sounds.
+- Removed (each was redundant or broken): Reset Sim and its modal (`/api/admin/reset` stays, for tests; **Start a new summit** on the setup screen is the one way to start over), the "3/4/5/6 nations" buttons (they took the first N nations in config order, against the advice on the setup page; the engine call stays because tests use it), Add Delegation (`/api/admin/realm/add` removed: it made nations with no missions or map place), the Edit modal (its flags are in the modifiers; `private_agenda` was shown nowhere; "starving" was overwritten on every recalculation), delete-nation ✕.
+- Setup: steps numbered by CSS counters, one "Fine-tuning" section closed by default with its values in the title, unsaved changes are shown (and leaving asks), a sticky action bar. "Continue to the command deck" before a game; "Start a new summit" only once a game is under way. The nations table turns into cards on a phone.
+- Every deck tab and the setup page now fit a phone (`.deck-grid`; the inline two-column grids used to overflow).
+
+**Saves: bugs found and fixed (`autosave_probe` output is summarised here)**
+- An hour of idle polling (a projector left open) pushed every real save out of the list, including the "Before server restart" one: 12 slots, and a fresh idle game saved itself every 5 minutes. Now: only games in progress that have changed are auto-saved (`autosave`: fingerprint of `dump_all`), and automatic (24) and deliberate (20) saves are kept separately (`Database.add_autosave`, columns `kind`, `game_id`, `turn`, `phase`, migrated for old databases).
+- The browser copy had the same flaw, worse: every page load and every 5 minutes it stored the current game, so after a restart the "newest copy" the README told people to restore was the empty new game. It also failed silently when out of room. Now see `keepBrowserCopy`.
+- `/api/admin/reset` kept no copy. A restored clock ran at once. A failing autosave broke the state poll (now caught and reported in `save_status.error`). `game_in_progress` missed a game concluded in Turn 1.
+- New: `engine.interrupted_game()` / `dismiss_interrupted_game()` / `POST /api/admin/resume/dismiss` and `#resume-banner` (also from the browser's copy); a prepared but unstarted game survives a restart (kind `setup`); checkpoints at the start of each turn and at the end. `AUTOSAVE_SECONDS` env var for the tests.
+- **`test_summit.py` used the real `summit.db`** (app.py opens it at import; `TEST_DB` only covered the test's own engines): every test run reset the real game. It now sets `SUMMIT_DB_PATH` to a temp file first.
+
+**Other fixes:** a declined change of seats or a refused passcode stayed on screen as if it had worked. "1 seats". Setting the clock before the start counted as the game being in progress. A nation activated after the lobby loaded did not appear until a reload. A nation taken out of the game left its phones stranded. Toasts swallowed taps on what was under them. Toasts and news in jargon ("Plenary Session Convened", "Sovereign ballot recorded").
+
+**Open questions for the user**
+- Phones say Standing and Stability "count towards how the whole continent fares" but do not state the verdict's exact thresholds (no Stability below 50, average Standing at least 50). The Guide does not state them either, so this was left as it was. Say if players should see them.
+- Not tried on physical phones: everything was checked in Chromium with phone viewports and touch emulation. The on-screen keyboard behaviour in particular should be checked on a real iPhone.
+
+**Tests:** 331 (289 unit/API, 42 browser). New: `TestSaves` (rewritten), `TestJoiningAndScreens`; browser tests for the join page on a small phone, a full delegation, the phone's states and help, what needs an answer coming first, the vote, the deck's panel through a whole game, the setup page, passcode cards and no sideways scrolling on any screen. `test_a_crashed_server_loses_nothing_and_the_room_gets_back_in`, `test_a_wiped_hosted_server_can_be_restored_from_the_browser`, `test_declining_the_interrupted_game_is_remembered` and `test_autosave_really_runs_during_a_game` run against a real server process that is killed and started again.

@@ -306,7 +306,7 @@ class Database:
                     value TEXT NOT NULL
                 )
             """)
-            # Rolling autosaves (snapshots of game_state), newest kept
+            # Saved games (snapshots of game_state). `kind` says how long a save is kept (see add_autosave).
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS autosaves (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -315,6 +315,15 @@ class Database:
                     data TEXT NOT NULL
                 )
             """)
+            # Databases from before these columns existed: everything but a plain autosave counts as worth keeping.
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(autosaves)").fetchall()}
+            if "kind" not in columns:
+                conn.execute("ALTER TABLE autosaves ADD COLUMN kind TEXT NOT NULL DEFAULT 'auto'")
+                conn.execute("UPDATE autosaves SET kind = 'kept' WHERE label NOT LIKE 'Autosave%'")
+            for name, declaration in (("game_id", "TEXT NOT NULL DEFAULT ''"), ("turn", "INTEGER NOT NULL DEFAULT 1"),
+                                      ("phase", "TEXT NOT NULL DEFAULT ''")):
+                if name not in columns:
+                    conn.execute(f"ALTER TABLE autosaves ADD COLUMN {name} {declaration}")
             conn.commit()
 
     def get_state(self, key: str, default: Any = None) -> Any:
@@ -351,18 +360,42 @@ class Database:
                              [(k, json.dumps(v)) for k, v in snapshot.items()])
             conn.commit()
 
-    def add_autosave(self, snapshot: Dict[str, Any], label: str, keep: int = 12) -> int:
+    # How many saves of each kind are kept. Automatic saves can never push out the ones somebody may come back for:
+    # manual saves, and the safety copies made before a restart, a restore or a new game.
+    KEEP_AUTOMATIC = 24      # two hours of play at one save every five minutes
+    KEEP_DELIBERATE = 20
+
+    def add_autosave(self, snapshot: Dict[str, Any], label: str, kind: str = "auto") -> int:
+        """Store a save. `kind`: auto (the five-minute saves), kept (manual and safety copies), restart (a game
+        interrupted by a server restart) or setup (a prepared game that had not started when the server restarted)."""
+        meta = snapshot.get("meta") or {}
         with self._get_conn() as conn:
-            cur = conn.execute("INSERT INTO autosaves (created, label, data) VALUES (?, ?, ?)",
-                               (time.time(), label, json.dumps(snapshot)))
-            conn.execute("DELETE FROM autosaves WHERE id NOT IN (SELECT id FROM autosaves ORDER BY id DESC LIMIT ?)", (keep,))
+            cur = conn.execute(
+                "INSERT INTO autosaves (created, label, data, kind, game_id, turn, phase) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (time.time(), label, json.dumps(snapshot), kind, str(meta.get("game_id") or ""),
+                 int(meta.get("current_turn") or 1), str(meta.get("phase") or "")))
+            conn.execute("""DELETE FROM autosaves WHERE kind = 'auto' AND id NOT IN
+                            (SELECT id FROM autosaves WHERE kind = 'auto' ORDER BY id DESC LIMIT ?)""", (self.KEEP_AUTOMATIC,))
+            conn.execute("""DELETE FROM autosaves WHERE kind != 'auto' AND id NOT IN
+                            (SELECT id FROM autosaves WHERE kind != 'auto' ORDER BY id DESC LIMIT ?)""", (self.KEEP_DELIBERATE,))
             conn.commit()
             return cur.lastrowid
 
     def list_autosaves(self) -> List[Dict[str, Any]]:
         with self._get_conn() as conn:
-            rows = conn.execute("SELECT id, created, label FROM autosaves ORDER BY id DESC").fetchall()
+            rows = conn.execute("SELECT id, created, label, kind, game_id, turn, phase FROM autosaves ORDER BY id DESC").fetchall()
         return [dict(r) for r in rows]
+
+    def newest_autosave(self, kinds: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+        """The newest save (without its data), optionally of certain kinds only."""
+        query = "SELECT id, created, label, kind, game_id, turn, phase FROM autosaves"
+        args: List[Any] = []
+        if kinds:
+            query += f" WHERE kind IN ({', '.join('?' for _ in kinds)})"
+            args = list(kinds)
+        with self._get_conn() as conn:
+            row = conn.execute(query + " ORDER BY id DESC LIMIT 1", args).fetchone()
+        return dict(row) if row else None
 
     def get_autosave(self, save_id: int) -> Optional[Dict[str, Any]]:
         with self._get_conn() as conn:
