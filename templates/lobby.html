@@ -13,6 +13,7 @@
     <span class="join-mark" aria-hidden="true">&#10022;</span>
     <h1 class="page-title join-title">The Summit of Realms</h1>
     <p class="join-lede">Tap your nation, then type its passcode. Your facilitator will tell you both.</p>
+    {% include "_language_switch.html" %}
   </header>
 
   <!-- This device is already in a delegation: one tap back to the game -->
@@ -189,7 +190,7 @@
       connectionWatch.failed();
       return;
     }
-    if (!data.realms) return;
+    if (!data.realms || followLanguage(data)) return;
 
     // A phone that was sent here by a new game goes straight back if the facilitator restores its old game.
     const mine = data.my_realms || [];

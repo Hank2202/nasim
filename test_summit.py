@@ -1390,9 +1390,11 @@ class TestSimplifiedGame(unittest.TestCase):
         self.assertEqual(e.db.get_state("meta")["game_id"], game)
         self.assertEqual(self._realm("sylvan")["alchemical_grain"], 100)
         self.assertFalse(e.rules()["live_hints"])
+        self.assertFalse(e.rules()["verdict_rules"])       # the full game leaves the verdict's thresholds for players to find out
         e.update_settings({"complexity": "simplified"})
         self.assertEqual(self._realm("sylvan")["alchemical_grain"], 100 + self.bonus["grain"])
         self.assertTrue(e.rules()["live_hints"])
+        self.assertTrue(e.rules()["verdict_rules"])        # the simplified game states them
 
     def test_a_running_game_keeps_its_complexity_until_a_new_summit(self):
         e = self.engine

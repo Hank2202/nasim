@@ -2364,3 +2364,25 @@ body.summit-over #trade-form { display: none; }
   .cards-page { max-width: none; padding: 0; }
   .pass-cards { grid-template-columns: 1fr 1fr; }
 }
+
+/* =============================================================================
+   14. Languages
+   ============================================================================= */
+.lang-switch { display: inline-flex; gap: 2px; flex-wrap: nowrap; font-size: 0.8rem; line-height: 1; }
+.lang-switch a { padding: 7px 10px; border-radius: 999px; color: var(--text-secondary); text-decoration: none; white-space: nowrap; }
+.lang-switch a:hover { color: var(--text-primary); }
+.lang-switch a.active { color: var(--bg-base); background: var(--text-primary); }
+.join-head .lang-switch { margin-top: 10px; }
+.sheet-actions .lang-switch { align-self: center; justify-content: center; margin-bottom: 4px; }
+.chip-choice { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--bg-surface); cursor: pointer; white-space: nowrap; }
+.chip-choice:has(input:checked) { border-color: var(--text-primary); font-weight: 700; }
+.lang-switch.compact { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; }
+.lang-switch.compact a { padding: 5px 7px; }
+/* Longer words (Czech) wrap the header onto a second line on a phone instead of being cut off */
+.nav-link, .nav-badges .btn-sm { white-space: nowrap; }
+@media (max-width: 640px) {
+  .app-header { flex-wrap: wrap; row-gap: 6px; }
+  .nav-badges { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
+}
+.verdict-rules { padding-left: 18px; }
+.verdict-rules li { margin: 4px 0; }

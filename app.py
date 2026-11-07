@@ -18,6 +18,7 @@ import threading
 import time
 import uuid
 from typing import Dict, Any
+from urllib.parse import urlsplit
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response, make_response, g
 from itsdangerous import URLSafeSerializer, BadSignature
@@ -26,6 +27,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from models import Database, DEFAULT_REALMS
 from engine import SummitEngine, load_scenario_config
 import wiki
+import i18n
 from qr_generator import generate_qr_svg
 
 app = Flask(__name__)
@@ -100,9 +102,40 @@ _ACTOR_KEYS = ("realm_id", "sender_id", "proposer_id", "supporter_id", "seconder
 # touches game state so concurrent phones (threaded server) cannot lose updates.
 _state_lock = threading.RLock()
 
+def current_language() -> str:
+    """This device's own choice (the switch on the join page, the phone's help, the page headers), or else the game's."""
+    if "summit_language" not in g:
+        chosen = request.cookies.get(i18n.COOKIE)
+        g.summit_language = chosen if chosen in i18n.LANGUAGES else engine.game_language()
+    return g.summit_language
+
+@app.context_processor
+def language_for_templates():
+    return {"language": current_language(), "languages": i18n.LANGUAGES}
+
+@app.after_request
+def translate_response(resp):
+    """Everything is written in English; pages and game data are translated here, on their way to a screen in another
+    language. This hook runs last, when the request has finished with the game, so it does not need the state lock."""
+    if resp.status_code == 304 or resp.direct_passthrough or request.path.startswith("/static/"):
+        return resp
+    is_page, is_data = resp.mimetype == "text/html", resp.mimetype == "application/json" and request.path.startswith("/api/")
+    if not (is_page or is_data) or request.path.startswith("/api/wiki") or request.path == "/api/admin/save/export":
+        return resp                                             # the wiki has its own articles; a save file stays as it is
+    language = current_language()
+    if language == i18n.SOURCE_LANGUAGE:
+        return resp
+    if request.environ.pop("summit.locked", False):
+        _state_lock.release()
+    if is_page:
+        resp.set_data(i18n.translate_page(resp.get_data(as_text=True), language))
+    else:
+        resp.set_data(json.dumps(i18n.translate_tree(resp.get_json(), language), ensure_ascii=False))
+    return resp
+
 @app.before_request
 def acquire_state_lock():
-    if not (request.path.startswith("/static/") or request.path.startswith("/api/wiki") or request.path == "/healthz"):
+    if not (request.path.startswith(("/static/", "/api/wiki", "/i18n/")) or request.path == "/healthz"):
         _state_lock.acquire()
         request.environ["summit.locked"] = True
 
@@ -112,7 +145,7 @@ def no_stale_copies(resp):
     (unchanged files still come back as a cheap 304), and game state is never cached at all."""
     if request.path.startswith("/api/"):
         resp.headers["Cache-Control"] = "no-store"
-    elif request.path.startswith("/static/") or resp.mimetype == "text/html":
+    elif request.path.startswith(("/static/", "/i18n/")) or resp.mimetype == "text/html":
         resp.headers["Cache-Control"] = "no-cache"
     return resp
 
@@ -318,6 +351,26 @@ def index():
         logged_out_by_new_game=request.args.get("again") == "1",
     )
 
+@app.route("/lang/<language>")
+def set_language(language: str):
+    """The language switch: this device speaks this language from now on, and goes back to the page it was on."""
+    back = urlsplit(request.args.get("next") or request.referrer or "/")
+    path = back.path if back.path.startswith("/") and not back.path.startswith(("//", "/\\")) else "/"
+    resp = redirect(path + (f"?{back.query}" if back.query else ""))
+    if language in i18n.LANGUAGES:
+        resp.set_cookie(i18n.COOKIE, language, max_age=30 * 86400, samesite="Lax", secure=IS_HOSTED)
+    return resp
+
+@app.route("/i18n/<language>/<name>.js")
+def language_catalogue(language: str, name: str):
+    """The texts page scripts write themselves, for static/js/i18n.js. The facilitator's texts are for the facilitator."""
+    allowed = name != "deck" or is_admin() or app.config.get("TESTING", False)
+    entries = i18n.browser_catalogue(language, name) if allowed else {}
+    resp = make_response(f"window.i18n && window.i18n.add({json.dumps(entries, ensure_ascii=False)});")
+    resp.mimetype = "application/javascript"
+    resp.add_etag()
+    return resp.make_conditional(request)
+
 @app.route("/realm/<realm_id>")
 def realm_view(realm_id: str):
     state = sanitize_state(engine.get_full_state())
@@ -429,26 +482,29 @@ def _in_game_viewer() -> bool:
         return True
     return any(is_realm_authed(k[len("auth_"):]) for k in request.cookies if k.startswith("auth_") and k != "auth_admin")
 
+def _wiki_refused():
+    return jsonify({"success": False, "message": i18n.tr("Join a delegation to read the Spireopedia.", current_language())}), 401
+
 @app.route("/api/wiki")
 def api_wiki_index():
     if not _in_game_viewer():
-        return jsonify({"success": False, "message": "Join a delegation to read the Spireopedia."}), 401
-    return jsonify({"success": True, **wiki.index_payload()})
+        return _wiki_refused()
+    return jsonify({"success": True, **wiki.index_payload(current_language())})
 
 @app.route("/api/wiki/search")
 def api_wiki_search():
     if not _in_game_viewer():
-        return jsonify({"success": False, "message": "Join a delegation to read the Spireopedia."}), 401
-    hits = wiki.search(request.args.get("q", ""))
+        return _wiki_refused()
+    hits = wiki.search(request.args.get("q", ""), current_language())
     return jsonify({"success": True, "results": [{k: h[k] for k in ("slug", "title", "subtitle", "category")} for h in hits]})
 
 @app.route("/api/wiki/<slug>")
 def api_wiki_article(slug: str):
     if not _in_game_viewer():
-        return jsonify({"success": False, "message": "Join a delegation to read the Spireopedia."}), 401
-    article = wiki.article_payload(slug)
+        return _wiki_refused()
+    article = wiki.article_payload(slug, current_language())
     if not article:
-        return jsonify({"success": False, "message": "Article not found."}), 404
+        return jsonify({"success": False, "message": i18n.tr("Article not found.", current_language())}), 404
     return jsonify({"success": True, "article": article})
 
 def game_in_progress() -> bool:
@@ -469,8 +525,15 @@ def admin_setup():
 
 @app.route("/api/admin/settings", methods=["POST"])
 def api_admin_settings():
+    before = engine.game_language()
     ok, msg = engine.update_settings(request.get_json(silent=True) or {})
-    return jsonify({"success": ok, "message": msg, "settings": engine.settings(as_chosen=True)}), (200 if ok else 400)
+    resp = jsonify({"success": ok, "message": msg, "settings": engine.settings(as_chosen=True)})
+    resp.status_code = 200 if ok else 400
+    # Whoever changes the language of the game wants to see it, whatever this device had chosen before.
+    if engine.game_language() != before:
+        resp.delete_cookie(i18n.COOKIE)
+        g.pop("summit_language", None)
+    return resp
 
 @app.route("/api/admin/setup/new", methods=["POST"])
 def api_admin_setup_new():
@@ -643,6 +706,7 @@ def api_state():
     state = sanitize_state(engine.get_full_state())
     # Which nations this device is logged in to: a lobby can take a phone back to its console (after a restored game, say).
     state["my_realms"] = [r["id"] for r in state["realms"] if r.get("active", True) and is_realm_authed(r["id"])]
+    state["language"] = current_language()     # a screen that is showing another language reloads
     if is_admin() or app.config.get("TESTING", False):
         state["save_status"] = engine.save_status()
         state["interrupted_game"] = engine.interrupted_game()

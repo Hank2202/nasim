@@ -69,6 +69,7 @@ class AdminApp {
     const settings = state.game_settings || {};
     const rules = settings.rules || {};
     // The page is built for one kind of game; if the complexity changed before play began, build it again.
+    if (followLanguage(state)) return;
     if (this._complexity && this._complexity !== rules.id) { window.location.reload(); return; }
     this._complexity = rules.id;
     this._rules = rules;

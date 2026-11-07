@@ -1,0 +1,6 @@
+{# Only for a screen that is not in English: translates what page scripts write. See i18n.py. #}
+{% if language != 'en' %}
+  <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+  <script src="/i18n/{{ language }}/public.js"></script>
+  {% if request.path.startswith('/admin') %}<script src="/i18n/{{ language }}/deck.js"></script>{% endif %}
+{% endif %}

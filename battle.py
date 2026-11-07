@@ -214,6 +214,10 @@ def odds_label(ratio: float) -> str:
     return "Very favourable"
 
 
+def odds_tone(ratio: float) -> str:
+    return "bad" if ratio < 0.85 else "even" if ratio < 1.2 else "good"
+
+
 def scouting(attacker: Dict[str, Any], defender: Dict[str, Any], weather: Dict[str, Any], cfg: Dict[str, Any],
              seed: str, attacker_bonus: float = 0.0) -> Dict[str, Any]:
     """The attacker's scouting report: the balance without luck, blurred (less so with good scouts), and the modifiers that
@@ -228,7 +232,7 @@ def scouting(attacker: Dict[str, Any], defender: Dict[str, Any], weather: Dict[s
     ratio = (a["power"] / d["power"]) * blur if d["power"] > 0 else 9.9
     sides = {"attacker": modifier_lines(attacker, "attacker", terrain, cfg), "defender": modifier_lines(defender, "defender", terrain, cfg)}
     report = reveal(attacker, sides, "attacker", scout, cfg, seed)
-    report.update(label=odds_label(ratio), reach=scout["reach"],
+    report.update(label=odds_label(ratio), tone=odds_tone(ratio), reach=scout["reach"],
                   terrain={"name": terrain.get("name", ""), "note": terrain.get("note", "")},
                   weather={"id": weather.get("id", ""), "name": weather.get("name", ""), "text": weather.get("text", "")})
     return report

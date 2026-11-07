@@ -1,0 +1,826 @@
+{
+  "_meta": {
+    "encyclopedia_name": "Věžopedie",
+    "tagline": "Svobodná encyklopedie kontinentu, kterou sestavují archiváři Neutrální věže",
+    "current_year": "304 PK",
+    "calendar_note": "Roky se počítají PK (po Konvergenci). Summit říší se koná roku 304 PK.",
+    "categories": [
+      "Státy",
+      "Zeměpis",
+      "Zdroje",
+      "Historie",
+      "Instituce"
+    ],
+    "link_syntax": "[[slug]] or [[slug|label]]; unknown slugs render as red links"
+  },
+  "articles": [
+    {
+      "slug": "sylvan-concordat",
+      "title": "Sylvanský konkordát",
+      "category": "Státy",
+      "subtitle": "Obilnice kontinentu",
+      "infobox": {
+        "Hlavní město": "Kořenov",
+        "Vláda": "Konfederační rada strážců sýpek",
+        "Založení": "12 PK (Pakt kořenů)",
+        "Oblast": "[[verdant-lowlands|Zelené nížiny]] a pánev Velkohvozdu",
+        "Heslo": "„Co zakopeme, to si uchováme.“",
+        "Hlavní zdroj": "[[alchemical-grain|Alchymické obilí]]",
+        "Veřejný mandát": "Na konci summitu nesmí žádná země hladovět",
+        "Étos": "Bioharmonie, mistrovství v bylinách, prastaré pakty"
+      },
+      "lead": "**Sylvanský konkordát** je konfederace zemědělských a lesních obcí v pánvi Velkohvozdu a největší producent [[alchemical-grain|alchymického obilí]] na kontinentu. Proslul svými **kořenovými sklepeními**, podzemními sýpkami, v nichž se obilí prorůstá houbovými vlákny, takže vydrží celá desetiletí. Sylvan je mírumilovný, ochotný ke spolupráci a zarytě nezávislý a nikdy neudržoval víc než malou domobranu.",
+      "sections": [
+        {
+          "heading": "Dějiny",
+          "body": "Před [[great-convergence|Velkou konvergencí]] byl Velkohvozd změtí soupeřících lesních klanů. Konvergence pohřbila polovinu jejich polí pod popelem a přeživší zahnala do jeskyní pod lesem. Roku 12 PK se stařešinové devíti klanů sešli u dutého dubu zvaného Krbokořen a přísahali **Pakt kořenů**: žádný klan nikdy nenechá jiný hladovět, dokud bude některá sýpka plná. Pakt je zakládající listinou Konkordátu a dodnes se recituje při každých dožínkách.\n\nRozhodující hodinou Konkordátu byla **Zima otevřených sýpek** (188 PK). Když alchymická rez zničila obilí severních zemí, otevřel Sylvan své sýpky všem státům, i těm, které mu kdysi hrozily. Tento čin zachránil snad dva miliony životů a dal Sylvanu morální autoritu, kterou si žádná armáda nekoupí. Naučil ho však i lekci, na kterou sousedé rádi zapomínají: stát, který živí všechny, stojí za to dobýt. Konvoje, které za té zimy přecházely hranici, doprovázeli vojáci [[aethelgard-dominion|Aethelgardského dominia]], a Aethelgard tuto službu od té doby rád připomíná."
+        },
+        {
+          "heading": "Kořenová sklepení a strážci sýpek",
+          "body": "Kořenové sklepení je komora vytesaná pod lesní půdou, obložená živými kořeny a osetá **mykorhizními houbovými vlákny**. Vlákna prorůstají každý pytel obilí a odsávají vlhkost, ze které vzniká hniloba. Toto umění střeží **strážci sýpek**, řád bylinkářů, kteří každé sklepení každou sezónu kontrolují a zároveň zasedají v radě Konkordátu. Strážce nesmí vlastnit zemědělskou půdu; říká se, že „kdo střeží, nesmí jíst“."
+        },
+        {
+          "heading": "Vláda a společnost",
+          "body": "Sylvan nemá krále ani jinou ústřední moc než Radu strážců sýpek, která zasedá v Kořenově. Rozhoduje se pokud možno shodou, a když to nejde, sčítají se kameny ze sýpek. Občané Sylvanu si cení udržitelnosti, řemesla a vzájemné pomoci; trhy jsou místní a dluhy se po špatné úrodě obvykle odpouštějí.\n\nProtože Sylvan do zbraní investoval jen zřídka, spoléhá na diplomacii a na svou pověst. S [[aethelgard-dominion|Aethelgardem]] má dlouhodobou, i když nesnadnou bezpečnostní dohodu a s [[iron-val-khor|Val-Khorem]], který na obilí ze Sylvanu závisí, aby uživil svá slévárenská města, obchodní partnerství."
+        },
+        {
+          "heading": "Zahraniční vztahy",
+          "body": "Sylvanu se dvoří každá mocnost, ale jen málokterá mu věří, že zůstane neutrální. [[aquila-maritime-league|Aquila]] skupuje jeho přebytky a dál je prodává; [[solaris-ascendancy|Solaris]] považuje Konkordát za morálního spojence; [[umbral-enclave|Umbrijská enkláva]] v Sylvanu vidí jediný velký stát, který se ji nikdy nepokusil ovládnout. Podle [[spire-accords|Dohod Věže]] má Sylvan tradičně dva hlasy ve Shromáždění."
+        },
+        {
+          "heading": "Současná krize",
+          "body": "Po neúrodě roku 303 PK jsou sýpky Sylvanu poslední skutečnou zásobou kontinentu a vlastní vědci Radu varovali, že rez nemusí být ojedinělá. Konkordát proto stojí před bolestnou volbou mezi svým zakládajícím slibem a vlastním přežitím."
+        }
+      ],
+      "see_also": [
+        "verdant-lowlands",
+        "alchemical-grain",
+        "winter-of-open-silos",
+        "aethelgard-dominion"
+      ],
+      "references": [
+        "Pakt kořenů, Krbokořenský rukopis, 12 PK",
+        "Letopisy otevřených sýpek, Archiv Věže, sv. IV",
+        "Příručka strážců sýpek, 6. vydání"
+      ]
+    },
+    {
+      "slug": "iron-val-khor",
+      "title": "Železný Val-Khor",
+      "category": "Státy",
+      "subtitle": "Průmyslové srdce",
+      "infobox": {
+        "Hlavní město": "Khorská Brána",
+        "Vláda": "Republika kovářských kolektivů",
+        "Založení": "58 PK (Charta devíti kováren)",
+        "Oblast": "[[mount-khor-spine|Hřbet hory Khor]] a Mlžná propast",
+        "Heslo": "„Udeř jednou, ale pořádně.“",
+        "Hlavní zdroj": "[[aether-cores|Éterová jádra]]",
+        "Veřejný mandát": "Alespoň čtyři země musí skončit summit se 60 a více jádry",
+        "Étos": "Těžká metalurgie, kovářské kolektivy, průmyslová výroba"
+      },
+      "lead": "**Železný Val-Khor** je průmyslové srdce kontinentu, horská republika postavená kolem jeskyní s vysokými pecemi v hoře Khor. Jeho kováři stabilizují těkavý tekutý éter do pevných [[aether-cores|éterových jader]], energetických matic, které pohánějí města od pobřeží k pobřeží. Val-Khor věří, že klíčem k budoucnosti kontinentu je technologický pokrok a že v něm má vést právě on.",
+      "sections": [
+        {
+          "heading": "Dějiny",
+          "body": "Když [[great-convergence|Konvergence]] rozlomila severní hory, otevřela **Mlžnou propast**, trhlinu chrlící sirný plyn a páru surového éteru. Tři desetiletí zabíjela každého, kdo se přiblížil. Roku 31 PK spustil kovář jménem **Hadrek Vorn** do páry čedičový kelímek na řetězu a vytáhl první pevný krystal éteru. Do jedné generace se horníci a kovodělníci z Hřbetu sdružili do devíti **kovářských kolektivů**, které roku 58 PK podepsaly Chartu devíti kováren a vyhlásily Republiku Val-Khor.\n\nMladá republika zbohatla prodejem energie a pak se málem sama zničila. Roku 203 PK vypukly **Uhlíkové nepokoje**, když kolektivy snížily příděly chleba, aby splnily zakázku na jádra; proti dělníkům bylo povoláno vojsko a Charta byla přepsána tak, aby zaručila každému slévárenskému městu příděl obilí. Odtud pramení dnešní závislost Val-Khoru na obilí ze [[sylvan-concordat|Sylvanu]]."
+        },
+        {
+          "heading": "Průmysl a turbíny Mlžné propasti",
+          "body": "Jen Val-Khor má tlakové, zesílené turbíny, které dokážou průduchy Mlžné propasti využívat, aniž by se katastrofálně zhroutilo potrubí. Postup je stále nebezpečný: **Noc popela** roku 241 PK, kdy přetížená síť v Khorské Hlubině praskla a otrávila celé údolí, zůstává národním traumatem a důvodem, proč má dnes každá slévárna bezpečnostního dozorce odpovědného kolektivům, a ne vedení.\n\nStát, který má 75 a více aktivních jader, odemkne to, čemu ekonomové říkají **technologická efektivita**: energetickou síť tak dokonalou, že jeho obyvatelé spotřebují o čtvrtinu méně obilí. Val-Khor ji dosáhl jako první."
+        },
+        {
+          "heading": "Vláda a společnost",
+          "body": "Moc spočívá v Radě devíti, kde má každý kovářský kolektiv jednoho delegáta, kterého volí tovaryši. Val-Khor si cení řemesla, přesnosti a přímé řeči; jeho občané jsou po celém kontinentu známí svou neomaleností. Společenské postavení se získává u výhně a nejvyšší poctou je Železný kruh, udělovaný kovářům, kteří dokončí mistrovské dílo.\n\nVal-Khor závisí na druhých v základních zásobách a se svými průmyslovými tajemstvími se dělí jen opatrně. Udržuje početné vojsko na ochranu Mlžné propasti, což znepokojuje [[aethelgard-dominion|Aethelgard]] i [[solaris-ascendancy|Solaris]]."
+        },
+        {
+          "heading": "Zahraniční vztahy",
+          "body": "Val-Khor prodává jádra všem, ale vzorec nesvěří skoro nikomu. Hojně obchoduje s [[aquila-maritime-league|Aquilou]], jejíž loďstva vozí jeho zboží, a pravidelně se přou s [[aethelgard-dominion|Aethelgardem]] o severní průsmyky. Jeho vztah se [[solaris-ascendancy|Solarisem]] je vztahem vzájemného respektu a tichého soupeření."
+        }
+      ],
+      "see_also": [
+        "mount-khor-spine",
+        "aether-cores",
+        "cinder-night",
+        "sylvan-concordat"
+      ],
+      "references": [
+        "Charta devíti kováren, 58 PK",
+        "Vorn, H., Poznámky o prvním kelímku",
+        "Zpráva o Noci popela, Archiv Věže"
+      ]
+    },
+    {
+      "slug": "solaris-ascendancy",
+      "title": "Solariská nadvláda",
+      "category": "Státy",
+      "subtitle": "Vůdce kontinentálního řádu",
+      "infobox": {
+        "Hlavní město": "Helion",
+        "Vláda": "Dědičné Sluneční kancléřství s voleným Senátem teras",
+        "Založení": "94 PK (Sluneční mandát)",
+        "Oblast": "[[solar-plateau|Sluneční plošina]] a terasy ze slunečního mramoru",
+        "Heslo": "„Ať je světlo vidět.“",
+        "Hlavní zdroj": "Diplomatická prestiž, dovoz [[echo-silk|ozvěnového hedvábí]]",
+        "Veřejný mandát": "Musí projít alespoň tři rezoluce podporované čtyřmi a více zeměmi",
+        "Étos": "Božský mandát, velkolepá architektura, sluneční záře"
+      },
+      "lead": "**Solariská nadvláda** je nejbohatší a nejprestižnější mocnost kontinentu, která z bílého mramorového města Helionu vládne slunci vystaveným terasám Sluneční plošiny. Solaris stojí po desetiletí v centru kontinentální diplomacie a pomohl vybudovat mnoho institucí, včetně samotné [[neutral-spire|Neutrální věže]], které udržují spolupráci šesti států. Považuje se za přirozeného vůdce, i když ne každé zemi je jeho vliv stejně příjemný.",
+      "sections": [
+        {
+          "heading": "Dějiny",
+          "body": "Solaris začínal jako náboženský řád. Roku 94 PK prohlásila astronomka a kněžka **Ilvara Slunotvůrkyně**, že spolehlivý návrat slunce po [[great-convergence|Konvergenci]] je důkazem božského mandátu přinést řád do rozbitého světa. Její stoupenci obložili terasy Sluneční plošiny zářivým slunečním mramorem a ze Slunečního mandátu se stal stát.\n\nJeho první staletí byla strohá a nesnášenlivá. Roku 119 PK zakázal **Lucernový edikt** soukromé studium éteru bez licence od kancléřství a ty, kdo se nepodřídili, vyhnal. Vyhnanci odešli do Propastné trhliny a založili to, z čeho se stala [[umbral-enclave|Umbrijská enkláva]]; vzpomínka na edikt je důvodem, proč Umbra Solarisu dodnes nedůvěřuje, a proč Solaris dodnes trvá na tom, aby Umbra měla místo u každého stolu.\n\nPo [[salt-war|Solné válce]] to byli diplomaté Solarisu, kdo navrhl neutrální půdu pro jednání. Dohody Věže z roku 150 PK byly z velké části dílem Solarisu a Solaris od té doby plénu předsedá."
+        },
+        {
+          "heading": "Vláda",
+          "body": "Sluneční kancléř pochází z rodu Slunotvůrců, ale zákony musí projít Senátem teras, sborem 120 delegátů volených městskými cechy. V praxi se Solaris řídí precedenty: archiváři kancléřství vedou obrovskou knihovnu všech rozhodnutí od roku 94 PK a donekonečna z ní citují. Solaris je hrdý na svou spravedlnost a jen pomalu mění názor."
+        },
+        {
+          "heading": "Kultura a architektura",
+          "body": "Solaris je známý svou velkolepou architekturou. Sluneční mramor teras ve dne pohlcuje světlo a v noci slabě září, takže Helion vypadá, jako by svítil zevnitř. Občané si zvykli na blahobyt a luxusní zboží, především [[echo-silk|ozvěnové hedvábí]] z [[aquila-maritime-league|Aquily]], je součástí veřejných obřadů. Každoroční Slavnost dlouhého poledne je největším setkáním na kontinentu."
+        },
+        {
+          "heading": "Zahraniční vztahy",
+          "body": "Když má Solaris vysokou reputaci, disponuje ve Shromáždění třemi hlasy, víc než kterýkoli jiný stát. Jeho vedení přijímá [[sylvan-concordat|Sylvan]] a [[aquila-maritime-league|Aquila]], [[aethelgard-dominion|Aethelgard]] ho snáší a [[umbral-enclave|Umbrijská enkláva]] ho nesnáší. Diplomaté Solarisu bedlivě sledují [[iron-val-khor|Val-Khor]], protože vědí, že jeho průmyslová a vojenská síla by jednou mohla ohrozit kontinentální řád."
+        }
+      ],
+      "see_also": [
+        "solar-plateau",
+        "spire-accords",
+        "umbral-enclave",
+        "echo-silk"
+      ],
+      "references": [
+        "Sluneční mandát, Heliónské kancléřství, 94 PK",
+        "Lucernový edikt a jeho důsledky, Archiv Věže",
+        "Slunotvůrkyně, I., Úvahy o návratu světla"
+      ]
+    },
+    {
+      "slug": "umbral-enclave",
+      "title": "Umbrijská enkláva",
+      "category": "Státy",
+      "subtitle": "Hlas periferie",
+      "infobox": {
+        "Hlavní město": "Lucernopád",
+        "Vláda": "Konkláve Sedmi závojů",
+        "Založení": "120 PK (po Lucernovém ediktu)",
+        "Oblast": "[[abyssal-rift|Propastná trhlina]] a podzemní katakomby",
+        "Heslo": "„Žádné jediné světlo.“",
+        "Hlavní zdroj": "Syntéza [[aether-cores|éteru]]",
+        "Veřejný mandát": "Žádná země nesmí skončit summit s více než 90 vojska",
+        "Étos": "Éterická syntéza, špionáž, tajemná mlčenlivost"
+      },
+      "lead": "**Umbrijská enkláva** je malý stát bohatý na zdroje, postavený v Propastné trhlině a pod ní. Dlouho žil ve stínu větších mocností a jeho lid hluboce podezírá každou zemi, která by získala dost moci na to, aby ovládla kontinent. Umbra prosazuje rovnováhu sil, v níž si i menší státy zachovají nezávislost a politický hlas, a pro dovednost svých kryptografů je obávaná i respektovaná.",
+      "sections": [
+        {
+          "heading": "Dějiny",
+          "body": "Umbru založili vyhnanci. Když **Lucernový edikt** Solarisu roku 119 PK postavil mimo zákon studium éteru bez licence, odešlo kolem čtyř tisíc učenců, kovářů a disidentů do Propastné trhliny, propasti tak hluboké, že na její dno nikdy nedopadne sluneční světlo. Čekalo se, že zemřou. Místo toho zjistili, že stěny trhliny vypotívají minerál, ze kterého lze za správných podmínek syntetizovat použitelný éter, a to bez smrtících průduchů severu.\n\nOsadníci postavili v katakombách města, a protože si pamatovali, co jim udělala jediná autorita, sepsali ústavu, která rozdělila moc mezi **Sedm závojů**: sedm rad, z nichž každá drží část každého rozhodnutí a žádná neví, co vědí ostatní. Výsledkem je vláda stejně tajnůstkářská jako stabilní.\n\nZa [[salt-war|Solné války]] prodávala Umbra zpravodajské informace oběma stranám. Hájí to jako rozumnou cestu malého státu, ale žádná ze stran jí to úplně neodpustila."
+        },
+        {
+          "heading": "Kryptografie a zpravodajství",
+          "body": "Umbrijští kryptografové jsou nejlepší na kontinentu. Ze svých uzavřených katakomb sledují mezinárodní jednání i hlasování a snaží se odhalit, kdy některá mocnost potichu hromadí vliv. Hlavním pravidlem umbrijské zahraniční politiky je, že žádný soupeř nesmí nikdy mít tři nebo více hlasů ve Shromáždění, protože tři hlasy dokážou prosadit návrh samy. Vlastní základní síla Umbry ve Shromáždění je jediný hlas a naučila se ho používat s krajní přesností."
+        },
+        {
+          "heading": "Společnost",
+          "body": "Život v katakombách je tichý, spořádaný a soukromý. Při slavnostních příležitostech nosí občané na veřejnosti šedý závoj a považuje se za nezdvořilé ptát se, co kdo pro Enklávu dělá. Největší svátek země, Lucernopád, připomíná den, kdy první vyhnanci dosáhli dna Trhliny a rozsvítili jedinou lampu."
+        },
+        {
+          "heading": "Zahraniční vztahy",
+          "body": "Největší nedůvěru chová Umbra k [[solaris-ascendancy|Solarisu]], jehož edikt ji stvořil. Přátelí se se [[sylvan-concordat|Sylvanem]], jediným velkým státem, o kterém věří, že se ji nikdy nepokusil ovládnout, a opatrně obchoduje s [[iron-val-khor|Val-Khorem]], jehož jádra konkurují umbrijskému syntetickému éteru. Přesto se musí vyhýbat izolaci: malý stát bez přátel je snadnou kořistí."
+        }
+      ],
+      "see_also": [
+        "abyssal-rift",
+        "spire-accords",
+        "solaris-ascendancy",
+        "salt-war"
+      ],
+      "references": [
+        "Ústava Sedmi závojů, 121 PK",
+        "Zpráva o sestupu, Archiv Lucernopádu",
+        "Umbrijské depeše Věži, 141–149 PK"
+      ]
+    },
+    {
+      "slug": "aquila-maritime-league",
+      "title": "Aquilská námořní liga",
+      "category": "Státy",
+      "subtitle": "Křižovatka obchodu",
+      "infobox": {
+        "Hlavní město": "Halkyonský Přístav",
+        "Vláda": "Kupecká oligarchie (Účetní rada)",
+        "Založení": "57 PK (Úmluva přístavů)",
+        "Oblast": "Souostroví [[sea-of-glass|Skleněného moře]] a Šeptající úžiny",
+        "Heslo": "„Každá cesta je účetní kniha.“",
+        "Hlavní zdroj": "[[echo-silk|Ozvěnové hedvábí]]",
+        "Veřejný mandát": "Každá země musí úspěšně obchodovat alespoň se dvěma různými zeměmi",
+        "Étos": "Svobodné oceány, obchodní loďstva, cechy luxusního hedvábí"
+      },
+      "lead": "**Aquilská námořní liga** je obchodní konfederace ostrovních přístavů ve Skleněném moři. Její přístavy spojují téměř každý kout kontinentu a svou prosperitu nevybudovala dobýváním ani přírodními zdroji, ale obchodem, dopravou a úvěrem. Aquila věří, že země, které na sobě hospodářsky závisejí, se méně často stávají nepřáteli.",
+      "sections": [
+        {
+          "heading": "Dějiny",
+          "body": "Po [[great-convergence|Konvergenci]] zůstal jižní oceán hladký jako leštěný obsidián a ostrovy souostroví nebyly víc než sutí. Roku 57 PK podepsali přístavní mistři jedenácti ostrovů **Úmluvu přístavů** a dohodli se na společných majácích, lodivodech a clech. Roku 70 PK si lodivodka jménem **Maren Ostrel** všimla světélkujících můr hnízdících v mořských jeskyních Šeptajících úžin a vypátrala třpytivé kokony, které se staly základem [[echo-silk|ozvěnového hedvábí]]. Cechy hedvábí, které kolem něj vyrostly, Aquilu zbohatily.\n\nSíla Aquily byla podrobena zkoušce v [[salt-war|Solné válce]] (141–149 PK), když se [[aethelgard-dominion|Aethelgard]] pokusil zmocnit mýta v úžinách silou. Aquila nezvítězila zbraněmi, ale tím, že uzavřela kupcům Aethelgardu všechny přístavy; do osmi měsíců byly sýpky Aethelgardu prázdné a jeho generálové vyjednávali ve **Slané Bráně**."
+        },
+        {
+          "heading": "Účetní rada",
+          "body": "Aquilu řídí Účetní rada, sbor nejbohatších kupeckých domů Ligy, jejichž hlasy mají váhu podle zaplacených daní. Kritici tomu říkají oligarchie, zastánci poctivost. Liga také vede kontinentální úvěrové knihy, společné záznamy, podle kterých se vyrovnávají dluhy mezi státy, a má tak vliv, který daleko přesahuje její vojenskou sílu."
+        },
+        {
+          "heading": "Lodě a hedvábí",
+          "body": "Skleněné moře je klidné až zrádně: nefouká vítr, do kterého by se dalo opřít plachtami, ani neteče proud, který by loď nesl, a tak jsou galéry Aquily zvláštní plavidla s mělkým ponorem, která pohánějí vycvičení veslaři. Cechy hedvábí žárlivě střeží své umění a vývoz nespředených kokonů se trestá vyhnanstvím."
+        },
+        {
+          "heading": "Zahraniční vztahy",
+          "body": "Aquila postavila svou bezpečnost na tom, že je užitečná co nejvíce státům: zemi propojenou se všemi je těžké izolovat. Prodává hedvábí [[solaris-ascendancy|Solarisu]], vozí jádra [[iron-val-khor|Val-Khoru]] a kupuje obilí ze [[sylvan-concordat|Sylvanu]]. Jejím jediným otevřeným nepřítelem je dlouhá paměť na Solnou válku, kterou připomíná pokaždé, když Aethelgard navrhne rozšířit své loďstvo."
+        }
+      ],
+      "see_also": [
+        "sea-of-glass",
+        "echo-silk",
+        "salt-war",
+        "spire-accords"
+      ],
+      "references": [
+        "Úmluva přístavů, 57 PK",
+        "Ostrel, M., Deník z můřích jeskyní",
+        "Smlouva ze Slané Brány, 149 PK"
+      ]
+    },
+    {
+      "slug": "aethelgard-dominion",
+      "title": "Aethelgardské dominium",
+      "category": "Státy",
+      "subtitle": "Strážce stability",
+      "infobox": {
+        "Hlavní město": "Aethelhrad",
+        "Vláda": "Feudální monarchie s Radou strážců",
+        "Založení": "33 PK (Přísaha stepi)",
+        "Oblast": "[[northern-steppes|Severní skalnaté stepi]] a pohraniční citadely",
+        "Heslo": "„Hradba je mír.“",
+        "Hlavní zdroj": "Vojenská síla",
+        "Veřejný mandát": "Žádná země nesmí skončit summit se stabilitou pod 50",
+        "Étos": "Vojenská čest, feudální hrady, strategické tvrze"
+      },
+      "lead": "**Aethelgardské dominium** je feudální vojenská mocnost, jejíž řetěz opevněných citadel střeží severní hranici kontinentu. Ze své bouřlivé historie si odnesl pevné přesvědčení, že mír vyžaduje bezpečnost. Udržuje jednu z nejsilnějších armád kontinentu a považuje se za ochránce regionální stability. Některé země tuto roli oceňují, jiné se obávají množství moci soustředěné v rukou Aethelgardu.",
+      "sections": [
+        {
+          "heading": "Dějiny",
+          "body": "Severní stepi byly první zemí, kterou lidé po [[great-convergence|Konvergenci]] osídlili, a poslední, která byla bezpečná. Nájezdníci z rozvrácených vysočin sužovali osadníky celou generaci, dokud roku 33 PK drobná rytířka jménem **Aethel Garrowmere** nesvolala ke kruhu menhirů čtyřicet pánů z kopců a nedala jim přísahat **Přísahu stepi**: každý pán bude bránit hradby svého souseda jako své vlastní. Dominium nese její jméno.\n\nAmbice Aethelgardu přerostly jeho síly v **Solné válce** (141–149 PK), když se jeho vrchní maršál Corvane Brask pokusil vyrvat [[aquila-maritime-league|Aquile]] mýto v Šeptajících úžinách. Tažení ztroskotalo, když Aquila uvalila na přístavy Aethelgardu embargo a jeho sýpky se vyprázdnily. Porážka u **Slané Brány** byla ponižující a zanechala trvalé přesvědčení: Dominium už nikdy nesmí záviset na druhých kvůli jídlu nebo palivu.\n\nRehabilitoval se za **Zimy otevřených sýpek** (188 PK), kdy jeho vojáci doprovázeli konvoje s obilím ze [[sylvan-concordat|Sylvanu]] nepřátelskou krajinou. Aethelgard tuto epizodu připomíná pokaždé, když někdo zpochybní jeho vojenský rozpočet."
+        },
+        {
+          "heading": "Citadely a feudální řád",
+          "body": "Po hřebeni stepi se táhne řetěz sedmnácti citadel, kterým velí dědiční strážci povinní koruně vojenskou službou. Systém je strnulý, ale spolehlivý: Dominium dokáže zmobilizovat rychleji než kterákoli jiná mocnost. Mladý rytíř si místo u dvora nezíská jen narozením, ale tím, že zvládne **Dlouhou hlídku**, zimu o samotě na pohraniční věži.\n\nVojenská doktrína Aethelgardu je jednoduchá. Válka je nejméně pravděpodobná, když žádný soupeř nevěří, že může vyhrát. Vláda považuje drtivou vojenskou převahu za nejlepší záruku míru a pro případ dlouhé krize drží strategické zásoby obilí a jader."
+        },
+        {
+          "heading": "Zahraniční vztahy",
+          "body": "Aethelgard má dlouholetou bezpečnostní dohodu se [[sylvan-concordat|Sylvanem]], hořkou vzpomínku na [[aquila-maritime-league|Aquilu]] a ostražitě sleduje [[iron-val-khor|Val-Khor]], jehož rostoucí vojensko-průmyslovou kapacitu považuje za první skutečnou strategickou hrozbu po desetiletích. Jeho vztah se [[solaris-ascendancy|Solarisem]] je formální a chladný."
+        }
+      ],
+      "see_also": [
+        "northern-steppes",
+        "salt-war",
+        "winter-of-open-silos",
+        "spire-accords"
+      ],
+      "references": [
+        "Přísaha stepi, 33 PK",
+        "Brask, C., Depeše z tažení do úžin",
+        "Smlouva ze Slané Brány, 149 PK"
+      ]
+    },
+    {
+      "slug": "great-convergence",
+      "title": "Velká konvergence",
+      "category": "Historie",
+      "subtitle": "Pohroma, kterou začíná kalendář",
+      "infobox": {
+        "Datum": "Rok 0 PK",
+        "Typ": "Tektonický převrat",
+        "Trvání": "Asi čtyřicet let dotřesů (Temná desetiletí)",
+        "Důsledek": "Vzestup plošin [[neutral-spire|Věže]]; přetvoření každého pobřeží",
+        "Odkaz": "Kalendář počítaný v letech po Konvergenci (PK)"
+      },
+      "lead": "**Velká konvergence** byl tektonický převrat tři staletí před summitem, který stlačil desky kontinentu k sobě, vyzdvihl obsidiánové plošiny [[neutral-spire|Neutrální věže]] nad hladinu moře a přetvořil každé pobřeží, horu i řeku. Všechny dějiny kontinentu začínají jím a kalendář počítá roky PK, tedy po Konvergenci.",
+      "sections": [
+        {
+          "heading": "Událost",
+          "body": "Kronikáři se shodují, že Konvergence trvala devět dní a její hukot byl slyšet na každém břehu. Když skončila, stála tam, kde bývalo otevřené moře, obrovská vyvýšená pánev z černého skla a kolem ní nová pásma sopečných hor. Jižní pobřeží se rozpadlo v souostroví, ze kterého se stalo [[sea-of-glass|Skleněné moře]]; severní pohoří se rozlomilo v Mlžnou propast; a hluboko na západě se otevřel zlom, ze kterého se stala [[abyssal-rift|Propastná trhlina]]."
+        },
+        {
+          "heading": "Temná desetiletí",
+          "body": "Zhruba čtyřicet let se kontinent otřásal dotřesy a popel zatemnil nebe tak dokonale, že slunce bylo jen pověstí. Hlad a mor zabily podle většiny odhadů dva ze tří obyvatel. Přeživší se shromáždili na místech, která se dala bránit, a z nich vzešly zárodky šesti států."
+        },
+        {
+          "heading": "Důsledky",
+          "body": "Konvergence po sobě zanechala tři věci, které utvářely každý pozdější věk. Zaprvé [[verdant-lowlands|Zelené nížiny]] bohaté na naplaveniny, kde [[alchemical-grain|alchymické obilí]] klíčí dvakrát rychleji než kdekoli jinde. Zadruhé surový éter, který uniká z nových propastí a je základem [[aether-cores|éterových jader]]. Zatřetí vzpomínku na nedostatek, kterou si nese každý stát a která vysvětluje velkou část jeho politiky."
+        }
+      ],
+      "see_also": [
+        "neutral-spire",
+        "verdant-lowlands",
+        "timeline-of-the-continent"
+      ],
+      "references": [
+        "Devět dní: svědectví očitých svědků, Archiv Věže",
+        "Letopisy Temných desetiletí, sv. I–III"
+      ]
+    },
+    {
+      "slug": "neutral-spire",
+      "title": "Neutrální věž",
+      "category": "Instituce",
+      "subtitle": "Sídlo summitu",
+      "infobox": {
+        "Typ": "Neutrální město a sněmovní sál",
+        "Poloha": "Střed obsidiánových plošin Věže",
+        "Postaveno": "150–163 PK",
+        "Spravuje": "Archiváři Věže (nestranní)",
+        "Účel": "Sídlo Shromáždění podle [[spire-accords|Dohod Věže]]"
+      },
+      "lead": "**Neutrální věž**, nazývaná také Věž dohod, je věžové město z černého sopečného skla ve středu kontinentu, postavené na plošinách, které vyzdvihla [[great-convergence|Velká konvergence]]. Nepatří žádnému státu. Existuje jen proto, aby hostila jednání, a je stálým sídlem Shromáždění.",
+      "sections": [
+        {
+          "heading": "Stavba",
+          "body": "Po [[salt-war|Solné válce]] navrhli diplomaté [[solaris-ascendancy|Solarisu]] místo, které si nemůže přivlastnit žádná armáda. Věž stavěli třináct let dělníci ze všech šesti států a každý stát odpovídal za jedno patro. Výsledkem je spirála šesti galerií, každá zdobená ve stylu jednoho státu, která stoupá ke kruhovému Sálu pléna na vrcholu."
+        },
+        {
+          "heading": "Archiváři",
+          "body": "Věž spravují archiváři, sbor písařů, kteří při vstupu přísahají, že se zřeknou veškeré národní loajality. Vedou zápisy, sčítají hlasy a spravují Archiv Věže, jediný úplný záznam dějin kontinentu. Archivář, u kterého se zjistí, že nadržoval některému státu, přijde o šedou šerpu a je z Věže vyhnán."
+        },
+        {
+          "heading": "Sál pléna",
+          "body": "V Sále pléna stojí šest lavic v kruhu kolem středového pódia. Návrhy se čtou z pódia a hlasuje se jmenovitě; váha každého státu závisí na jeho reputaci. Akustika sálu je proslule dokonalá: šepot na pódiu je slyšet na každé lavici, a proto tam ještě nikdy nikdo šeptat nesměl."
+        }
+      ],
+      "see_also": [
+        "spire-accords",
+        "great-convergence",
+        "solaris-ascendancy"
+      ],
+      "references": [
+        "Záznamy o stavbě Věže, 150–163 PK",
+        "Řád archivářů, 3. vydání"
+      ]
+    },
+    {
+      "slug": "spire-accords",
+      "title": "Dohody Věže",
+      "category": "Instituce",
+      "subtitle": "Zakládací charta a pravidlo dvou podporovatelů",
+      "infobox": {
+        "Podepsáno": "150 PK (Charta ratifikována 151 PK)",
+        "Místo": "[[neutral-spire|Neutrální věž]]",
+        "Signatáři": "Všech šest států",
+        "Klíčové ustanovení": "Pravidlo dvou podporovatelů pro návrhy",
+        "Podnět": "[[salt-war|Solná válka]] a Půlnoční clo"
+      },
+      "lead": "**Dohody Věže** jsou zakládající dohody dnešního kontinentu, podepsané roku 150 PK na konci [[salt-war|Solné války]]. Jejich ústřední listina, **Zakládací charta**, vytvořila Shromáždění a procedurální pravidla, podle kterých vládne. Mezi nimi je proslulé **pravidlo dvou podporovatelů**: žádný zákon ani prohlášení nesmí jít k formálnímu hlasování, pokud ho během pracovní části nepodpořily alespoň dva suverénní státy. Návrhy bez podpory zaniknou bez hlasování.",
+      "sections": [
+        {
+          "heading": "Vznik",
+          "body": "Bezprostřední příčinou Charty bylo **Půlnoční clo** z roku 149 PK. V posledních týdnech války uvalil jediný delegát, sám a bez dalších, trestní clo na obilí pro celý kontinent, a to na pozdním nočním zasedání, které většina států už opustila. Než ho bylo možné zrušit, způsobilo hladomor ve dvou provinciích. Delegáti, kteří Chartu sepsali, se shodli, že žádné opatření už nikdy nesmí záviset na jediném hlasu. Výsledkem bylo pravidlo dvou podporovatelů."
+        },
+        {
+          "heading": "Ustanovení",
+          "body": "Charta stanoví tyto zásady.\n\nZaprvé, každý stát má základní počet hlasů ve Shromáždění, upravený podle jeho diplomatické reputace: státy s nejvyšší reputací mají největší váhu. Zadruhé, návrhy potřebují dva podporovatele, než se dostanou k projednání. Zatřetí, Věž je trvale neutrální: nesmí do ní vstoupit žádná armáda a žádný stát v ní nesmí mít posádku. Začtvrté, a na to se zapomíná častěji, Charta vyžaduje, aby se Shromáždění sešlo na mimořádném zasedání, kdykoli některému státu hrozí hladomor."
+        },
+        {
+          "heading": "Hlasy ve Shromáždění",
+          "body": "V praxi se rovnováha sil ve Shromáždění točí kolem hrstky hlasů. Stát, který má tři hlasy, dokáže prosadit návrh sám, a proto [[umbral-enclave|Umbrijská enkláva]] počty tak bedlivě sleduje. Další pravidlo dává jeden hlas navíc státu s největším celkovým hmotným bohatstvím; sepsali ho obchodníci z [[aquila-maritime-league|Aquily]] a od jeho vzniku čelí kritice."
+        }
+      ],
+      "see_also": [
+        "neutral-spire",
+        "salt-war",
+        "umbral-enclave"
+      ],
+      "references": [
+        "Zakládací charta, 151 PK",
+        "Rozpravy prvního pléna, Archiv Věže"
+      ]
+    },
+    {
+      "slug": "salt-war",
+      "title": "Solná válka",
+      "category": "Historie",
+      "subtitle": "Konflikt, ze kterého vzešly Dohody Věže",
+      "infobox": {
+        "Datum": "141–149 PK",
+        "Místo": "[[sea-of-glass|Skleněné moře]] a Šeptající úžiny",
+        "Výsledek": "Smlouva ze Slané Brány; Dohody Věže",
+        "Strany": "[[aethelgard-dominion|Aethelgard]] proti [[aquila-maritime-league|Aquile]] (s umbrijským zpravodajstvím na obou stranách)",
+        "Velitelé": "Vrchní maršál Corvane Brask; mistryně účetní knihy Ilsa Quenn"
+      },
+      "lead": "**Solná válka** (141–149 PK) byla jediná rozsáhlá válka mezi státy v zaznamenaných dějinách kontinentu. Vedly ji spolu [[aethelgard-dominion|Aethelgard]] a [[aquila-maritime-league|Aquila]] o právo vybírat mýto od lodí se solí plujících Šeptajícími úžinami a skončila **smlouvou ze Slané Brány**.",
+      "sections": [
+        {
+          "heading": "Příčiny",
+          "body": "Sůl byla nezbytná ke konzervaci obilí a téměř všechna přicházela po moři. Když Aquila zvýšila mýto v úžinách, Aethelgard, který neměl vlastní pobřeží, prohlásil, že taková cena je hospodářským škrcením. Vrchní maršál Corvane Brask vedl roku 141 PK výpravné vojsko proti úžinám."
+        },
+        {
+          "heading": "Válka",
+          "body": "Brask dobyl severní břeh hned první léto. Mistryně účetní knihy Ilsa Quenn, která se soupeři nemohla vyrovnat na souši, nařídila uzavřít všechny přístavy Ligy lodím, kupcům i bankéřům Aethelgardu. Do osmi měsíců byly sýpky dominia prázdné a jeho armáda hladověla. [[umbral-enclave|Umbrijská enkláva]] dodávala zpravodajské informace oběma stranám, a tím válku prodloužila skoro o dva roky."
+        },
+        {
+          "heading": "Smlouva ze Slané Brány",
+          "body": "Mír byl podepsán roku 149 PK v aquilském přístavu Slaná Brána. Aethelgard se stáhl; Aquila snížila mýto a přijala nezávislý celní úřad. Delegáti se dohodli, že se sejdou na neutrálním místě a projednají trvalý mír. Z tohoto setkání vzešly [[spire-accords|Dohody Věže]] a stavba [[neutral-spire|Neutrální věže]]."
+        }
+      ],
+      "see_also": [
+        "spire-accords",
+        "aethelgard-dominion",
+        "aquila-maritime-league"
+      ],
+      "references": [
+        "Smlouva ze Slané Brány, 149 PK",
+        "Brask, C., Depeše z tažení do úžin",
+        "Quenn, I., Uzavřené přístavy"
+      ]
+    },
+    {
+      "slug": "winter-of-open-silos",
+      "title": "Zima otevřených sýpek",
+      "category": "Historie",
+      "subtitle": "Velký hladomor z rzi roku 188 PK",
+      "infobox": {
+        "Datum": "188–189 PK",
+        "Příčina": "Alchymická rez",
+        "Zasažené oblasti": "Sever a střed kontinentu",
+        "Pomoc poskytl": "[[sylvan-concordat|Sylvanský konkordát]] v doprovodu vojáků [[aethelgard-dominion|Aethelgardu]]"
+      },
+      "lead": "**Zima otevřených sýpek** (188–189 PK) byl hladomor na celém kontinentu, který způsobila alchymická rez a který skončil, když [[sylvan-concordat|Sylvanský konkordát]] otevřel svá kořenová sklepení všem státům.",
+      "sections": [
+        {
+          "heading": "Rez",
+          "body": "Na jaře roku 188 PK se přes severní obilná pole přehnala na jih spora barvy rzi, která během jediné noci proměnila zralé [[alchemical-grain|alchymické obilí]] v prach. Na podzim byla úroda ve třech státech úplně zničená."
+        },
+        {
+          "heading": "Otevření sýpek",
+          "body": "Strážci sýpek Sylvanu se sešli v Kořenově a proti radě svých pokladníků odhlasovali, že své zásoby rozdají bez placení každému státu, který o ně požádá. Konvoje vozů s obilím křižovaly kontinent pod ochranou vojáků [[aethelgard-dominion|Aethelgardu]]. Podle odhadů se tak zachránily dva miliony životů."
+        },
+        {
+          "heading": "Odkaz",
+          "body": "Zima dala Sylvanu obrovskou morální autoritu, ale také naučila kontinent, že sýpky jediného státu jsou jeho poslední obrannou linií. Odtud pochází doktrína nouzového přerozdělení ve Shromáždění i trvání Aethelgardu na strategických zásobách."
+        }
+      ],
+      "see_also": [
+        "sylvan-concordat",
+        "alchemical-grain",
+        "aethelgard-dominion"
+      ],
+      "references": [
+        "Letopisy otevřených sýpek, Archiv Věže, sv. IV"
+      ]
+    },
+    {
+      "slug": "cinder-night",
+      "title": "Noc popela",
+      "category": "Historie",
+      "subtitle": "Únik z reaktoru v Khorské Hlubině roku 241 PK",
+      "infobox": {
+        "Datum": "241 PK",
+        "Místo": "Khorská Hlubina, [[mount-khor-spine|Hřbet hory Khor]]",
+        "Příčina": "Přetížená éterová síť",
+        "Důsledek": "Systém bezpečnostních dozorců; pravidla mezinárodních inspekcí"
+      },
+      "lead": "**Noc popela** roku 241 PK byla nejhorší průmyslová katastrofa v dějinách kontinentu: přetížená éterová síť ve slévárně v Khorské Hlubině praskla a na jedno údolí [[iron-val-khor|Val-Khoru]] pršel žhnoucí popel.",
+      "sections": [
+        {
+          "heading": "Únik",
+          "body": "Spěšná zakázka na jádra hnala slévárnu v Khorské Hlubině za hranici bezpečnosti. O půlnoci síť selhala a uzavřený éter unikl ve valícím se mraku, který na čtyřicet mil kolem spálil pole a otrávil vodu."
+        },
+        {
+          "heading": "Následky",
+          "body": "V následujících týdnech zemřelo přes devět tisíc lidí. Kolektivy v reakci zavedly systém bezpečnostních dozorců, sbor inspektorů odpovědných dělníkům, ne vedení. Val-Khor také poprvé a naposledy pozval do svých sléváren zahraniční pozorovatele a položil tak základ kontinentálních bezpečnostních norem."
+        }
+      ],
+      "see_also": [
+        "iron-val-khor",
+        "aether-cores"
+      ],
+      "references": [
+        "Zpráva o Noci popela, Archiv Věže"
+      ]
+    },
+    {
+      "slug": "verdant-lowlands",
+      "title": "Zelené nížiny",
+      "category": "Zeměpis",
+      "subtitle": "Obilnice kontinentu",
+      "infobox": {
+        "Poloha": "Kolem [[neutral-spire|plošin Věže]]",
+        "Terén": "Naplavené roviny a lesní pánev (Velkohvozd)",
+        "Patří k": "[[sylvan-concordat|Sylvanský konkordát]]",
+        "Pozoruhodnost": "Bahno z Konvergence, ve kterém obilí klíčí dvakrát rychleji"
+      },
+      "lead": "**Zelené nížiny** jsou rozlehlé naplavené roviny a lesní pánve kolem [[neutral-spire|plošin Věže]], včetně pánve Velkohvozdu. Přirozené usazeniny bahna, které zanechala [[great-convergence|Konvergence]], umožňují [[alchemical-grain|alchymickému obilí]] klíčit dvakrát rychleji než kdekoli jinde na kontinentu, a proto je tato oblast obilnicí kontinentu.",
+      "sections": [
+        {
+          "heading": "Zeměpis",
+          "body": "Nížiny leží v závětří plošin Věže, chráněné před severními větry a zavlažované řekami, které stékají z obsidiánových vysočin. Jižní polovinu pokrývá Velkohvozd, les obrovských kořenů a spletitých korun, kde se nacházejí kořenová sklepení Sylvanu."
+        },
+        {
+          "heading": "Podnebí a rizika",
+          "body": "Nížiny ohrožují choroby rostlin, hejna kobylek, sucho a požáry. Alchymickou rez roku 188 PK, která zpustošila sever, zastavili na hranicích nížin strážci sýpek: vypálili protipožární pás dlouhý sto mil."
+        }
+      ],
+      "see_also": [
+        "sylvan-concordat",
+        "alchemical-grain"
+      ],
+      "references": [
+        "Průzkum nížin, Archiv Věže"
+      ]
+    },
+    {
+      "slug": "mount-khor-spine",
+      "title": "Hřbet hory Khor",
+      "category": "Zeměpis",
+      "subtitle": "Sopečné hory a Mlžná propast",
+      "infobox": {
+        "Poloha": "Severní hory",
+        "Patří k": "[[iron-val-khor|Železný Val-Khor]]",
+        "Pozoruhodnosti": "Jeskyně s vysokými pecemi, Mlžná propast",
+        "Nebezpečí": "Zemětřesení, sirný plyn, zával dolů"
+      },
+      "lead": "**Hřbet hory Khor** je pásmo sopečných hor na severu kontinentu, domov sléváren [[iron-val-khor|Val-Khoru]]. Pohoří rozděluje **Mlžná propast**, geotermální trhlina, ze které uniká přehřátý sirný plyn a pára čistého surového éteru.",
+      "sections": [
+        {
+          "heading": "Mlžná propast",
+          "body": "Propast se otevřela za [[great-convergence|Velké konvergence]] a tři desetiletí byla smrtící. Průduchy dokážou bez katastrofálního zhroucení potrubí využít jen tlakové, zesílené turbíny, které navrhli kováři z Val-Khoru. Pára se kondenzuje na tekutý éter a potrubím se vede do jeskyní sléváren."
+        },
+        {
+          "heading": "Jeskyně sléváren",
+          "body": "Uvnitř hory kováři stabilizují tekutý éter na pevná [[aether-cores|éterová jádra]] v kelímcích ze sopečného čediče. Jeskyně osvětluje a vytápí záře roztavené horniny; některé spodní komory jsou na lidskou práci příliš horké a střídají se v nich čety v chlazených oblecích."
+        }
+      ],
+      "see_also": [
+        "iron-val-khor",
+        "aether-cores",
+        "cinder-night"
+      ],
+      "references": [
+        "Průzkumy Mlžné propasti, Archiv cechů z Khorské Brány"
+      ]
+    },
+    {
+      "slug": "sea-of-glass",
+      "title": "Skleněné moře",
+      "category": "Zeměpis",
+      "subtitle": "Jižní oceán klidný jako zrcadlo",
+      "infobox": {
+        "Poloha": "Jih kontinentu",
+        "Patří k": "[[aquila-maritime-league|Aquilská námořní liga]]",
+        "Pozoruhodnosti": "Klidná hladina, Šeptající úžiny, světélkující hedvábné můry",
+        "Nebezpečí": "Tsunami, bouřlivý příboj"
+      },
+      "lead": "**Skleněné moře** je jižní oceán kontinentu, pojmenovaný podle své hladiny klidné jako zrcadlo. Leží v něm souostroví [[aquila-maritime-league|Aquily]] a úzké **Šeptající úžiny**, kde hnízdí vzácné světélkující hedvábné můry, z jejichž kokonů se vyrábí [[echo-silk|ozvěnové hedvábí]].",
+      "sections": [
+        {
+          "heading": "Plavba",
+          "body": "Bez větru a téměř bez proudů je Skleněné moře pro plachetnice neschůdné. Plavba vyžaduje zvláštní galéry s mělkým ponorem, které pohánějí vycvičení veslaři. Lodivodi si plavební cesty mezi útesy pamatují zpaměti a jejich znalost je cechovním tajemstvím."
+        },
+        {
+          "heading": "Šeptající úžiny",
+          "body": "Úžiny se tak jmenují proto, že ozvěna v jejich mořských jeskyních nese šepot na míle daleko. V jeskyních žijí hedvábné můry, jejichž kokony ve tmě slabě třpytí. Úžiny jsou nejužším a nejcennějším průlivem kontinentu a příčinou [[salt-war|Solné války]]."
+        },
+        {
+          "heading": "Pohromy",
+          "body": "Klid moře je klamný. Souostroví leží na subdukčním zlomu a velké vlny tsunami, které ostrovy čas od času zasáhnou, přicházejí bez varování zpod zrcadlové hladiny."
+        }
+      ],
+      "see_also": [
+        "aquila-maritime-league",
+        "echo-silk",
+        "salt-war"
+      ],
+      "references": [
+        "Almanach lodivodů Skleněného moře"
+      ]
+    },
+    {
+      "slug": "abyssal-rift",
+      "title": "Propastná trhlina",
+      "category": "Zeměpis",
+      "subtitle": "Hluboká propast Umbrijské enklávy",
+      "infobox": {
+        "Poloha": "Západ kontinentu",
+        "Patří k": "[[umbral-enclave|Umbrijská enkláva]]",
+        "Hloubka": "Několik mil; na dno nikdy nedopadne sluneční světlo",
+        "Pozoruhodnost": "Stěny, které vypotívají minerál, podzemní katakomby"
+      },
+      "lead": "**Propastná trhlina** je obrovský zlom na západě kontinentu, který otevřela [[great-convergence|Velká konvergence]]. Její dno leží ve věčné tmě. [[umbral-enclave|Umbrijská enkláva]] postavila podél jejích stěn síť měst a katakomb.",
+      "sections": [
+        {
+          "heading": "Plačící stěny",
+          "body": "Stěnami Trhliny prosakuje tmavý, třpytivý minerál, ze kterého lze syntetizovat použitelný éter, a to bez smrtících průduchů severu. Tento postup objevili první vyhnanci a stojí na něm hospodářství Umbry."
+        },
+        {
+          "heading": "Katakomby",
+          "body": "Pod dnem trhliny leží bludiště tunelů. Kryptografové Umbry pracují v uzavřených síních a Sedm závojů se schází v místnostech bez oken. Návštěvníky vedou lucerny, protože jakékoli jiné světlo je v hlavním městě zakázané."
+        }
+      ],
+      "see_also": [
+        "umbral-enclave",
+        "aether-cores"
+      ],
+      "references": [
+        "Zpráva o sestupu, Archiv Lucernopádu"
+      ]
+    },
+    {
+      "slug": "northern-steppes",
+      "title": "Severní stepi",
+      "category": "Zeměpis",
+      "subtitle": "Skalnaté pohraničí Aethelgardského dominia",
+      "infobox": {
+        "Poloha": "Sever kontinentu",
+        "Patří k": "[[aethelgard-dominion|Aethelgardské dominium]]",
+        "Pozoruhodnosti": "Sedmnáct pohraničních citadel, kruhy menhirů",
+        "Podnebí": "Studené, suché zimy; chudá půda"
+      },
+      "lead": "**Severní stepi** jsou vysoko položené skalnaté pastviny na severním okraji kontinentu, které brání sedmnáct citadel [[aethelgard-dominion|Aethelgardského dominia]]. Půda je tenká a zimy dlouhé, a proto se Aethelgard vždycky těžko uživil sám.",
+      "sections": [
+        {
+          "heading": "Pohraniční citadely",
+          "body": "Citadely stojí podél hřebene stepi, každá na dohled té další, takže maják zapálený na jedné je vidět ze všech. V zimě drží stráž jednotliví hlídkující v kamenných věžích; této zkoušce se říká Dlouhá hlídka."
+        },
+        {
+          "heading": "Menhiry",
+          "body": "Po stepích jsou roztroušené kruhy menhirů, postavené ještě před Konvergencí. Právě u jednoho takového kruhu svolala roku 33 PK Aethel Garrowmere čtyřicet pánů z kopců, aby složili Přísahu stepi."
+        }
+      ],
+      "see_also": [
+        "aethelgard-dominion",
+        "salt-war"
+      ],
+      "references": [
+        "Průzkumy severního pohraničí"
+      ]
+    },
+    {
+      "slug": "solar-plateau",
+      "title": "Sluneční plošina",
+      "category": "Zeměpis",
+      "subtitle": "Terasy Solarisu ze slunečního mramoru",
+      "infobox": {
+        "Poloha": "Východ kontinentu",
+        "Patří k": "[[solaris-ascendancy|Solariská nadvláda]]",
+        "Pozoruhodnost": "Terasy ze slunečního mramoru, které v noci září",
+        "Podnebí": "Suché, slunečné, téměř bez mraků"
+      },
+      "lead": "**Sluneční plošina** je vysoko položená suchá tabule na východě kontinentu, kterou [[solaris-ascendancy|Solariská nadvláda]] proměnila v terasy ze zářivého slunečního mramoru. Kámen ve dne pohlcuje sluneční světlo a v noci slabě září, takže město Helion vypadá, jako by svítilo zevnitř.",
+      "sections": [
+        {
+          "heading": "Sluneční mramor",
+          "body": "Sluneční mramor je světlý, průsvitný kámen, který se láme jen na plošině. Terasy z něj, stavěné po dvě staletí, sestupují po svahu až do rovin pod ní a jsou největším architektonickým dílem kontinentu."
+        },
+        {
+          "heading": "Podnebí",
+          "body": "Plošina má víc slunečných dní než kterákoli jiná oblast, ale málo deště. Solaris spoléhá na dovoz obilí a na podzemní cisterny, které zachycují zimní sníh."
+        }
+      ],
+      "see_also": [
+        "solaris-ascendancy"
+      ],
+      "references": [
+        "Průzkum teras, Heliónské kancléřství"
+      ]
+    },
+    {
+      "slug": "alchemical-grain",
+      "title": "Alchymické obilí",
+      "category": "Zdroje",
+      "subtitle": "Potrava a míza života kontinentu",
+      "infobox": {
+        "Typ": "Základní plodina",
+        "Původ": "Pěstuje se v [[verdant-lowlands|Zelených nížinách]]",
+        "Spotřeba": "Základně 20 jednotek na stát za kolo; 15 s technologickou efektivitou",
+        "Slabina": "Alchymická rez; hniloba"
+      },
+      "lead": "**Alchymické obilí** je základní plodina kontinentu, odolná obilnina, jejíž semena vstřebávají stopové minerály z bahna Konvergence. Živí každý stát a jeho nedostatek stojí u kořene téměř každé politické krize v dějinách kontinentu.",
+      "sections": [
+        {
+          "heading": "Pěstování",
+          "body": "V bahenních usazeninách, které zanechala [[great-convergence|Konvergence]], klíčí obilí dvakrát rychleji než kdekoli jinde. Mimo nížiny roste špatně a vyžaduje pečlivou péči."
+        },
+        {
+          "heading": "Skladování",
+          "body": "Neošetřené obilí shnije do dvou let. Bylinkáři ze [[sylvan-concordat|Sylvanu]] prorůstají obilí v podzemních kořenových sklepeních mykorhizními houbovými vlákny, díky kterým vydrží celá desetiletí."
+        },
+        {
+          "heading": "Hladomor",
+          "body": "Stát, kterému se vyprázdní sýpky, rychle ztrácí vitalitu a propadá občanským nepokojům. Kontinent zažil dva velké hladomory: Temná desetiletí po Konvergenci a [[winter-of-open-silos|Zimu otevřených sýpek]] roku 188 PK."
+        }
+      ],
+      "see_also": [
+        "sylvan-concordat",
+        "verdant-lowlands",
+        "winter-of-open-silos"
+      ],
+      "references": [
+        "Pojednání o alchymickém obilí, nakladatelství strážců sýpek"
+      ]
+    },
+    {
+      "slug": "aether-cores",
+      "title": "Éterová jádra",
+      "category": "Zdroje",
+      "subtitle": "Energie a technologie",
+      "infobox": {
+        "Typ": "Energetická matice",
+        "Výrobce": "[[iron-val-khor|Val-Khor]] (z průduchů Mlžné propasti); [[umbral-enclave|Umbra]] (syntéza)",
+        "Klíčová hranice": "75 jader odemyká technologickou efektivitu",
+        "Nebezpečí": "Přetížení a únik"
+      },
+      "lead": "**Éterová jádra** jsou pevné krystalické energetické matice stabilizované z tekutého éteru, které pohánějí města, dílny i loďstva po celém kontinentu. Stát s velkou zásobou jader dokáže provozovat svůj průmysl s pozoruhodnou efektivitou.",
+      "sections": [
+        {
+          "heading": "Výroba",
+          "body": "Kováři z [[iron-val-khor|Val-Khoru]] získávají surový éter z průduchů Mlžné propasti a stabilizují ho v kelímcích ze sopečného čediče. [[umbral-enclave|Umbrijští]] chemici vyrábějí podobný materiál z minerálu [[abyssal-rift|Propastné trhliny]]."
+        },
+        {
+          "heading": "Technologická efektivita",
+          "body": "Stát, který má 75 a více aktivních jader, odemkne technologickou efektivitu: jeho energetická síť je tak výkonná, že obyvatelstvo spotřebuje o čtvrtinu méně obilí."
+        },
+        {
+          "heading": "Nebezpečí",
+          "body": "Přetížené sítě mohou prasknout, jak se stalo v [[cinder-night|Noci popela]] roku 241 PK."
+        }
+      ],
+      "see_also": [
+        "iron-val-khor",
+        "umbral-enclave",
+        "cinder-night"
+      ],
+      "references": [
+        "Příručka stabilizace jader, nakladatelství cechů z Khorské Brány"
+      ]
+    },
+    {
+      "slug": "echo-silk",
+      "title": "Ozvěnové hedvábí",
+      "category": "Zdroje",
+      "subtitle": "Luxus a diplomacie",
+      "infobox": {
+        "Typ": "Luxusní textilie",
+        "Zdroj": "Kokony světélkujících hedvábných můr ze Šeptajících úžin",
+        "Výrobce": "Cechy hedvábí [[aquila-maritime-league|Aquily]]",
+        "Použití": "Dvorské obřady, dary, diplomatické laskavosti"
+      },
+      "lead": "**Ozvěnové hedvábí** je vzácné jemné vlákno tkané z kokonů světélkujících hedvábných můr ze Šeptajících úžin. Je ceněné na dvorech všech států a je zároveň luxusním zbožím i platidlem diplomacie.",
+      "sections": [
+        {
+          "heading": "Výroba",
+          "body": "Můry hnízdí jen v mořských jeskyních [[sea-of-glass|Šeptajících úžin]]. Cechy hedvábí z [[aquila-maritime-league|Aquily]] sbírají kokony v noci, spřádají je v temných dílnách a tkají z nich látku, která slabě září ještě celé roky."
+        },
+        {
+          "heading": "Diplomatické využití",
+          "body": "Dar hedvábných rouch je tradicí každého pléna. Veřejná gala placená hedvábím slouží k ovlivňování názorů a k usmiřování křivd, a když bohatý stát přestane dopřávat luxus, považuje se to za známku politického úpadku."
+        }
+      ],
+      "see_also": [
+        "aquila-maritime-league",
+        "sea-of-glass",
+        "solaris-ascendancy"
+      ],
+      "references": [
+        "Ostrel, M., Deník z můřích jeskyní"
+      ]
+    },
+    {
+      "slug": "timeline-of-the-continent",
+      "title": "Dějiny kontinentu v datech",
+      "category": "Historie",
+      "subtitle": "Klíčová data, 0–304 PK",
+      "infobox": {
+        "Rozsah": "Rok 0 PK až 304 PK",
+        "Kalendář": "PK (po Konvergenci)"
+      },
+      "lead": "Tento přehled uvádí hlavní události v dějinách kontinentu od [[great-convergence|Velké konvergence]] po zahájení Summitu říší.",
+      "sections": [
+        {
+          "heading": "Raná léta (0–100 PK)",
+          "body": "**0 PK** [[great-convergence|Velká konvergence]].\n\n**0–40 PK** Temná desetiletí.\n\n**12 PK** Pakt kořenů: založení [[sylvan-concordat|Sylvanského konkordátu]].\n\n**31 PK** Hadrek Vorn vytahuje z Mlžné propasti první krystal éteru.\n\n**33 PK** Přísaha stepi: založení [[aethelgard-dominion|Aethelgardského dominia]].\n\n**57 PK** Úmluva přístavů: založení [[aquila-maritime-league|Aquilské námořní ligy]].\n\n**58 PK** Charta devíti kováren: založení [[iron-val-khor|Val-Khoru]].\n\n**70 PK** Maren Ostrel objevuje hedvábné můry.\n\n**94 PK** Sluneční mandát: založení [[solaris-ascendancy|Solarisu]]."
+        },
+        {
+          "heading": "Prostřední léta (100–250 PK)",
+          "body": "**119 PK** Lucernový edikt.\n\n**120 PK** Založení [[umbral-enclave|Umbrijské enklávy]].\n\n**141–149 PK** [[salt-war|Solná válka]].\n\n**149 PK** Půlnoční clo; smlouva ze Slané Brány.\n\n**150 PK** Podepsání [[spire-accords|Dohod Věže]]; začíná stavba [[neutral-spire|Neutrální věže]].\n\n**163 PK** Dokončení Věže.\n\n**188–189 PK** [[winter-of-open-silos|Zima otevřených sýpek]].\n\n**203 PK** Uhlíkové nepokoje ve Val-Khoru.\n\n**241 PK** [[cinder-night|Noc popela]]."
+        },
+        {
+          "heading": "Současnost (250–304 PK)",
+          "body": "**298 PK** Poslední plně úspěšná sklizeň.\n\n**303 PK** Neúroda: nejhorší neúroda za celou generaci.\n\n**304 PK** V Neutrální věži se schází Summit říší."
+        }
+      ],
+      "see_also": [
+        "great-convergence",
+        "spire-accords"
+      ],
+      "references": [
+        "Chronologie Archivu Věže, 6. vydání"
+      ]
+    }
+  ]
+}

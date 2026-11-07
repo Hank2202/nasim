@@ -1214,6 +1214,7 @@
     }
   ],
   "game_settings_defaults": {
+    "language": "en",
     "scenario": "famine",
     "complexity": "full",
     "working_session_seconds": 1200,
@@ -1925,7 +1926,7 @@
         "One secret mission per nation, with a clear goal of its own.",
         "One kind of Assembly: every turn ends with the same single vote, with no debate clock per motion in Turn 3.",
         "No Vitality to watch, and no Grain Rationing decree.",
-        "Phones show how far your Grain will last and whether your missions are on track."
+        "Phones show how far your Grain will last, whether your missions are on track and exactly how the continent is judged."
       ],
       "quiz": false,
       "war": false,
@@ -1934,6 +1935,7 @@
       "one_secret_mission": true,
       "hide_vitality": true,
       "live_hints": true,
+      "verdict_rules": true,
       "hidden_decrees": [
         "relief"
       ],

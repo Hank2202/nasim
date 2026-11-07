@@ -860,6 +860,13 @@ def test_simplified_game_from_start_to_finish(server, browser):
     expect(sylvan.locator("#cores-val")).to_have_text("35")
     expect(sylvan.locator("#silk-val")).to_have_text("40")
     expect(sylvan.locator("#food-forecast")).to_contain_text("enough Grain for the 3 meals left")
+    sylvan.locator(".ribbon-help").click()
+    expect(sylvan.locator(".sheet-card .verdict-rules")).to_contain_text("every nation has at least 50 Stability")
+    expect(sylvan.locator(".sheet-card .verdict-rules")).to_contain_text("average Standing of all nations is at least 50")
+    sylvan.keyboard.press("Escape")
+    sylvan.locator(".vital[data-explain=stability]").click()
+    expect(sylvan.locator(".sheet-card")).to_contain_text("every nation needs at least 50 at the end")
+    sylvan.keyboard.press("Escape")
     expect(umbra.locator("#food-forecast")).to_contain_text("enough Grain")
     expect(sylvan.locator("#public-hint .mission-hint")).to_contain_text("On track")
     sylvan.locator("#toggle-agenda-btn").click()
@@ -994,6 +1001,8 @@ def test_simplified_projector_and_guide(server, browser):
     guide.goto(server + "/overview")
     expect(guide.locator("#guide-difficulty")).to_contain_text("Game complexity: Simplified")
     expect(guide.locator("#guide-difficulty")).to_contain_text("The Great Famine")
+    guide.locator("[data-tab=tab-pacing]").click()
+    expect(guide.locator("#tab-pacing .verdict-rules")).to_contain_text("at most one nation is out of Grain")
     guide.locator("[data-tab=tab-assembly]").click()
     expect(guide.locator("#tab-assembly")).to_contain_text("Share the Grain")
     expect(guide.locator("#tab-assembly")).not_to_contain_text("Lore Quiz")
@@ -1212,6 +1221,7 @@ def test_the_phone_explains_itself(server, browser):
     sheet = sylvan.locator(".sheet-card")
     expect(sheet).to_contain_text("How a turn goes")
     expect(sheet).to_contain_text("The Assembly votes")
+    expect(sheet).not_to_contain_text("How the continent is judged")      # the full game keeps the thresholds to itself
     expect(sheet.locator("a", has_text="full game guide")).to_have_attribute("href", "/overview")
     sheet.locator("#help-sound").click()
     expect(sheet.locator("#help-sound")).to_have_text("Turn sounds on")
@@ -1704,3 +1714,82 @@ def test_autosave_really_runs_during_a_game(browser):
         admin.close()
     finally:
         fast.crash()
+
+
+# --------------------------------------------------------------------------------------------- languages and the map
+def test_czech_chosen_on_the_setup_screen_and_one_phone_in_english(server, browser):
+    """The facilitator picks the game's language on the setup screen; a phone can still choose its own."""
+    admin = admin_page(browser, server)
+    errors = watch_errors(admin)
+    try:
+        full_game(admin)
+        admin.goto(server + "/admin/setup")
+        admin.locator("input[name=language][value=cs]").check()
+        admin.locator("#setup-actions .btn-secondary").click()                    # Save settings
+        expect(admin.locator("html")).to_have_attribute("lang", "cs", timeout=6000)
+        expect(admin.locator(".page-title")).to_have_text("Nastavení summitu")
+        expect(admin.locator("input[name=language][value=cs]")).to_be_checked()
+
+        phone = browser.new_context(**PHONE).new_page()
+        phone_errors = watch_errors(phone)
+        phone.goto(server + "/")
+        expect(phone.locator(".join-lede")).to_contain_text("Klepněte na svůj stát")
+        expect(phone.locator(".lang-switch a.active")).to_have_text("Čeština")
+        # This phone would rather read English: only this phone changes
+        phone.locator(".lang-switch a", has_text="English").click()
+        expect(phone.locator(".join-lede")).to_contain_text("Tap your nation")
+        phone.locator(".lobby-realm-card", has_text="Sylvan Concordat").click()
+        phone.fill("#login-realm-pin", "1001")
+        phone.locator("#pin-login-form button[type=submit]").click()
+        expect(phone.locator(".ribbon-name strong")).to_have_text("Sylvan Concordat")
+        expect(phone.locator(".bottom-nav-item").first).to_contain_text("Realm")
+        # ...and back to Czech from its help sheet, on the same screen
+        phone.locator(".ribbon-help").click()
+        phone.locator(".sheet-actions .lang-switch a", has_text="Čeština").click()
+        expect(phone.locator(".bottom-nav-item").first).to_contain_text("Stát")
+        expect(phone).to_have_url(re.compile(r"/realm/sylvan$"))
+
+        projector = browser.new_page(viewport={"width": 1280, "height": 720})
+        projector_errors = watch_errors(projector)
+        projector.goto(server + "/projector")
+        expect(projector.locator("html")).to_have_attribute("lang", "cs")
+        # Back to English: the projector, which follows the game, reloads in English by itself
+        api(admin, "/api/admin/settings", {"language": "en"})
+        expect(projector.locator("html")).to_have_attribute("lang", "en", timeout=8000)
+        assert errors == [] and phone_errors == [] and projector_errors == []
+        projector.close()                   # an open projector keeps animating and slows the tests after this one
+        phone.context.close()
+    finally:
+        api(admin, "/api/admin/settings", {"language": "en"})
+        admin.context.close()
+
+
+def test_the_map_shows_traffic_only_for_real_trades(server, browser):
+    """No caravans or ships at the start; each accepted trade sends one, a few per pair at most; a new game clears the roads."""
+    admin = admin_page(browser, server)
+    reset_game(admin)
+    projector = browser.new_page(viewport={"width": 1280, "height": 720})
+    errors = watch_errors(projector)
+    projector.goto(server + "/projector")
+    projector.wait_for_function("window.projApp && window.projApp.map && window.projApp.map.routeNet")
+    projector.wait_for_timeout(1200)
+    assert projector.evaluate("projApp.map.caravans.length") == 0
+    assert projector.evaluate("projApp.map.shipsAtSea") == 0
+
+    def trade(sender, receiver):
+        api(admin, "/api/trade/create", {"sender_id": sender, "receiver_id": receiver, "offer_resource": "silk", "offer_amount": 1,
+                                         "request_resource": "silk", "request_amount": 1})
+        pending = next(t for t in state(admin)["trades"] if t["status"] == "pending")
+        api(admin, f"/api/trade/{pending['id']}/respond", {"action": "accept", "realm_id": receiver})
+
+    trade("sylvan", "val_khor")
+    projector.wait_for_function("projApp.map.caravans.length === 1", timeout=6000)
+    for _ in range(4):
+        trade("sylvan", "val_khor")
+    projector.wait_for_timeout(1500)
+    assert projector.evaluate("projApp.map.caravans.filter(c => [c.a, c.b].sort().join() === 'sylvan,val_khor').length") == 3
+    reset_game(admin)
+    projector.wait_for_function("projApp.map.caravans.length === 0", timeout=6000)
+    assert errors == []
+    projector.close()
+    admin.context.close()

@@ -1,0 +1,6 @@
+{# One device's own language; without a choice it follows the game (setup screen). Page headers use the short form. #}
+<nav class="lang-switch{{ ' compact' if compact }}" aria-label="Language">
+  {%- for code, name in languages.items() %}
+  <a href="/lang/{{ code }}" lang="{{ code }}" hreflang="{{ code }}" title="{{ name }}"{% if code == language %} class="active" aria-current="true"{% endif %}>{{ ('CZ' if code == 'cs' else code | upper) if compact else name }}</a>
+  {%- endfor %}
+</nav>

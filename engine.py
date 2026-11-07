@@ -25,6 +25,7 @@ import uuid
 from typing import Dict, List, Optional, Any, Tuple
 from models import Database, DEFAULT_REALMS
 import battle as battle_rules
+import i18n
 import motions as motion_rules
 import wiki
 
@@ -158,7 +159,8 @@ class SummitEngine:
     # Difficulty has two settings. The scenario says how hard the world is (storyline, Grain eaten, news, events).
     # The complexity says which mechanics the game has; these are its rules, with "full" as the default for old saves.
     FULL_RULES = {"name": "Full game", "quiz": True, "war": True, "free_motions": True, "grand_plenary": True,
-                  "one_secret_mission": False, "hide_vitality": False, "live_hints": False, "hidden_decrees": [], "starting_bonus": {}}
+                  "one_secret_mission": False, "hide_vitality": False, "live_hints": False, "verdict_rules": False,
+                  "hidden_decrees": [], "starting_bonus": {}}
 
     def rules(self, meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """The rules of the game being played. A game keeps the complexity it was dealt with (meta.complexity)."""
@@ -168,6 +170,11 @@ class SummitEngine:
         if key not in known:
             key = "full"
         return {**self.FULL_RULES, **known.get(key, {}), "id": key}
+
+    def game_language(self) -> str:
+        """The language screens start in, unless a device has chosen its own (see i18n.py)."""
+        stored = (self.db.get_state("settings", {}) or {}).get("language")
+        return stored or load_scenario_config().get("game_settings_defaults", {}).get("language", i18n.SOURCE_LANGUAGE)
 
     def settings(self, as_chosen: bool = False) -> Dict[str, Any]:
         """The settings in force. `as_chosen` gives what the facilitator chose on the setup screen, before the rules of
@@ -229,6 +236,8 @@ class SummitEngine:
                     if number not in changes:
                         current.pop(number, None)
             elif key == "complexity" and value in cfg.get("complexities", {}):
+                current[key] = value
+            elif key == "language" and value in i18n.LANGUAGES:
                 current[key] = value
         self.db.set_state("settings", current)
         # The complexity is part of how a game is dealt: it takes effect at once before play begins, otherwise with the next new summit.
@@ -688,7 +697,11 @@ class SummitEngine:
             return False, "That is not a Summit of Realms save."
         if self.game_in_progress():
             self.autosave(label="Before restore", force=True)   # so a mistaken restore can be undone
+        language = (self.db.get_state("settings", {}) or {}).get("language")
         self.db.restore_all(snapshot)
+        # The language belongs to the room, not to the save: bringing a game back does not change what screens speak.
+        restored_settings = {k: v for k, v in (self.db.get_state("settings", {}) or {}).items() if k != "language"}
+        self.db.set_state("settings", {**restored_settings, "language": language} if language else restored_settings)
         meta = snapshot.get("meta", {})
         # A save holds a moment in the past. Every clock waits, with the time it had left, until the facilitator resumes:
         # nothing may run out while the room is getting back on its feet, and no vote or debate may be jumped over.
@@ -2627,7 +2640,9 @@ class SummitEngine:
             self.autosave(label=f"Before server restart · Turn {meta.get('current_turn', 1)}", force=True, kind=kind)
         elif meta and self._setup_differs_from_config():
             self.autosave(label="Before server restart · prepared game", force=True, kind="setup")
-        self.db.set_state("settings", {})
+        # The language belongs to the room, not to the game: it is not something a restart should take back.
+        language = (self.db.get_state("settings", {}) or {}).get("language")
+        self.db.set_state("settings", {"language": language} if language else {})
         self.reset_simulation()
         self.clear_realm_sessions()
 
@@ -2636,7 +2651,7 @@ class SummitEngine:
         cfg = load_scenario_config()
         defaults = dict(cfg.get("game_settings_defaults", {}))
         defaults = {**cfg.get("scenarios", {}).get(defaults.get("scenario"), {}).get("suggested", {}), **defaults}
-        if any(defaults.get(key) != value for key, value in (self.db.get_state("settings", {}) or {}).items()):
+        if any(defaults.get(key) != value for key, value in (self.db.get_state("settings", {}) or {}).items() if key != "language"):
             return True
         config_realms = {r["id"]: r for r in cfg.get("realms") or []}
         for r in self.db.get_state("realms", []) or []:

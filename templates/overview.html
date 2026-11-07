@@ -203,6 +203,13 @@
           <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
             After the last vote of Turn 3 nations eat one last time and the summit ends. Secret missions are revealed, the continent's verdict and the honours are announced, and the rankings go up on the projector.
           </p>
+          {% if rules.verdict_rules %}
+          <ul class="verdict-rules" style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5; margin: 8px 0 0 18px;">
+            <li><b>🟢 Stable continent:</b> at the end no nation is out of Grain, every nation has at least 50 Stability and the average Standing of all nations is at least 50. No nation's Stability may ever have fallen to 0.</li>
+            <li><b>🟡 Fragile peace:</b> at the end at most one nation is out of Grain, and no nation's Stability has ever fallen to 0.</li>
+            <li><b>🔴 Continental crisis:</b> two or more nations are out of Grain at the end, or a nation's Stability fell to 0.</li>
+          </ul>
+          {% endif %}
         </div>
       </div>
     </div>

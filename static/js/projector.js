@@ -46,6 +46,7 @@ class ProjectorApp {
   }
 
   renderState(state) {
+    if (followLanguage(state)) return;
     const { meta, realms, proposals, news_feed } = state;
     this.settings = state.game_settings || {};
     this.rules = this.settings.rules || {};
@@ -207,10 +208,10 @@ class ProjectorApp {
     if (verdictTitle) verdictTitle.innerText = outcome.continental_verdict;
     let verdictColor = '#ef4444';
     let verdictIcon = '🔴';
-    if (outcome.continental_verdict === 'STABLE CONTINENT') {
+    if (outcome.continental_grade === 'legendary') {
       verdictColor = '#10b981';
       verdictIcon = '🟢';
-    } else if (outcome.continental_verdict === 'FRAGILE PEACE') {
+    } else if (outcome.continental_grade === 'moderate') {
       verdictColor = '#f59e0b';
       verdictIcon = '🟡';
     }

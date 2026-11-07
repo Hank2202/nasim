@@ -253,6 +253,7 @@ Untick a nation on the setup screen and the game adapts:
 
 Logging in before a game has started opens this page first; afterwards the **Setup** link at the top of the command deck leads back to it. The facilitator login lasts 24 hours in that browser; **Log out** ends it. Steps 1 to 3 are all a facilitator has to decide; the rest stays closed under *Fine-tuning* with its values in the title. The nations table applies at once; the other settings wait for **Save settings**, and the page says so when something is not saved yet. The page covers:
 
+0. **Language of the game** — English or Čeština, for every screen that has not chosen its own (see [Languages](#-languages-english-and-czech)).
 1. **Game complexity** — the Full game or the Simplified game (see [Two difficulty settings](#-two-difficulty-settings)). Fields for mechanics the chosen game does not have disappear from this page.
 2. **Scenario** — *Open summit* (no scripted crises), *The Great Famine* (the MGV 2026 storyline: Round 2 border incident, Round 3 famine and Continental Food Acts) or *Armageddon* (the famine storyline plus 3 large disasters and 10 larger small events per turn). Choosing a scenario fills in its numbers under *Scenario numbers*.
 3. **Nations** — which nations play, **how hard each nation is to play** (Easy, Medium or Hard with the reason; see below), delegates per nation (sets the seats and, in the full game, how many secret missions it gets), and passcodes (edit one, or **Shuffle passcodes**).
@@ -265,6 +266,30 @@ Under *Fine-tuning*:
 **Save settings** changes the running game from now on, except its complexity: before play has begun a new complexity applies at once (phones follow by themselves), afterwards it waits for the next new summit. Once a game is under way the page also offers **Start a new summit with these settings**, which begins a fresh game and keeps the nations and passcodes (the old game stays on the Saves tab). Defaults live in `game_settings_defaults` in `scenario_config.json`.
 
 **When time runs out** a bell sounds on every screen and, with *Move on automatically* ticked (default), the game advances by itself: working session → Assembly vote (or straight to the next turn when no motion is on the ballot) → short pause → next turn … → results after Turn 3. In the Grand Plenary each motion's debate rolls into its vote and then into the next motion. Untick it to only sound the bell and move on by hand.
+
+## 🌐 Languages: English and Czech
+
+The whole game speaks English or Czech: phones, the command deck, the setup screen, the projector (map labels included), the Guide, the passcode cards, the results report, every news item and message, the secret missions, the quiz and the Spireopedia.
+
+- **For everyone:** choose *Language of the game* at the top of the setup screen and save. Open screens switch by themselves. English is the default (`game_settings_defaults.language` in `scenario_config.json`). The choice survives a server restart and is not changed by restoring a save.
+- **For one device:** the *English · Čeština* switch on the join page, in a phone's `?` help, in the page header (deck, setup, Guide) and in the projector's settings. A device that has chosen keeps its language until it chooses again; the others follow the game. Changing the game's language on the setup screen clears that browser's own choice, so the facilitator sees what they chose.
+- Names are Czech too: *Sylvanský konkordát, Železný Val-Khor, Solariská nadvláda, Umbrijská enkláva, Aquilská námořní liga, Aethelgardské dominium*, towns such as *Kořenov, Lucernopád, Slaná Brána*, the *Mlžná propast* and *Velkohvozd*; the Spireopedia is the *Věžopedie* and years are counted *PK* (po Konvergenci). Invented personal names that mean nothing in English (Hadrek Vorn, Maren Ostrel) stay as they are; *Ilvara Sunmaker* becomes *Ilvara Slunotvůrkyně*. The resources are *obilí, jádra, hedvábí, vojsko, vitalita, reputace, stabilita*; nations are *státy*, motions *návrhy*, the Assembly *Shromáždění*, the Grand Plenary *Velké plénum*, as in the facilitator notes.
+
+**How it works.** The code, the database and save files stay in English. Texts are translated on their way to a screen, from catalogues of “English text → translation” in `translations/cs/`:
+
+| File | What | Sent to browsers? |
+| :--- | :--- | :--- |
+| `config.json` | nations, missions (secret ones too), motions, events, scenarios | no |
+| `messages.json` | everything the server says: news, results, errors, mission checks | no |
+| `pages.json` | the text of the pages | no |
+| `quiz.json` | questions, options and explanations | no |
+| `public.json` | what the page scripts write on phones and the projector | yes, to everyone |
+| `deck.json` | what the command deck's scripts write | only to the facilitator |
+| `lore_articles.json` | the Czech Spireopedia (same slugs and links as `lore_articles.json`) | as articles, like the English |
+
+`i18n.py` translates pages and game data on the server (`app.py`, after each request); `static/js/i18n.js` translates what page scripts write, as they write it. Both use the same rules. A catalogue key can hold placeholders: `{n}`, `{n2}`… match a number, `{amount}` a number with a resource (“+5 Grain”), `{name}` or `{…_name}` a name in capitals, any other `{word}` free text within one sentence. What a placeholder matched is translated as well, and `{n:hlas|hlasy|hlasů}` picks the Czech plural. Symbols around a text (arrows, ticks, a colon) need no entry of their own, and a long text is translated sentence by sentence or around ` · `, `:`, `,` when the whole is not in the catalogue. **Never put a secret in `public.json` or `deck.json`**: `test_i18n.py` checks that no secret mission and no quiz answer is in them.
+
+To change a Czech text, edit its value in `translations/cs/`; the server picks the change up without a restart. When you add English text to the game, add its Czech too (the tests list missing quiz and mission translations; for the screens, play a game in Czech and look for English). Another language is another folder next to `cs` plus its name in `LANGUAGES` in `i18n.py`.
 
 ## 🧩 Two difficulty settings
 
@@ -280,7 +305,8 @@ Difficulty is two independent choices on the setup screen. Any complexity can be
 | Secret missions | one per delegate (up to 4) | **one per nation**, a clear goal about the nation itself (so it works whoever else is playing) |
 | Assembly | quick vote in Turns 1–2, Grand Plenary in Turn 3 (a debate and a vote per motion) | the **same single vote** at the end of every turn |
 | Vitality | a value to watch, with the Grain Rationing decree | not played: no bar, no decree, not in the news |
-| Help on the phone | none | how far the Grain lasts ("15 Grain short for the 2 meals left"), and whether each mission is **on track** right now |
+| Help on the phone | none | how far the Grain lasts ("15 Grain short for the 2 meals left"), whether each mission is **on track** right now, and **exactly how the continent is judged** (in the `?` help, on the Stability, Standing and Grain numbers and in the Guide) |
+| How the continent is judged | the players find out at the end | stated in advance: a **stable continent** needs no nation out of Grain at the end, every nation at 50 Stability or more and an average Standing of 50 or more, and no nation's Stability ever at 0; a **fragile peace** allows one nation out of Grain; two or more, or a Stability of 0, mean a **continental crisis** |
 
 The Spireopedia stays available in the Wiki tab of the Simplified game for anyone curious, but nothing depends on it. Trading, decrees, co-sponsors and weighted votes are the same in both games, and so are the famine, the verdict and the debrief. The complexity is stored in `complexities` in `scenario_config.json`, one switch per mechanic, and a game keeps the complexity it was dealt with (`meta.complexity`).
 
@@ -379,6 +405,7 @@ venv/bin/python -m pytest -q
 ```
 
 - `test_summit.py`: engine and API tests. They run on a throwaway database, never on the `summit.db` of a real game.
+- `test_i18n.py`: the translator's rules, that the Czech catalogues cover the missions, scenarios and quiz, that the files sent to browsers hold no secrets, and how the game and a device choose their language.
 - `test_e2e.py`: click-through tests. They start the real server with logins enforced and drive a headless browser as phones, the facilitator and the projector, covering joining, trading, motions and voting, private motions and game-master questions, the quiz, the wiki, roster changes, the debrief, the report, the setup screen and every screen on a phone. For saves they really kill the server in the middle of a game (and wipe its database, like a hosted restart), start it again and check that the game and the phones come back. They are skipped if Playwright isn't installed.
 - `tools/simulate.py`: plays hundreds of complete summits through the real engine with computer-controlled delegations (cooperative or selfish, different quiz skill, scenario and complexity) and prints how often the continent ends stable and how often each mission is met. Use it to check balance after changing numbers in `scenario_config.json`; `--simplified` compares the two difficulty settings.
 
@@ -392,4 +419,5 @@ venv/bin/python -m pytest -q
 | `templates/cards.html` | passcode cards to print (`/admin/cards`) |
 | `static/js/projector.js` | projector screen |
 | `static/js/map.js` | projector's animated map (Living Atlas) |
+| `static/js/i18n.js` | every page when it is not in English: translates what scripts write (see [Languages](#-languages-english-and-czech)) |
 | `static/style.css` | all pages; the header comment explains its sections |

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ language }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -102,21 +102,21 @@
     <tr><th>Time</th><th>From</th><th>To</th><th>Gives</th><th>Asks for</th><th>Result</th><th>Message</th></tr>
     {% for t in r.trades %}
     <tr><td>{{ t.time }}</td><td>{{ t.from }}</td><td>{{ t.to }}</td><td>{{ t.gives }}</td><td>{{ t.asks }}</td>
-      <td class="{{ 'ok' if t.status == 'accepted' else 'bad' if t.status == 'declined' else '' }}">{{ t.status }}</td><td>{{ t.note }}</td></tr>
+      <td class="{{ 'ok' if t.status == 'accepted' else 'bad' if t.status == 'declined' else '' }}">{{ {'accepted': 'Accepted', 'declined': 'Declined', 'pending': 'Pending', 'cancelled': 'Cancelled'}.get(t.status, t.status) }}</td><td>{{ t.note }}</td></tr>
     {% else %}<tr><td colspan="7" class="sub">No trades.</td></tr>{% endfor %}
   </table>
 
   <h2>Motions and votes ({{ r.motions | length }})</h2>
   {% for m in r.motions %}
   <div class="motion {{ m.status }}">
-    <b>{{ m.title }}</b> <span class="pill">{{ m.type }}</span> <span class="pill">{{ m.status }}</span> <span class="pill">turn {{ m.turn }}</span>
+    <b>{{ m.title }}</b> <span class="pill">{{ m.type }}</span> <span class="pill">{{ {'draft': 'Needs a co-sponsor', 'qualified': 'On the ballot', 'passed': 'Passed', 'rejected': 'Rejected'}.get(m.status, m.status) }}</span> <span class="pill">turn {{ m.turn }}</span>
     <div class="sub">Tabled by {{ m.tabled_by }} · sponsors: {{ m.sponsors | join(', ') }}</div>
     <div>{{ m.terms }}</div>
     {% for line in m.effect %}<div class="sub">If passed: {{ line }}</div>{% endfor %}
     {% if m.result %}<div class="sub">Carried out: {{ m.result }}</div>{% endif %}
     {% if m.answer %}<div><b>Game masters' answer:</b> {{ m.answer }}</div>{% endif %}
     {% if m.votes %}
-    <div>{% for v in m.votes %}<span class="pill">{{ v.nation }}: {{ v.choice }}{% if v.choice != 'abstain' %} ({{ v.weight }}){% endif %}</span> {% endfor %}</div>
+    <div>{% for v in m.votes %}<span class="pill">{{ v.nation }}: {{ {'support': 'For', 'oppose': 'Against', 'abstain': 'Abstained'}.get(v.choice, v.choice) }}{% if v.choice != 'abstain' %} ({{ v.weight }}){% endif %}</span> {% endfor %}</div>
     {% endif %}
   </div>
   {% else %}<p class="sub">No motions were tabled.</p>{% endfor %}
@@ -126,7 +126,7 @@
   <table>
     <tr><th>Turn</th><th>Attacker</th><th>Defender</th><th>Outcome</th><th>Winner</th><th>Spoils</th><th>Power (attacker / defender)</th><th>Weather · ground</th></tr>
     {% for b in r.battles %}
-    <tr><td>{{ b.turn }}</td><td>{{ b.attacker }}</td><td>{{ b.defender }}</td><td>{{ b.outcome | replace('_', ' ') }}</td><td>{{ b.winner or '—' }}</td>
+    <tr><td>{{ b.turn }}</td><td>{{ b.attacker }}</td><td>{{ b.defender }}</td><td>{{ {'attacker_crushing': 'Crushing victory', 'attacker_victory': 'Victory', 'attacker_narrow': 'Narrow victory', 'stalemate': 'Bloody stalemate', 'defender_narrow': 'Narrow defence', 'defender_victory': 'Attack repelled', 'defender_crushing': 'Army routed'}.get(b.outcome, b.outcome | replace('_', ' ')) }}</td><td>{{ b.winner or '—' }}</td>
       <td>{{ b.spoils }}</td><td class="num">{{ b.attacker_power }} / {{ b.defender_power }}</td><td>{{ b.weather }} · {{ b.terrain }}</td></tr>
     {% endfor %}
   </table>

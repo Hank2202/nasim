@@ -94,6 +94,12 @@ class RealmApp {
         <li><b>Your people eat${s.grain_consumption ? ` ${s.grain_consumption} Grain` : ''}.</b> Then the next turn begins.</li>
       </ol>
       <p>After Turn ${s.max_turns || 3} the results are counted: how many of your goals you met, and how the whole continent fares.</p>
+      ${r.verdict_rules ? `<h3>How the continent is judged</h3>
+      <ul class="verdict-rules">
+        <li><b>🟢 Stable continent:</b> at the end no nation is out of Grain, every nation has at least 50 Stability and the average Standing of all nations is at least 50. No nation's Stability may ever have fallen to 0.</li>
+        <li><b>🟡 Fragile peace:</b> at the end at most one nation is out of Grain, and no nation's Stability has ever fallen to 0.</li>
+        <li><b>🔴 Continental crisis:</b> two or more nations are out of Grain at the end, or a nation's Stability fell to 0.</li>
+      </ul>` : ''}
       <h3>Where to find things</h3>
       <dl>
         <dt>Realm</dt><dd>Your numbers, your goals, your decrees${r.war ? ' and the war room' : ''}.</dd>
@@ -104,6 +110,7 @@ class RealmApp {
         ${r.quiz ? '<dt>Quiz</dt><dd>Win or lose resources, one question at a time.</dd>' : ''}
       </dl>
       <div class="sheet-actions">
+        ${document.getElementById('language-switch').innerHTML}
         <a class="btn btn-secondary btn-block" href="/overview" target="_blank" rel="noopener">Read the full game guide</a>
         <button type="button" class="btn btn-secondary btn-block" id="help-sound">${synth.muted ? 'Turn sounds on' : 'Turn sounds off'}</button>
         <button type="button" class="btn btn-danger btn-block" id="help-leave">Leave this delegation</button>
@@ -121,13 +128,13 @@ class RealmApp {
     const r = this.rules || {}, s = this._settings || {};
     const eat = this._me && this._me.tech_efficiency_unlocked ? Math.round(s.grain_consumption * 0.75) : s.grain_consumption;
     const texts = {
-      grain: ['🌾 Grain', `Food. Your people eat ${eat} Grain at the end of every turn. If your silos run empty you are starving: ${r.hide_vitality ? '−20 Stability' : '−25 Vitality and −20 Stability'}, and a nation still starving at the end hurts the whole continent's result.`],
+      grain: ['🌾 Grain', `Food. Your people eat ${eat} Grain at the end of every turn. If your silos run empty you are starving: ${r.hide_vitality ? '−20 Stability' : '−25 Vitality and −20 Stability'}, and a nation still starving at the end hurts the whole continent's result.${r.verdict_rules ? ' One nation out of Grain at the end turns a stable continent into a fragile peace; two make it a crisis.' : ''}`],
       cores: ['⚙️ Cores', 'Aether Cores run your industry. They pay for the Civil Guard and for mustering regiments. With 75 Cores your nation becomes Efficient: it eats a quarter less Grain for the rest of the summit.'],
       silk: ['🧵 Silk', 'Luxury and influence. It pays for the Grand Gala and the Forges. Your wealth is Grain + Cores + Silk, and the single richest nation has one extra vote in the Assembly.'],
       military: ['⚔️ Military', `Your army. Some missions measure it, and the news may make it matter.${r.war ? ' It decides most of a battle.' : ''}`],
       vitality: ['❤️ Vitality', 'How healthy your people are. Starving costs 25. In a battle a healthy nation fights a little better.'],
-      standing: ['🤝 Standing', `How the other nations see you. It counts towards how the whole continent fares at the end.${r.war ? ' Starting a war costs Standing.' : ''}`],
-      stability: ['🏛️ Stability', 'How calm your people are. Starving costs 20. It counts towards how the whole continent fares at the end, and a people at 0 is a disaster for everyone.'],
+      standing: ['🤝 Standing', `How the other nations see you. It counts towards how the whole continent fares at the end.${r.verdict_rules ? ' For a stable continent the average Standing of all nations must be at least 50.' : ''}${r.war ? ' Starting a war costs Standing.' : ''}`],
+      stability: ['🏛️ Stability', `How calm your people are. Starving costs 20. It counts towards how the whole continent fares at the end, and a people at 0 is a disaster for everyone.${r.verdict_rules ? ' For a stable continent every nation needs at least 50 at the end; a nation that ever falls to 0 makes it a crisis.' : ''}`],
     };
     const t = texts[key];
     if (t) showSheet({ title: t[0], html: `<p>${escapeHtml(t[1])}</p>` });
@@ -491,6 +498,7 @@ class RealmApp {
     if (realm && realm.active === false) { window.location.href = '/'; return; }
     // The facilitator changed the complexity before play began: this page was built for the other kind of game.
     this.rules = (state.game_settings || {}).rules || {};
+    if (followLanguage(state)) return;
     if (this._complexity && this._complexity !== this.rules.id) { window.location.reload(); return; }
     this._complexity = this.rules.id;
     this._lastRealms = realms;
@@ -886,7 +894,7 @@ class RealmApp {
     if (!myEval) return;
 
     const esc = escapeHtml;
-    const look = { 'STABLE CONTINENT': ['🟢', 'stable'], 'FRAGILE PEACE': ['🟡', 'fragile'] }[outcome.continental_verdict] || ['🔴', 'crisis'];
+    const look = { legendary: ['🟢', 'stable'], moderate: ['🟡', 'fragile'] }[outcome.continental_grade] || ['🔴', 'crisis'];
     const result = (title, goal, achieved, explanation) => `<div class="mission-result ${achieved ? 'met' : 'missed'}">
         <div class="row-between"><strong>${esc(title)}</strong><span class="status-pill ${achieved ? 'ok' : 'bad'}">${achieved ? 'Met' : 'Not met'}</span></div>
         ${goal ? `<p class="mission-result-goal">${esc(goal)}</p>` : ''}
@@ -1308,10 +1316,9 @@ class RealmApp {
       return;
     }
     const m = p.modes || {};
-    const oddsClass = l => (/favourable/i.test(l) && !/un/i.test(l) ? 'good' : (/Unfavourable|Very unfavourable/.test(l) ? 'bad' : 'even'));
     const way = (key, title) => m[key] ? `<div class="way-card ${m[key].can_attack ? '' : 'off'}">
         <div class="way-title">${title}</div>
-        <div class="scout-odds ${oddsClass(m[key].label)}">${esc(m[key].label)}</div>
+        <div class="scout-odds ${esc(m[key].tone || 'even')}">${esc(m[key].label)}</div>
         <p class="small">${esc(m[key].summary)}</p>${m[key].can_attack ? '' : `<p class="small warn">${esc(m[key].reason)}</p>`}</div>` : '';
     box.innerHTML = `<div class="scout-box">
       <div class="scout-note">Your scouts' guess against ${esc(p.defender_name)}. It can be wrong, and chance still decides part of the fight.</div>

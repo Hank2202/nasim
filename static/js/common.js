@@ -227,6 +227,13 @@ function clockStage(meta) {
 const RESOURCE_ICONS = { grain: '🌾', cores: '⚙️', silk: '🧵', military: '⚔️' };
 const RESOURCE_SHORT = { grain: 'Grain', cores: 'Cores', silk: 'Silk', military: 'Military', vitality: 'Vitality', standing: 'Standing', stability: 'Stability' };
 
+// A screen showing another language than it should (the facilitator changed the game's language) reloads.
+function followLanguage(state) {
+  if (!state || !state.language || state.language === document.documentElement.lang) return false;
+  window.location.reload();
+  return true;
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
