@@ -33,6 +33,12 @@
     sylvan: [-20, 140], umbra: [-265, 15], aquila: [230, 300],
   };
   const SPIRE = [10, -20];
+  // The town where a nation's caravans set out from.
+  // Words on the canvas are out of reach of i18n.js's page watcher, so they ask for their translation themselves.
+  const say = text => (window.tr ? window.tr(text) : text);
+  const CAPITAL_TOWNS = { aethelgard: 'Aethelhold', val_khor: 'Khorgate', solaria: 'Helion', sylvan: 'Rootholm', umbra: 'Lanternfall', aquila: 'Halcyon Quay' };
+  // Traffic follows the real trades: at most this many caravans between two nations, at this speed (world units per second).
+  const MAX_CARAVANS_PER_PAIR = 3, CARAVAN_SPEED = 9, TRADE_ARC_SECONDS = 40;
   // Settlements: [realm, name, x, y, isCapital]. Capitals match the Spireopedia articles.
   const SETTLEMENTS = [
     ['aethelgard', 'Aethelhold', -70, -215, true], ['aethelgard', 'Stonewatch', -230, -200], ['aethelgard', 'Garrowmere', 75, -235],
@@ -139,6 +145,8 @@
       this.reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       this.realms = {};
       this.trades = [];
+      this.caravans = [];                // one per concluded trade (up to a limit per pair): nothing moves before anyone has traded
+      this.tradeSeen = null;             // trade id -> when this screen first saw it
       this.rosterKey = '';
       this.focus = null;                 // realm id the camera is visiting, or null for overview
       this.onFocus = null;               // callback(realmId|null)
@@ -355,12 +363,12 @@
         const x = (rand() - 0.5) * 1100, y = (rand() - 0.5) * 820;
         if (this.heightAt(x, y) < -2) this.sparkles.push({ x, y, phase: rand() * 6.28 });
       }
-      // ships: elliptical routes through the seas
+      // ships on the open sea: elliptical routes. They only sail once trade has picked up (see shipsAtSea).
       this.ships = [
-        { cx: 240, cy: 255, rx: 210, ry: 18, speed: 0.018, phase: 0 },
-        { cx: -120, cy: 300, rx: 260, ry: 26, speed: -0.012, phase: 2 },
-        { cx: -420, cy: -40, rx: 40, ry: 260, speed: 0.01, phase: 4 },
-        { cx: 60, cy: -330, rx: 320, ry: 22, speed: 0.011, phase: 1 },
+        { cx: 240, cy: 255, rx: 210, ry: 18, speed: 0.018, phase: 0, vis: 0 },
+        { cx: -120, cy: 300, rx: 260, ry: 26, speed: -0.012, phase: 2, vis: 0 },
+        { cx: -420, cy: -40, rx: 40, ry: 260, speed: 0.01, phase: 4, vis: 0 },
+        { cx: 60, cy: -330, rx: 320, ry: 22, speed: 0.011, phase: 1, vis: 0 },
       ];
       this.clouds = Array.from({ length: 8 }, (_, i) => ({ x: -900 + i * 225 + rand() * 80, y: -300 + rand() * 600, s: 0.8 + rand() * 0.9 }));
     }
@@ -439,12 +447,63 @@
         if (path && path.length > 2) this.roads.push({ from: a, to: b, pts: chaikin(path) });
       }
       this.seaLanes = SEA_LANES.map(([a, b]) => [place(a), place(b)]).filter(([a, b]) => a && b);
-      // travellers: one cart per road, moving back and forth at walking pace
-      this.carts = this.roads.map((road, i) => {
-        let len = 0; const acc = [0];
-        for (let k = 1; k < road.pts.length; k++) { len += Math.hypot(road.pts[k][0] - road.pts[k - 1][0], road.pts[k][1] - road.pts[k - 1][1]); acc.push(len); }
-        return { road, acc, len, u: (i * 0.37) % 1, dir: i % 2 ? 1 : -1 };
-      });
+      this.buildRouteNetwork(place);
+    }
+
+    // Roads and sea lanes as a graph, so a caravan can find its way from one capital to another.
+    buildRouteNetwork(place) {
+      const net = {};
+      const link = (from, to, pts, sea) => {
+        let len = 0;
+        for (let k = 1; k < pts.length; k++) len += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+        (net[from] = net[from] || []).push({ to, pts, sea, len });
+        (net[to] = net[to] || []).push({ to: from, pts: pts.slice().reverse(), sea, len });
+      };
+      for (const road of this.roads) link(road.from, road.to, road.pts, false);
+      for (const [a, b] of SEA_LANES) {
+        const A = place(a), B = place(b);
+        if (!A || !B) continue;
+        // the same curve the lane is painted with
+        const cx = (A.x + B.x) / 2 + (B.y - A.y) * 0.2, cy = (A.y + B.y) / 2 - (B.x - A.x) * 0.2, pts = [];
+        for (let t = 0; t <= 1.0001; t += 0.05) {
+          pts.push([(1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * cx + t * t * B.x, (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * cy + t * t * B.y]);
+        }
+        link(a, b, pts, true);
+      }
+      this.routeNet = net;
+      this.routeCache = {};
+    }
+
+    // The shortest way between two nations' capitals: { pts: [[x, y, sea]...], acc: [distance so far...], len }.
+    route(idA, idB) {
+      const key = `${idA}|${idB}`;
+      if (key in this.routeCache) return this.routeCache[key];
+      const start = CAPITAL_TOWNS[idA], goal = CAPITAL_TOWNS[idB];
+      const best = { [start]: { d: 0, via: null } }, open = [start], done = new Set();
+      while (open.length) {
+        open.sort((a, b) => best[a].d - best[b].d);
+        const node = open.shift();
+        if (node === goal) break;
+        if (done.has(node)) continue;
+        done.add(node);
+        for (const edge of this.routeNet[node] || []) {
+          const d = best[node].d + edge.len;
+          if (!best[edge.to] || d < best[edge.to].d) { best[edge.to] = { d, via: node, edge }; open.push(edge.to); }
+        }
+      }
+      if (!best[goal]) return (this.routeCache[key] = null);
+      const edges = [];
+      for (let n = goal; best[n].via !== null; n = best[n].via) edges.unshift(best[n].edge);
+      const pts = [], acc = [];
+      let len = 0;
+      for (const edge of edges) {
+        for (const [x, y] of edge.pts) {
+          if (pts.length) len += Math.hypot(x - pts[pts.length - 1][0], y - pts[pts.length - 1][1]);
+          pts.push([x, y, edge.sea]);
+          acc.push(len);
+        }
+      }
+      return (this.routeCache[key] = pts.length > 1 ? { pts, acc, len } : null);
     }
 
     traceRiver(x, y, rand) {
@@ -598,6 +657,7 @@
       const realms = (state && state.realms) || [];
       this.realms = Object.fromEntries(realms.map(r => [r.id, r]));
       this.trades = (state && state.trades) || [];
+      this.syncCaravans();
       this.sieges = (state && state.sieges) || [];
       const key = realms.map(r => `${r.id}:${r.active !== false}:${r.theme_color}`).join(',');
       if (key !== this.rosterKey) {
@@ -606,6 +666,35 @@
         if (this.focus && !this.isActive(this.focus)) this.setFocus(null);
       }
     }
+
+    // Traffic on the map follows the real trades. Before anyone has traded the roads and the sea are empty; every
+    // concluded trade sends a caravan from the nation that made the offer to its partner, and it keeps travelling
+    // between the two. A new game (no trades any more) empties the map again.
+    syncCaravans() {
+      const accepted = this.trades.filter(t => t.status === 'accepted');
+      const now = performance.now() / 1000;
+      const firstLook = !this.tradeSeen;           // trades from before this screen opened are not news
+      if (firstLook) this.tradeSeen = new Map();
+      const ids = new Set(accepted.map(t => t.id));
+      for (const id of [...this.tradeSeen.keys()]) if (!ids.has(id)) this.tradeSeen.delete(id);
+      this.caravans = this.caravans.filter(c => ids.has(c.tradeId));
+      const perPair = {};
+      for (const c of this.caravans) { const k = [c.a, c.b].sort().join('|'); perPair[k] = (perPair[k] || 0) + 1; }
+      for (const t of accepted.slice().reverse()) {          // the list is newest first; the oldest get the caravans
+        const seen = this.tradeSeen.has(t.id);
+        if (!seen) this.tradeSeen.set(t.id, firstLook ? -Infinity : now);
+        if (seen || !CAPITAL_TOWNS[t.sender_id] || !CAPITAL_TOWNS[t.receiver_id]) continue;
+        const k = [t.sender_id, t.receiver_id].sort().join('|');
+        if ((perPair[k] || 0) >= MAX_CARAVANS_PER_PAIR) continue;
+        perPair[k] = (perPair[k] || 0) + 1;
+        // A trade made just now sets out from home; on a screen opened later the old caravans are already under way.
+        const start = firstLook ? ([...String(t.id)].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % 100) / 100 : 0;
+        this.caravans.push({ tradeId: t.id, a: t.sender_id, b: t.receiver_id, u: start, dir: start * 100 % 2 ? -1 : 1 });
+      }
+    }
+
+    // One more ship on the open sea for every few trades, up to all of them.
+    get shipsAtSea() { return Math.floor((this.tradeSeen ? this.tradeSeen.size + 1 : 0) / 3); }
 
     isActive(id) { const r = this.realms[id]; return !!r && r.active !== false; }
 
@@ -694,14 +783,15 @@
       if (this.q.sparkles) this.drawSparkles(ctx, s);
       this.drawEvents(ctx, s, 'sea');
       this.drawShips(ctx, s);
-      this.drawCarts(ctx, s);
+      this.drawCaravans(ctx, s);
       this.drawTrades(ctx, s);
       this.drawSieges(ctx, s);
       this.drawWars(ctx, s);
       this.hits = [];
 
-      // 2. upright scenery and banners, back to front
-      const items = this.sprites.map(sp => ({ sp, p: this.project(sp.x, sp.y, sp.h) }));
+      // 2. upright scenery and banners, back to front. The terrain is a flat picture, so everything stands on the
+      // picture itself: lifting a sprite by its height would make it slide across the land as the camera turns.
+      const items = this.sprites.map(sp => ({ sp, p: this.project(sp.x, sp.y) }));
       items.sort((a, b) => a.p.depth - b.p.depth);
       for (const { sp, p } of items) this.drawSprite(ctx, sp, p, s);
       for (const { sp, p } of items) if (sp.type === 'capital') this.drawBanner(ctx, sp.id, p, s);
@@ -717,19 +807,29 @@
     }
 
     /* ------------------------------------------------------- living details */
-    drawCarts(ctx, s) {
+    drawCaravans(ctx, s) {
       const k = Math.max(0.6, s);
-      for (const cart of this.carts) {
-        cart.u += cart.dir * (5 / cart.len) * 0.016 * (this.reduceMotion ? 0.2 : 1);
-        if (cart.u > 1 || cart.u < 0) { cart.dir *= -1; cart.u = clamp(cart.u, 0, 1); }
-        const d = cart.u * cart.len, pts = cart.road.pts;
-        let i = 1; while (i < cart.acc.length - 1 && cart.acc[i] < d) i++;
-        const f = (d - cart.acc[i - 1]) / Math.max(0.001, cart.acc[i] - cart.acc[i - 1]);
+      for (const c of this.caravans) {
+        if (!this.isActive(c.a) || !this.isActive(c.b)) continue;
+        const route = this.route(c.a, c.b);
+        if (!route) continue;
+        const d = c.u * route.len, pts = route.pts;
+        let i = 1; while (i < route.acc.length - 1 && route.acc[i] < d) i++;
+        const f = (d - route.acc[i - 1]) / Math.max(0.001, route.acc[i] - route.acc[i - 1]);
         const x = pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, y = pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f;
-        const p = this.project(x, y, Math.max(0, this.heightAt(x, y)));
-        ctx.fillStyle = 'rgba(50,35,20,0.25)'; ctx.beginPath(); ctx.ellipse(p.x + 1, p.y + 1, 3 * k, 1.2 * k, 0, 0, 6.283); ctx.fill();
-        ctx.fillStyle = '#7a5532'; ctx.fillRect(p.x - 2.5 * k, p.y - 3 * k, 5 * k, 2.6 * k);
-        ctx.fillStyle = '#efe3c4'; ctx.fillRect(p.x - 2 * k, p.y - 5 * k, 4 * k, 2.2 * k);
+        const p = this.project(x, y);
+        const owner = this.realms[c.a] || {}, cloth = owner.theme_color || DEFAULT_COLORS[c.a];
+        if (pts[i][2]) {                                  // a sea lane: a small trading ship under the sender's sail
+          const dir = Math.sign(this.project(pts[i][0], pts[i][1]).x - this.project(pts[i - 1][0], pts[i - 1][1]).x) * c.dir || 1;
+          ctx.fillStyle = '#6b4a2a';
+          ctx.beginPath(); ctx.moveTo(p.x - 6 * k, p.y); ctx.lineTo(p.x + 6 * k, p.y); ctx.lineTo(p.x + 4 * k, p.y + 3 * k); ctx.lineTo(p.x - 4 * k, p.y + 3 * k); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = cloth;
+          ctx.beginPath(); ctx.moveTo(p.x, p.y - 1); ctx.lineTo(p.x, p.y - 11 * k); ctx.lineTo(p.x + dir * 6 * k, p.y - 2 * k); ctx.closePath(); ctx.fill();
+        } else {                                          // a road: a wagon with a cover in the sender's colour
+          ctx.fillStyle = 'rgba(50,35,20,0.25)'; ctx.beginPath(); ctx.ellipse(p.x + 1, p.y + 1, 3.4 * k, 1.3 * k, 0, 0, 6.283); ctx.fill();
+          ctx.fillStyle = '#7a5532'; ctx.fillRect(p.x - 3 * k, p.y - 3 * k, 6 * k, 2.8 * k);
+          ctx.fillStyle = cloth; ctx.fillRect(p.x - 2.4 * k, p.y - 5.6 * k, 4.8 * k, 2.8 * k);
+        }
       }
     }
 
@@ -819,6 +919,14 @@
     }
 
     updateEvents(dt) {
+      for (const c of this.caravans) {
+        const route = this.route(c.a, c.b);
+        if (!route) continue;
+        c.u += c.dir * CARAVAN_SPEED * dt / route.len;
+        if (c.u > 1 || c.u < 0) { c.dir *= -1; c.u = clamp(c.u, 0, 1); }
+      }
+      const sailing = this.shipsAtSea;
+      this.ships.forEach((sh, i) => { sh.vis += ((i < sailing ? 1 : 0) - sh.vis) * Math.min(1, dt * 0.5); });
       for (const w of this.wars) w.age += dt;
       this.wars = this.wars.filter(w => w.age < w.dur);
       this.eventClock += dt;
@@ -1014,7 +1122,7 @@
       const dist = ev.age * 11;
       const x = ev.at[0] + Math.cos(ev.dir) * dist + Math.sin(ev.age * 0.7) * 12;
       const y = ev.at[1] + Math.sin(ev.dir) * dist + Math.cos(ev.age * 0.5) * 8;
-      const g = this.project(x, y, Math.max(0, this.heightAt(x, y)));
+      const g = this.project(x, y);
       if (layer === 'sea') {
         ctx.fillStyle = `rgba(120,100,70,${0.25 * vis})`;          // dust ring at the base
         ctx.beginPath(); ctx.ellipse(g.x, g.y, 20 * k, 6 * k, 0, 0, 6.283); ctx.fill();
@@ -1182,12 +1290,14 @@
 
     drawShips(ctx, s) {
       for (const sh of this.ships) {
+        if (sh.vis < 0.03) continue;                        // no trade yet, no ship
         const a = this.time * sh.speed + sh.phase;
         const x = sh.cx + Math.cos(a) * sh.rx, y = sh.cy + Math.sin(a) * sh.ry;
         if (this.heightAt(x, y) > -1.5) continue;           // never sail over land
         const p = this.project(x, y, 0), k = Math.max(0.7, s * 1.1);
         const dir = Math.sign(-Math.sin(a) * sh.speed * Math.cos(this.cam.yaw)) || 1;
         ctx.save();
+        ctx.globalAlpha = sh.vis;
         ctx.translate(p.x, p.y);
         // wake
         ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.2;
@@ -1201,13 +1311,19 @@
       }
     }
 
+    // The moment of a trade: a golden arc between the two capitals that fades after a while. The caravan stays.
     drawTrades(ctx, s) {
-      const recent = this.trades.filter(t => t.status === 'accepted').slice(0, 6);   // the list is newest first
-      recent.forEach((t, i) => {
+      if (!this.tradeSeen) return;
+      const now = performance.now() / 1000;
+      const fresh = this.trades.filter(t => t.status === 'accepted' && now - (this.tradeSeen.get(t.id) ?? -Infinity) < TRADE_ARC_SECONDS);
+      fresh.forEach((t, i) => {
         const a = CAPITALS[t.sender_id], b = CAPITALS[t.receiver_id];
         if (!a || !b || !this.isActive(t.sender_id) || !this.isActive(t.receiver_id)) return;
+        const left = TRADE_ARC_SECONDS - (now - this.tradeSeen.get(t.id));
         const pa = this.project(a[0], a[1], 4), pb = this.project(b[0], b[1], 4);
         const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2 - 60 * s;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, left / 6);
         ctx.strokeStyle = 'rgba(168,116,18,0.75)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
         ctx.lineDashOffset = -this.time * 20;
         ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.quadraticCurveTo(mx, my, pb.x, pb.y); ctx.stroke();
@@ -1216,6 +1332,7 @@
         const qx = (1 - u) * (1 - u) * pa.x + 2 * (1 - u) * u * mx + u * u * pb.x;
         const qy = (1 - u) * (1 - u) * pa.y + 2 * (1 - u) * u * my + u * u * pb.y;
         ctx.fillStyle = '#e2b23c'; ctx.beginPath(); ctx.arc(qx, qy, 4, 0, 6.283); ctx.fill();
+        ctx.restore();
       });
     }
 
@@ -1331,7 +1448,7 @@
         ctx.lineTo(p.x, p.y - 54 * k); ctx.lineTo(p.x + 2 * k, p.y - 44 * k);
         ctx.quadraticCurveTo(p.x + 4 * k, p.y - 26 * k, p.x + 8 * k, p.y); ctx.closePath(); ctx.fill();
         ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.arc(p.x, top, 2.2 * k, 0, 6.283); ctx.fill();
-        this.mapText(ctx, 'The Neutral Spire', p.x, p.y + 12 * k, { size: 12, italic: true, color: 'rgba(59,42,26,0.85)', spacing: 1 });
+        this.mapText(ctx, say('The Neutral Spire'), p.x, p.y + 12 * k, { size: 12, italic: true, color: 'rgba(59,42,26,0.85)', spacing: 1 });
       }
     }
 
@@ -1340,8 +1457,8 @@
     drawBanner(ctx, id, p, s) {
       const r = this.realms[id];
       if (!this.isActive(id)) {
-        this.mapText(ctx, REGION_NAMES[id].toUpperCase(), p.x, p.y - 4, { size: 13, color: 'rgba(110,98,80,0.9)', spacing: 3 });
-        this.mapText(ctx, 'unclaimed lands', p.x, p.y + 12, { size: 12, italic: true, color: 'rgba(120,108,90,0.85)' });
+        this.mapText(ctx, say(REGION_NAMES[id]).toUpperCase(), p.x, p.y - 4, { size: 13, color: 'rgba(110,98,80,0.9)', spacing: 3 });
+        this.mapText(ctx, say('unclaimed lands'), p.x, p.y + 12, { size: 12, italic: true, color: 'rgba(120,108,90,0.85)' });
         return;
       }
       const focused = this.focus === id;
@@ -1423,7 +1540,7 @@
       if (r.is_plutocrat) flags.push('richest realm');
       if (r.is_quarantined) flags.push('borders sealed');
       ctx.restore();
-      if (flags.length) this.mapText(ctx, flags.join(' · '), p.x, p.y + 26 * (this.ui || 1), { size: 12, italic: true, color: '#8a2c25' });
+      if (flags.length) this.mapText(ctx, flags.map(say).join(' · '), p.x, p.y + 26 * (this.ui || 1), { size: 12, italic: true, color: '#8a2c25' });
     }
 
     drawClouds(ctx, s) {
@@ -1457,8 +1574,10 @@
       ctx.fill();
     }
 
-    // Map lettering: serif with a soft parchment halo, optional letter-spacing.
+    // Map lettering: serif with a soft parchment halo, optional letter-spacing. Town names and every other label
+    // drawn here are translated on a screen that is not in English.
     mapText(ctx, text, x, y, { size = 14, italic = false, bold = false, color = '#2b2016', spacing = 0 } = {}) {
+      text = say(text);
       ctx.save();
       size = Math.round(size * (this.ui || 1));
       ctx.font = `${italic ? 'italic ' : ''}${bold ? '700 ' : ''}${size}px "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif`;

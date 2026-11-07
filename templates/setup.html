@@ -33,6 +33,17 @@
   </div>
   {% endif %}
 
+  <!-- The language every screen starts in -->
+  <section class="card setup-language">
+    <div class="card-title">Language of the game</div>
+    <p class="section-sub">Every screen starts in this language. A phone can still switch for itself, on the join page or in its help.</p>
+    <div class="chip-row mt-1" role="radiogroup" aria-label="Language of the game">
+      {% for code, name in languages.items() %}
+      <label class="chip-choice" lang="{{ code }}"><input type="radio" name="language" value="{{ code }}" {% if settings.language == code %}checked{% endif %}> <span>{{ name }}</span></label>
+      {% endfor %}
+    </div>
+  </section>
+
   <!-- 1. Complexity: which mechanics the game has -->
   <section class="card">
     <div class="card-title setup-step">Game complexity</div>
@@ -190,7 +201,7 @@
       const pick = name => (document.querySelector(`input[name=${name}]:checked`) || {}).value;
       const num = id => parseFloat(document.getElementById(id).value);
       return {
-        scenario: pick('scenario'), complexity: pick('complexity'),
+        scenario: pick('scenario'), complexity: pick('complexity'), language: pick('language'),
         grain_consumption: parseInt(document.getElementById('grain_per_turn').value, 10) || 20,
         good_news_percent: parseInt(document.getElementById('good_news').value, 10) || 0,
         working_session_seconds: Math.round(num('working_min') * 60), plenary_vote_seconds: Math.round(num('vote_min') * 60),
@@ -228,7 +239,7 @@
         this.setDirty(false);
         showToast(res.message || 'Settings saved', 'success');
         // The nation ratings on this page follow the game now in force.
-        if (res.settings.rules.id !== '{{ rules.id }}') setTimeout(() => location.reload(), 700);
+        if (res.settings.rules.id !== '{{ rules.id }}' || res.settings.language !== '{{ settings.language }}') setTimeout(() => location.reload(), 700);
         else this.refreshMissionCounts();
       }
       return res.success;

@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ language }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Summit of Realms - Continental Wire & Plenary</title>
+  {% include "_language_head.html" %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     html, body {
@@ -251,14 +252,19 @@
         </div>
       </div>
 
+      <div style="margin-bottom: 16px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+        <div class="form-label">Language of this screen</div>
+        {% include "_language_switch.html" %}
+      </div>
+
       <!-- Map quality: sharper map vs. lighter load on older laptops -->
       <div style="margin-bottom: 16px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
         <div class="form-label">Map quality</div>
         <div class="chip-row" id="quality-picker">
           <button type="button" class="chip" data-q="auto" onclick="setMapQuality('auto')">Auto</button>
-          <button type="button" class="chip" data-q="high" onclick="setMapQuality('high')">High</button>
+          <button type="button" class="chip" data-q="high" onclick="setMapQuality('high')">Sharp</button>
           <button type="button" class="chip" data-q="balanced" onclick="setMapQuality('balanced')">Balanced</button>
-          <button type="button" class="chip" data-q="low" onclick="setMapQuality('low')">Low</button>
+          <button type="button" class="chip" data-q="low" onclick="setMapQuality('low')">Light</button>
         </div>
         <p class="section-sub" id="quality-status" style="margin-top: 6px;"></p>
       </div>
@@ -338,10 +344,11 @@
     }
 
 
+    const QUALITY_WORD = { high: 'sharp', balanced: 'balanced', low: 'light' };
     const QUALITY_TEXT = {
-      high: 'High: sharpest map, every effect.',
+      high: 'Sharp: sharpest map, every effect.',
       balanced: 'Balanced: sharp map, every effect.',
-      low: 'Low: lighter map, fewer effects, 30 frames per second, for older laptops.',
+      low: 'Light: lighter map, fewer effects, 30 frames per second, for older laptops.',
     };
     function showQuality(mode, effective) {
       document.querySelectorAll('#quality-picker .chip').forEach(b => b.classList.toggle('active', b.dataset.q === mode));
@@ -349,7 +356,7 @@
       if (!el) return;
       const fps = window.projApp && window.projApp.map && window.projApp.map.measuredFps;
       el.innerText = mode === 'auto'
-        ? `Auto chose ${effective}${fps ? ` (measured ${fps} frames per second)` : ' (measuring…)'}. ${QUALITY_TEXT[effective]}`
+        ? `Auto chose ${QUALITY_WORD[effective]}${fps ? ` (measured ${fps} frames per second)` : ' (measuring…)'}. ${QUALITY_TEXT[effective]}`
         : QUALITY_TEXT[effective];
     }
     function setMapQuality(mode) {

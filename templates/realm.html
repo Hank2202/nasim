@@ -468,7 +468,7 @@
 </nav>
 {% endblock %}
 
-{% block page_scripts %}<script src="{{ url_for('static', filename='js/battle.js') }}"></script><script src="{{ url_for('static', filename='js/realm.js') }}"></script>{% endblock %}
+{% block page_scripts %}<template id="language-switch">{% include "_language_switch.html" %}</template><script src="{{ url_for('static', filename='js/battle.js') }}"></script><script src="{{ url_for('static', filename='js/realm.js') }}"></script>{% endblock %}
 
 {% block scripts %}
 <script>
